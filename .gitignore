@@ -1,0 +1,25 @@
+# ---- secrets: never commit -------------------------------------------------
+.env
+**/.env
+sandbox/.env.ai-fix
+shopify-setup/.env
+*.pem
+
+# ---- generated at build time (up.ps1 step 10 rebuilds the flow) -----------
+sandbox/node-red/flows.json
+# backups of the flow carry the baked ERPNext + Shopify tokens
+sandbox/node-red/*.bak
+sandbox/node-red/*.bak.*
+
+# ---- caches / logs --------------------------------------------------------
+__pycache__/
+*.pyc
+*.log
+.cache/
+sandbox/.cache/
+Thumbs.db
+
+# ---- frontend toolchain (only needed to recompile the SPA) ----------------
+scheduler/frontend/node_modules/
+scheduler/ui-tests/node_modules/
+scheduler/ui-tests/*.png

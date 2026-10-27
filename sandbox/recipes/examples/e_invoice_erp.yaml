@@ -1,0 +1,28 @@
+# Recipe: only genuinely app-specific residual facts go here. Things
+# install-app.sh derives generically (the .pth flat/nested layout, which
+# doctype to verify against, Single-doctype table recovery, the Custom
+# Script -> Client Script auto-conversion) are NOT declared here on
+# purpose.
+
+app: e_invoice_erp
+repo: https://github.com/hisham733/E-Invoice-API
+
+versions:
+  "16":
+    branch: main
+    verified: true
+    verify_doctype: API Credentials
+    notes: |
+      The user's URL (https://github.com/hisham733/E-Invoice-ERPnext)
+      redirects to hisham733/E-Invoice-API. App name is e_invoice_erp
+      (repo-root setup.py packages e_invoice_erp). Nested layout
+      (apps/e_invoice_erp/e_invoice_erp/hooks.py) — install-app.sh's
+      detect_pth_target handles this automatically.
+
+      No extra_pip needed: repo-root requirements.txt is just 'frappe'.
+
+      hooks.py has a doc_events hook on 'API Credentials' before_save ->
+      e_invoice_erp.e_invoice_erp.doctype.api_credentials.api_credentials
+      .fetch_api_token. Single doctype in module: 'API Credentials'
+      (track_changes, autoname INV-{MM}-{######}). verify_doctype pinned
+      to 'API Credentials' (a normal doctype -> 200).

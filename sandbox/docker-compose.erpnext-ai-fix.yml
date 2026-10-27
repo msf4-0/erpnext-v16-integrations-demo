@@ -1,0 +1,184 @@
+# ERPNEXT-AI-FIX — self-contained stack.
+#
+# Goal: ONE `docker compose up` gives a working ERPNext + barcode scanner +
+# Shopify automation path, with Node-RED and ngrok INSIDE the stack (no host
+# `node-red` / host `ngrok` process required).
+#
+#   bench      : ERPNext v16 bench (the sandbox image, provisioned by script)
+#   db         : MariaDB 11.8
+#   redis-*    : cache + queue
+#   node-red   : the Shopify <-> ERPNext bridge, seeded with flows.json
+#   ngrok      : public ingress for the webhook endpoints
+#
+# Start it with sandbox/up.ps1 (it provisions, builds flows, wires webhooks).
+# Project name is pinned to `erpnext-ai-fix` so it never collides with the
+# original `erpnext-sandbox` / `frappe_docker-1` projects.
+
+name: ${COMPOSE_PROJECT_NAME:-erpnext-ai-fix}
+
+services:
+  bench:
+    image: frappe/bench:latest
+    command: sleep infinity
+    ports:
+      # Host port is configurable; the container-internal port is always 8000.
+      - "${ERPNEXT_PORT:-8000}:8000"
+    volumes:
+      - bench_sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      - db
+      - redis-cache
+      - redis-queue
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SITE_NAME=${SITE_NAME:-frontend}
+      - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin}
+      # Consumed by the Node-RED flow builder: the URL Node-RED uses to reach
+      # this bench over the compose network (NOT localhost — Node-RED is a
+      # different container).
+      - ERPNEXT_INTERNAL_URL=http://bench:8000
+    restart: unless-stopped
+
+  db:
+    image: mariadb:11.8
+    # WHY THE DATADIR IS IN RAM.
+    #
+    # This host's Docker container-storage write path is pathological for
+    # databases: host C: fsync is 0.8 ms, but inside a container it is 600-900 ms,
+    # and MariaDB DDL there costs 3+ SECONDS PER TABLE. Measured on this machine:
+    #
+    #   named volume   : 100 CREATE TABLE > 300 s   (ERPNext needs ~900 -> hours)
+    #   tmpfs          : 100 CREATE TABLE =  0.20 s (~490 tables/sec)
+    #
+    # Turning off fsync (innodb_flush_method=nosync, flush_log_at_trx_commit=0,
+    # doublewrite off) did NOT help, so the bottleneck is the volume write path
+    # itself, not durability barriers. tmpfs bypasses it entirely.
+    #
+    # TRADE-OFF: the site database lives in RAM. `docker compose down`, a
+    # container stop, or a Docker Desktop restart DISCARDS it, and ERPNext will
+    # then report a missing/blank site. Re-run sandbox/up.ps1 to rebuild - that
+    # is now a couple of minutes instead of hours. Set DB_USE_TMPFS=0 in
+    # sandbox/.env.ai-fix to fall back to the persistent db_data volume if you
+    # would rather have durability than speed (expect a very slow first build).
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-flush-log-at-trx-commit=0
+      - --innodb-flush-method=nosync
+      - --innodb-doublewrite=0
+      - --sync-binlog=0
+      - --skip-log-bin
+      - --innodb-buffer-pool-size=512M
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-admin}
+    # NOTE: no `volumes:` entry — /var/lib/mysql is the tmpfs mount below.
+    tmpfs:
+      - /var/lib/mysql:size=${DB_TMPFS_SIZE:-2g}
+    restart: unless-stopped
+
+  redis-cache:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+
+  redis-queue:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Node-RED — the Shopify <-> ERPNext bridge.
+  #
+  # `node_red_data` is a named volume so the image's own settings.js is seeded
+  # into it on first run; flows.json is bind-mounted over the top so the flow
+  # that ships in ./node-red/flows.json is always the one that runs.
+  # ---------------------------------------------------------------------------
+  node-red:
+    image: nodered/node-red:latest
+    ports:
+      # Host 1881 by default: 1880 is commonly occupied by a host-level
+      # Node-RED (which is exactly the broken setup this stack replaces).
+      - "${NODE_RED_PORT:-1881}:1880"
+    volumes:
+      - node_red_data:/data
+      - ./node-red/flows.json:/data/flows.json
+    environment:
+      - TZ=${TZ:-UTC}
+      - ERPNEXT_INTERNAL_URL=${ERPNEXT_INTERNAL_URL:-http://bench:8000}
+      - SHOPIFY_STORE=${SHOPIFY_STORE:-4e1075.myshopify.com}
+      - SHOPIFY_API_VERSION=${SHOPIFY_API_VERSION:-2026-04}
+    depends_on:
+      - bench
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # ngrok — OPT-IN containerised public ingress.
+  #
+  # Enable with:  docker compose ... --profile container-ngrok up -d
+  #
+  # By default the stack uses the ngrok binary already installed on the host
+  # (up.ps1 starts `ngrok http <NODE_RED_PORT>`), because:
+  #   * it is already authenticated, and
+  #   * pulling ngrok/ngrok:latest was observed to stall on this machine.
+  # Either way the public URL is read back from the agent's local API
+  # (http://127.0.0.1:<api port>/api/tunnels) and written into the ERPNext
+  # Webhook records automatically, so a new tunnel URL never leaves them stale.
+  # ---------------------------------------------------------------------------
+  ngrok:
+    image: ngrok/ngrok:latest
+    profiles: ["container-ngrok"]
+    command: >
+      http node-red:1880
+      --log stdout
+      --authtoken=${NGROK_AUTHTOKEN}
+      ${NGROK_URL_FLAG}
+    ports:
+      - "${NGROK_API_PORT:-4041}:4040"
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+    depends_on:
+      - node-red
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # scheduler — the drag-and-drop production planner.
+  #
+  # This is the operator's standalone Node/Express + React app
+  # (`custom-schedule-app`), unchanged in architecture: Express exposes /api and
+  # the compiled React client from the same origin. It reaches ERPNext over the
+  # compose network (bench:8000, NOT localhost:8000 — inside this container
+  # localhost is the scheduler itself) with an API token minted for this site.
+  #
+  # The token is created by sandbox/scripts/ai-fix-scheduler.sh and written back
+  # to sandbox/.env.ai-fix as SCHEDULER_ERPNEXT_API_KEY / _SECRET.
+  #
+  # REACT_APP_* are compile-time: changing them requires a rebuild
+  # (`docker compose ... build scheduler`), not just a restart.
+  # ---------------------------------------------------------------------------
+  scheduler:
+    build:
+      context: ../scheduler
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: /api
+        # Browser-side: where "open in ERPNext" links point. The host's
+        # published ERPNext port, not the compose-internal one.
+        REACT_APP_ERPNEXT_URL: http://localhost:${ERPNEXT_PORT:-8000}
+    ports:
+      - "${SCHEDULER_PORT:-3001}:3000"
+    environment:
+      - ERPNEXT_URL=http://bench:8000
+      - ERPNEXT_API_KEY=${SCHEDULER_ERPNEXT_API_KEY:-}
+      - ERPNEXT_API_SECRET=${SCHEDULER_ERPNEXT_API_SECRET:-}
+      - PORT=3000
+      - NODE_ENV=production
+    depends_on:
+      - bench
+    restart: unless-stopped
+
+volumes:
+  bench_sites:
+  # db_data is intentionally NOT used: the site database lives in the db
+  # service's tmpfs (see the long comment on the `db` service for the
+  # measurements that forced this). The volume is declared so that flipping
+  # DB_USE_TMPFS=0 has something to attach to.
+  db_data:
+  node_red_data:

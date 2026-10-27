@@ -1,0 +1,27 @@
+# Normalise line endings so the repo behaves the same on any machine.
+#
+# This project ships shell scripts that are copied into Linux containers
+# (sandbox/scripts/*.sh). If a Windows clone converts them to CRLF, bash fails
+# with "/bin/bash^M: bad interpreter" and every provisioning step breaks - so
+# those are pinned to LF regardless of core.autocrlf.
+* text=auto
+
+*.sh    text eol=lf
+*.py    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.json  text eol=lf
+Dockerfile text eol=lf
+
+*.ps1   text eol=crlf
+*.cmd   text eol=crlf
+*.bat   text eol=crlf
+
+# binaries - never touch
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.zip   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary

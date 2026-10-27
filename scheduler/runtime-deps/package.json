@@ -1,0 +1,12 @@
+{
+  "name": "scheduler-runtime-deps",
+  "private": true,
+  "description": "Runtime deps for scheduler/server.js, pre-installed on the host because in-image npm ci is unusably slow on this host. All packages are pure JS (server.js never imports sqlite3).",
+  "dependencies": {
+    "axios": "^1.4.0",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2"
+  }
+}

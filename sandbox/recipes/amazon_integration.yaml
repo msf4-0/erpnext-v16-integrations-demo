@@ -1,0 +1,49 @@
+# Recipe — amazon_integration (locally authored app).
+#
+# Source of truth is ./repos/amazon-integration (gitignored, local-only). The
+# app is NOT a git repo with a remote, so install from the DIRECTORY:
+#   docker compose -p erpnext-sandbox cp ./repos/amazon-integration bench:/tmp/amazon-integration
+#   docker compose -p erpnext-sandbox exec bench bash -lc \
+#     "/tmp/scripts/install-app.sh amazon_integration /tmp/amazon-integration 16 /tmp/recipes/amazon_integration.yaml"
+#
+# Scaffolded with `bench new-app amazon_integration` so the v16 boilerplate is
+# exact (7 wizard prompts; app_license must be the lowercase SPDX id `mit`).
+
+app: amazon_integration
+repo: ./repos/amazon-integration
+
+versions:
+  "16":
+    verified: true
+    verify_doctype: Amazon Account
+    notes: |
+      Locally authored app. Module 'Amazon Integration' (dir amazon_integration),
+      v16 NESTED layout: apps/amazon_integration/amazon_integration/hooks.py —
+      install-app.sh auto-detects the .pth target, no recipe field needed.
+
+      Scope by operator request: the `Amazon Account` doctype stores ONLY the
+      first five fields — naming_series, account_name, seller_id, account_type,
+      status. It deliberately has NO login details / API credentials
+      (no lwa_client_id/secret, refresh_token, aws keys), no marketplace child
+      table, no Company/Warehouse/Currency links, and no derived or read-only
+      fields. Consequences to preserve if this is ever extended:
+        - there is nothing to validate or 'test connect', so there is no
+          connection_status / Test Connection button and no client script;
+        - no child doctype exists.
+      Do not re-add credential fields casually: if they return, they must be
+      fieldtype `Password` (v16 stores those encrypted in __Auth), NOT Data
+      (the Shopify Access precedent stores secrets as plain Data — worse).
+
+      Permissions: System Manager r/w/c/d; `All` read-ONLY. (There are no
+      secrets in this doctype, so `All` read-only is a conservative default,
+      not a security requirement.)
+
+      No fixtures, no doc_events, no scheduler_events, no patches.
+      `modules.txt` needs a trailing newline (the v16 scaffold writes it
+      without one — the same app-name-concatenation bug class documented in
+      install-app.sh for apps.txt).
+
+# Auto-detected by install-app.sh, not declared:
+#   .pth target -> nested layout, apps/amazon_integration
+#   verify doctype -> auto-detect would find Amazon Account anyway; pinned for
+#     clarity since it is the only doctype.

@@ -1,0 +1,33 @@
+# Recipe: eu_einvoice (European e-Invoice, alyf-de, version-16 branch).
+#
+# SUBSTITUTE for e_invoice_erp: the original recipe pointed at
+# https://github.com/hisham733/E-Invoice-API, which is now gone (404 — repo
+# deleted/private; not our account). eu_einvoice is the public app with a
+# verified version-16 branch.
+#
+# Best-effort in comp_demo: an install failure WARNs and never blocks the build.
+
+app: eu_einvoice
+repo: https://github.com/alyf-de/eu_einvoice
+
+versions:
+  "16":
+    branch: version-16
+    verified: false
+    verify_doctype: E Invoice Import
+    # eu_einvoice ships deps in pyproject.toml (PEP 621), NOT requirements.txt,
+    # so install-app.sh's requirements.txt auto-install does not fire and its
+    # module import fails with "No module named 'drafthorse'". Declare them here.
+    extra_pip:
+      - "factur-x~=3.1"
+      - "drafthorse~=2025.2.0"
+      - "saxonche>=12.5.0,<13.0.0"
+      - "lxml>=6.1.0,<7.0.0"
+    notes: |
+      Nested layout (eu_einvoice/eu_einvoice/hooks.py) — install-app.sh's
+      detect_pth_target handles it. Module dir: european_e_invoice. Key
+      doctypes: e_invoice_settings (Single), e_invoice_import, e_invoice_item,
+      e_invoice_payment_term, e_invoice_trade_tax, e_invoice_attachment_row.
+      verify_doctype pinned to the normal doctype 'E Invoice Import' (REST 200).
+      Needs pyproject deps via extra_pip (see above) — otherwise install aborts
+      with ModuleNotFoundError: drafthorse.

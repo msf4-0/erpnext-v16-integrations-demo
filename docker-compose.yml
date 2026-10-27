@@ -1,0 +1,117 @@
+# comp_demo - COMPLETE self-contained ERPNext demo stack.
+#
+# One project, one command: ERPNext v16 + barcode/QR (barcode_shrdc) +
+# Shopify <-> ERPNext bridge (Node-RED + ngrok) + the drag-and-drop production
+# planner (scheduler). Nothing is shared with the old `erpnext-sandbox`,
+# `frappe_docker-1` or `erpnext-ai-fix` projects: own name, own volumes, own
+# ports.
+#
+#   bench      : ERPNext v16 bench (frappe/bench:latest), provisioned by up.ps1
+#   db         : MariaDB 11.8 (tmpfs datadir - see the comment on the service)
+#   redis-*    : cache + queue
+#   node-red   : Shopify <-> ERPNext bridge, runs ./flows.json
+#   scheduler  : production planner (Express API + React SPA, port 3001)
+#
+# ngrok is NOT a container here: the host ngrok binary is already authenticated
+# and pulling ngrok/ngrok:latest stalls on this machine, so up.ps1 starts the
+# host binary instead and reads the public URL back from its local API.
+#
+# Start with:  powershell -File F:\ERPNEXT\erpnext-build\up.ps1
+
+name: comp_demo
+
+services:
+  bench:
+    image: frappe/bench:latest
+    command: sleep infinity
+    ports:
+      - "${ERPNEXT_PORT:-8000}:8000"
+    volumes:
+      - bench_sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      - db
+      - redis-cache
+      - redis-queue
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SITE_NAME=${SITE_NAME:-frontend}
+      - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin}
+      - ERPNEXT_INTERNAL_URL=http://bench:8000
+    restart: unless-stopped
+
+  db:
+    image: mariadb:11.8
+    # WHY THE DATADIR IS IN RAM: this host's container-storage write path is
+    # pathological for databases (host fsync 0.8 ms, in-container 600-900 ms;
+    # MariaDB DDL costs seconds per table on a named volume, so ERPNext's ~900
+    # tables take hours). Measured: named volume 100 CREATE TABLE > 300 s;
+    # tmpfs 0.20 s. Disabling fsync did not help.
+    #
+    # TRADE-OFF: the site DB lives in RAM, so a container stop / Docker Desktop
+    # restart discards it. That is why the demo is REBUILDABLE: re-run
+    # up.ps1 (it recreates the site, reinstalls the apps, re-seeds and
+    # re-verifies). Expect ~25-35 min, not hours.
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-flush-log-at-trx-commit=0
+      - --innodb-flush-method=nosync
+      - --innodb-doublewrite=0
+      - --sync-binlog=0
+      - --skip-log-bin
+      - --innodb-buffer-pool-size=512M
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-admin}
+    tmpfs:
+      - /var/lib/mysql:size=${DB_TMPFS_SIZE:-2g}
+    restart: unless-stopped
+
+  redis-cache:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+
+  redis-queue:
+    image: redis:6.2-alpine
+    restart: unless-stopped
+
+  node-red:
+    image: nodered/node-red:latest
+    ports:
+      - "${NODE_RED_PORT:-1880}:1880"
+    volumes:
+      - node_red_data:/data
+      - ${FLOWS_PATH:-./node-red/flows.json}:/data/flows.json
+    environment:
+      - TZ=${TZ:-UTC}
+      - ERPNEXT_INTERNAL_URL=${ERPNEXT_INTERNAL_URL:-http://bench:8000}
+      - SHOPIFY_STORE=${SHOPIFY_STORE:-4e1075.myshopify.com}
+      - SHOPIFY_API_VERSION=${SHOPIFY_API_VERSION:-2026-04}
+    depends_on:
+      - bench
+    restart: unless-stopped
+
+  scheduler:
+    image: comp_demo-scheduler:latest
+    build:
+      # vendored inside comp_demo so the project builds without ERPNEXT-AI-FIX
+      context: ./scheduler
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_URL: /api
+        REACT_APP_ERPNEXT_URL: http://localhost:${ERPNEXT_PORT:-8000}
+    ports:
+      - "${SCHEDULER_PORT:-3001}:3000"
+    environment:
+      - ERPNEXT_URL=http://bench:8000
+      - ERPNEXT_API_KEY=${SCHEDULER_ERPNEXT_API_KEY:-}
+      - ERPNEXT_API_SECRET=${SCHEDULER_ERPNEXT_API_SECRET:-}
+      - PORT=3000
+      - NODE_ENV=production
+    depends_on:
+      - bench
+    restart: unless-stopped
+
+volumes:
+  bench_sites:
+  db_data:
+  node_red_data:

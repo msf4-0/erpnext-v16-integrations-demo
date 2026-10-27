@@ -1,0 +1,79 @@
+# Example recipe — shopify (ERPNext Shopify connector).
+#
+# Only genuinely app-specific residual facts go here. Things install-app.sh
+# derives generically (the .pth flat/nested layout, which doctype to verify
+# against, Single-doctype table recovery, the Custom Script -> Client Script
+# auto-conversion) are NOT declared here on purpose.
+#
+# This is a worked example kept for reference. Point `repo:` at your own
+# source (a git URL or a local directory under ./repos/) to use it.
+
+app: shopify
+repo: https://github.com/msf4-0/shopify-ERPnext
+
+versions:
+  "12":
+    branch: main
+    verified: true
+    verify_doctype: Shopify Access
+    notes: |
+      v12 target. Nested layout, no extra_pip (uses requests + raw Shopify
+      REST), no Custom Script fixtures — only a custom_field.json fixture
+      (Item/Sales Order/Customer). v12 'Custom Script' is still native, so
+      common.sh's check_custom_script_fixture (v15+) is a no-op.
+  "15":
+    branch: main
+    verified: true
+    verify_doctype: Shopify Access
+    notes: |
+      Nested layout (apps/shopify/shopify/hooks.py) — install-app.sh's
+      detect_pth_target handles this automatically.
+
+      No extra_pip needed: requirements.txt is just 'frappe'. The app uses
+      the `requests` library (already a frappe dependency) plus raw
+      Shopify REST calls, NOT the `shopify` pip package.
+
+      No Custom Script fixtures — only custom_field.json (adds
+      shopify_product_id / shopify_order_id / shopify_customer_id to
+      Item / Sales Order / Customer), so the v15 Client Script conversion
+      is a no-op here. On a site that ALSO has barcode_shrdc installed you
+      may see "Skipping fixture syncing from the file custom_field.json.
+      Reason: DocType Frepple Item Distribution not found" during migrate —
+      that warning belongs to barcode_shrdc's fixture, NOT shopify's (this
+      app's fixture is 3 records, all core doctypes). Harmless on v15.
+
+      Known upstream bug: every handler does
+      frappe.get_doc("Shopify Access", frappe.get_value("Shopify Access",
+      {}, "name")); with zero Shopify Access records get_value returns None
+      and get_doc("Shopify Access", None) throws "Shopify Access None not
+      found", breaking unrelated ops (e.g. creating an Item). A fixed fork
+      adds shopify/utils.py::get_shopify_access() and guards 11 handlers to
+      early-return when it is None.
+
+      Related upstream bug in shopify/api.py: it imported
+      `retrieve_shopify_products` (plural) but shopify/retrieve_product.py
+      only defines `retrieve_shopify_product` (singular), so importing
+      shopify.api raised ImportError and the whitelisted
+      sync_retrieve_products() could never run. Fixed by correcting the
+      reference to the singular name. Verified: all 17 shopify modules
+      import under bench site context, and api.sync_retrieve_products
+      resolves to retrieve_product.retrieve_shopify_product.
+
+      Verified install/load only — no live Shopify sync tested (requires
+      real store credentials).
+  "16":
+    branch: main
+    verified: true
+    verify_doctype: Shopify Link
+    notes: |
+      Nested layout (apps/shopify/shopify/hooks.py) — install-app.sh's
+      detect_pth_target handles this automatically. No extra_pip (uses
+      requests + raw Shopify REST). No Custom Script fixtures — only
+      custom_field.json (adds shopify_product_id / shopify_order_id /
+      shopify_customer_id to Item / Sales Order / Customer).
+
+      On v16 the verify_doctype is 'Shopify Link' (REST 200). Shopify
+      Access also returns 200; either is fine. No live Shopify sync
+      tested (requires real store credentials). Note: upstream carries the
+      known 'Shopify Access None not found' doc-event bug when no store is
+      configured (see the v15 note and install-log/).

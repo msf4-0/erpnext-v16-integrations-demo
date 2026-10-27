@@ -1,0 +1,124 @@
+# Example recipe — barcode_shrdc (ERPNext Barcode Integration).
+#
+# Only genuinely app-specific residual facts go here. Things install-app.sh
+# derives generically (the .pth flat/nested layout, which doctype to verify
+# against, Single-doctype table recovery, the Custom Script -> Client Script
+# auto-conversion) are NOT declared here on purpose.
+#
+# This is a worked example kept for reference. Point `repo:` at your own
+# source (a git URL or a local directory under ./repos/) to use it.
+
+app: barcode_shrdc
+repo: https://github.com/msf4-0/ERPNext-Barcode-Integration
+# NOTE: upstream master historically had runtime bugs on v15 (QR-on-unsaved
+# error, broken run_doc_method item fetch, custom_field fixture aborting
+# mid-file). If you maintain a fixed fork, point `repo:` at it or add a
+# per-version `source:` (a local directory under ./repos/) — install-app.sh
+# accepts a directory as its <repo> argument and copies+registers it by hand:
+#   docker compose -p erpnext-sandbox cp ./repos/<your-fork> bench:/tmp/<your-fork>
+#   docker compose -p erpnext-sandbox exec bench bash -lc \
+#     "/tmp/scripts/install-app.sh barcode_shrdc /tmp/<your-fork> 15 /tmp/recipes/barcode_shrdc.yaml"
+# The v12/v16 entries below apply to upstream master.
+
+versions:
+  "12":
+    branch: master
+    verified: true
+    extra_pip:
+      - qrcode
+    verify_doctype: Barcode Printing
+    notes: |
+      Legacy v12 target. 'Custom Script' is still a native v12 doctype
+      (the rename to 'Client Script' happens in v15), so common.sh's
+      check_custom_script_fixture (gated on v15+) is a no-op here — the
+      fixtures stay as Custom Script and are synced directly. verify_doctype
+      pinned to 'Barcode Printing' (a normal doctype -> 200), not the
+      auto-detected Single doctype.
+  "15":
+    branch: main
+    verified: true
+    extra_pip:
+      - qrcode
+      - reportlab
+      - rlPyCairo
+    verify_doctype: Barcode Printing
+    notes: |
+      Requirements:
+      - Native (root, once per container): `apt-get install -y libcairo2-dev
+        pkg-config` — rlPyCairo won't build without cairo headers. These live
+        in the container writable layer, so a container recreate wipes them.
+      - Python (bench venv): the app's requirements.txt lists only
+        frappe+qrcode, but the code imports reportlab and rlPyCairo, so
+        extra_pip declares all three.
+
+      Fixture gotcha (recurs on every fresh install): custom_field.json ships
+      borrowed fields from other apps. On v15, `install-app`/`migrate` ABORTS
+      the whole fixture file when it hits one whose target DocType isn't
+      installed — a stray 'Frepple Item Distribution-absd' entry — so the 5
+      barcode fields AFTER it in the file (Delivery Note-barcode_validation,
+      Delivery Note Item-checking_qty, Stock Entry-stock_check, Stock Entry
+      Detail-checking_qty, Sales Invoice Item-reference_dt/reference_dn)
+      silently never sync. install-app.sh's filter_missing_custom_field_dts
+      only runs for v14 and older, so on v15 this must be pruned by hand:
+      delete any fixture whose `dt` is not an installed DocType, then re-run
+      `bench --site frontend migrate`. Verify with:
+        SELECT name FROM `tabCustom Field` WHERE name LIKE '%checking_qty%';
+      Expected rows: Delivery Note Item / Stock Entry Detail checking_qty.
+
+      Known upstream gap: make_qrcode has no unsaved-doc guard, so clicking
+      "Create QR" before saving raises
+      `DoesNotExistError: Barcode Printing new-... not found`. A fixed fork
+      can add a friendly ValidationError guard. Print formats render
+      server-side via the `jinja` hook -> get_barcode_image (no jsdelivr/CDN,
+      no data-URI). The on-screen form preview still loads JsBarcode from the
+      jsdelivr CDN at runtime, so that preview needs network.
+
+      'Custom Script' -> 'Client Script' conversion (v15) is handled by
+      common.sh.
+  "16":
+    branch: master
+    verified: true
+    extra_pip:
+      - qrcode
+    verify_doctype: Barcode Printing
+    notes: |
+      get-app used to abort during uv/pypika dependency resolution (uv
+      refuses the `pypika @ git+...` URL dependency in requirements.txt)
+      but still cloned the app. install-app.sh sets BENCH_DISABLE_UV=1
+      on get-app so bench uses pip, which handles the URL dependency fine
+      and get-app completes cleanly — the generic recovery path is now
+      only a fallback, not the normal flow.
+
+      hooks.py referenced 'Custom Script' fixtures, which don't exist as
+      a table in v16 (renamed to 'Client Script'). common.sh auto-converts
+      the fixture (rename file + flip doctype + update hooks.py) on v16+,
+      so this no longer needs hand-fixing.
+
+      verify_doctype is pinned to 'Barcode Printing' because the
+      auto-detected first doctype (QR Code Configuration) is a Single
+      doctype with no table, so an authenticated REST GET against it
+      returns 500 (TableMissingError). Barcode Printing is a normal
+      doctype and returns 200.
+
+      custom_field.json fixture abort (verified on a clean v16 install):
+      the fixture ships 21 records, including borrowed fields from other
+      apps, and record #15 is `Frepple Item Distribution-absd` — a DocType
+      not installed on a stock ERPNext site. frappe ABORTS the remainder of
+      the file at that record, so the 5 barcode fields AFTER it silently
+      never sync (Delivery Note-barcode_validation, Delivery Note
+      Item-checking_qty, Stock Entry-stock_check, Stock Entry
+      Detail-checking_qty, Sales Invoice Item-reference_dt/dn). Those
+      fields are referenced by the app's own client_script.json fixtures
+      (they toggle the scan-barcode / checking-qty behaviour), so leaving
+      them out breaks the feature even though the app is "installed".
+      This is the SAME gotcha documented for v12/v15 — it is NOT fixed by
+      newer frappe. common.sh's filter_missing_custom_field_dts used to be
+      gated to v14 and older; it is now version-independent and prunes any
+      fixture whose target DocType is absent, on every version. It queries
+      the DB via pymysql directly (not frappe.init/connect, which dies with
+      '/home/frappe/logs/database.log' outside a full bench context).
+      Confirmed: prune drops exactly the Frepple record, then migrate syncs
+      all 20 remaining fields.
+
+# Auto-detected by install-app.sh, not declared:
+#   .pth target        -> nested layout, apps/barcode_shrdc/barcode_shrdc

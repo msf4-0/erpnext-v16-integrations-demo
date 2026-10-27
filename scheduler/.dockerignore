@@ -1,0 +1,10 @@
+frontend/node_modules
+frontend/src
+frontend/public
+frontend/package-lock.json
+.git
+.gitignore
+docs
+wo-timers.json
+*.md
+setup.bat

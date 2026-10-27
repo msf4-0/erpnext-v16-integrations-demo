@@ -1,0 +1,39 @@
+services:
+  bench:
+    image: frappe/bench:latest
+    command: sleep infinity
+    ports:
+      # Container-internal port stays 8000. HOST_PORT is auto-selected at run
+      # time (see sandbox/config.example.env); the default is only a fallback.
+      - "${HOST_PORT:-8001}:8000"
+    volumes:
+      - bench_sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      - db
+      - redis-cache
+      - redis-queue
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Consumed by the provisioning/install scripts inside the container.
+      - SITE_NAME=${SITE_NAME:-frontend}
+      - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin}
+
+  db:
+    image: mariadb:11.8
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-admin}
+    volumes:
+      - db_data:/var/lib/mysql
+
+  redis-cache:
+    image: redis:6.2-alpine
+
+  redis-queue:
+    image: redis:6.2-alpine
+
+volumes:
+  bench_sites:
+  db_data:

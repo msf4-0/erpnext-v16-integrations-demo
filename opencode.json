@@ -1,0 +1,51 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md"],
+  "agent": {
+    "erpnext-planner": {
+      "permission": {
+        "bash": {
+          "docker compose -p comp_demo*": "allow",
+          "docker ps*": "allow",
+          "powershell -File F:\\ERPNEXT\\comp_demo\\up.ps1*": "allow"
+        }
+      }
+    },
+    "erpnext-test-runner": {
+      "permission": {
+        "bash": {
+          "docker compose -p comp_demo*": "allow",
+          "docker compose --project-name comp_demo*": "allow",
+          "docker start*": "allow",
+          "docker ps*": "allow",
+          "powershell -File F:\\ERPNEXT\\comp_demo\\up.ps1*": "allow"
+        }
+      }
+    },
+    "module-developer": {
+      "permission": {
+        "bash": {
+          "docker compose -p comp_demo*": "allow",
+          "docker ps*": "allow"
+        }
+      }
+    },
+    "module-installer": {
+      "permission": {
+        "bash": {
+          "docker compose -p comp_demo*": "allow",
+          "docker ps*": "allow",
+          "docker images*": "allow"
+        }
+      }
+    },
+    "module-fixer": {
+      "permission": {
+        "bash": {
+          "docker compose -p comp_demo*": "allow",
+          "docker ps*": "allow"
+        }
+      }
+    }
+  }
+}

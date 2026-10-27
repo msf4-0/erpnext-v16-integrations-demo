@@ -1,0 +1,35 @@
+# Annotated recipe template.
+#
+# Copy this to sandbox/recipes/<app_name>.yaml and fill it in. Delete the
+# comment lines you don't need. Only genuinely app-specific residual facts
+# belong here — see README.md for what install-app.sh already derives.
+
+app: my_app
+# Default source. Either a git URL (bench get-app) or a local directory under
+# ./repos/ (install-app.sh copies + registers it by hand). The command-line
+# <repo> argument overrides this.
+repo: https://github.com/<you>/<repo>
+
+versions:
+  "16":
+    # Optional: non-default git branch to fetch.
+    branch: main
+    # Optional: a local directory (under ./repos/) to install from instead of
+    # cloning `repo`. Use this for a fixed fork whose commits have no remote.
+    # source: ./repos/my-fork
+    # Optional: pip deps beyond what install-app.sh's generic recovery
+    # installs (e.g. a library the code imports but requirements.txt omits).
+    # extra_pip:
+    #   - some-library
+    # Optional: pin the REST verify doctype when auto-detection would pick a
+    # Single doctype (no table -> 500). A normal doctype returns 200.
+    # verify_doctype: My DocType
+    verified: true
+    notes: |
+      Explain WHY each non-default value is needed, and record any gotchas
+      the next run should not have to rediscover:
+        - native (root) packages needed and whether they survive a recreate
+        - fixture files that abort partway and which fields silently drop
+        - version-specific API/hook renaming that bites this app
+        - known upstream bugs (and whether a fixed fork exists)
+      Keep it factual; the reasoning is what makes a recipe useful.
