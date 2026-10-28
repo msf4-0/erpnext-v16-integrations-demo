@@ -6,7 +6,7 @@ mode: primary
 You do two jobs, in order: (1) stand up an ERPNext sandbox at a specific
 version, and (2) install one or more named custom apps into it. You are
 scoped to a single docker compose project, `comp_demo` Ã¢â‚¬â€ all your
-`bash` commands must go through `docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml ...`,
+`bash` commands must go through `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ...`,
 plus read-only `docker ps` / `docker images`. If something seems to require
 touching anything outside that project, stop and report it instead of
 working around the restriction.
@@ -55,7 +55,7 @@ don't have to ask mid-way:
    `${HOST_PORT:-8001}:8000`, so you do NOT edit the compose file itself (the
    container-internal port stays 8000, so the scripts are unchanged).
    **Report the chosen port to the user** in your final summary. Your `bash`
-   permission is scoped to `docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml ...` (plus
+   permission is scoped to `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ...` (plus
    read-only `docker ps`/`docker images`), so host PowerShell probes like
    `Get-NetTCPConnection`/`Test-NetConnection` are **not** available to you.
    Read the ports already published by containers from `docker ps` (the
@@ -117,10 +117,10 @@ to detect rather than re-hardcoding a new fixed value.
 
 ## Step 0: Provision the base ERPNext version
 
-1. Check what's running: `docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml ps`.
+1. Check what's running: `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ps`.
    - Same version already up Ã¢â€ â€™ skip to Step 1.
    - Different version running Ã¢â€ â€™ tear down first:
-     `docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml down -v` (the `-v` matters, it
+     `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml down -v` (the `-v` matters, it
      drops the old DB volume so the new version starts clean).
 2. If no compose file exists yet at `./sandbox/docker-compose.yml`, create
    one with a bench service, MariaDB, and Redis. The bench service maps the
@@ -129,7 +129,7 @@ to detect rather than re-hardcoding a new fixed value.
    NOT edit the compose file Ã¢â‚¬â€ the host port may already be in use). The
    container-internal port stays 8000, so the scripts are unaffected. Bring it
    up with the env file:
-   `docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml --env-file ./sandbox/.env -f ./sandbox/docker-compose.yml up -d`.
+   `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml --env-file ./sandbox/.env -f ./sandbox/docker-compose.yml up -d`.
    Also pick the DB image for the requested version (e.g. `mariadb:10.3` for
    v12, `mariadb:11.8` for v15+) Ã¢â‚¬â€ see the install log for the per-version DB
    settings that worked.
@@ -141,13 +141,13 @@ to detect rather than re-hardcoding a new fixed value.
    so    a stale copy silently defeats fixes. Order matters: `lib/common.sh`
    first (provision-base and install-app source it), then the two scripts:
    ```
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml exec <bench-service> bash -lc \
+   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec <bench-service> bash -lc \
      "mkdir -p /tmp/scripts/lib /tmp/recipes"
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml cp ./sandbox/scripts/lib/common.sh \
+   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml cp ./sandbox/scripts/lib/common.sh \
      bench:/tmp/scripts/lib/common.sh
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml cp ./sandbox/scripts/provision-base.sh \
+   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml cp ./sandbox/scripts/provision-base.sh \
      bench:/tmp/scripts/provision-base.sh
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml cp ./sandbox/scripts/install-app.sh \
+   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml cp ./sandbox/scripts/install-app.sh \
      bench:/tmp/scripts/install-app.sh
    ```
    Also copy any `./sandbox/scripts/verify-*.sh` you intend to run (e.g.
@@ -162,9 +162,9 @@ to detect rather than re-hardcoding a new fixed value.
    `ensure-root-prep.sh` so it's a single repeatable command, and it is
    idempotent:
    ```
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml cp ./sandbox/scripts/ensure-root-prep.sh \
+   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml cp ./sandbox/scripts/ensure-root-prep.sh \
      bench:/tmp/scripts/ensure-root-prep.sh
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml exec -u root bench bash -lc \
+   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec -u root bench bash -lc \
      "chmod +x /tmp/scripts/ensure-root-prep.sh && /tmp/scripts/ensure-root-prep.sh"
    ```
    Why this is separate and must be root: on a fresh `down -v` + `up` the
@@ -176,7 +176,7 @@ to detect rather than re-hardcoding a new fixed value.
    forget.
 5. Run the fast path:
    ```
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml exec <bench-service> bash -lc "/tmp/scripts/provision-base.sh <version>"
+   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec <bench-service> bash -lc "/tmp/scripts/provision-base.sh <version>"
    ```
    If a `version-<N>` branch doesn't exist for the requested version on
    `frappe` or `erpnext`, the script will fail clearly Ã¢â‚¬â€ say so plainly
@@ -203,14 +203,14 @@ Look for `./sandbox/recipes/<app_name>.yaml`; if absent, look in
 (your own recipes override the shipped examples). If present, run the
 fast path:
 ```
-docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml exec <bench-service> bash -lc \
+docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec <bench-service> bash -lc \
   "/tmp/scripts/install-app.sh <app_name> <repo_url> <version> /tmp/recipes/<app_name>.yaml"
 ```
 Copy the recipe file individually (same overwrite caveat as the scripts Ã¢â‚¬â€
 a dir-copy won't refresh an existing file), from whichever directory it
 lives in:
 ```
-docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml cp \
+docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml cp \
   ./sandbox/recipes/<app_name>.yaml \
   <bench-service>:/tmp/recipes/<app_name>.yaml
 ```

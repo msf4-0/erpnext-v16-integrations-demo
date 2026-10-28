@@ -5,22 +5,22 @@ project (`comp_demo`), one build command, everything included: barcode/QR item
 tracking, e-invoicing, drag-and-drop production planning, Shopify Ã¢â€ â€ ERPNext via
 Node-RED, plus the **erpnext-planner** and module-* agents used to build it.
 
-## Build & run (from `F:\ERPNEXT\erpnext-build`)
+## Build & run (from `F:\ERPNEXT\erpnextcomp_demo`)
 
 ```powershell
 copy .env.example .env                        # if .env is missing (holds secrets Ã¢â‚¬â€ do not commit)
-powershell -File F:\ERPNEXT\erpnext-build\up.ps1  # full build: stack + provision v16 + install apps + seed + verify
-powershell -File F:\ERPNEXT\erpnext-build\up.ps1 -SkipProvision   # reuse an existing site (skip the long v16 provision)
-powershell -File F:\ERPNEXT\erpnext-build\up.ps1 -SkipInstall     # reuse installed apps
-powershell -File F:\ERPNEXT\erpnext-build\up.ps1 -SkipScheduler   # skip the planner image build (~6 min)
+powershell -File F:\ERPNEXT\erpnextcomp_demo\up.ps1  # full build: stack + provision v16 + install apps + seed + verify
+powershell -File F:\ERPNEXT\erpnextcomp_demo\up.ps1 -SkipProvision   # reuse an existing site (skip the long v16 provision)
+powershell -File F:\ERPNEXT\erpnextcomp_demo\up.ps1 -SkipInstall     # reuse installed apps
+powershell -File F:\ERPNEXT\erpnextcomp_demo\up.ps1 -SkipScheduler   # skip the planner image build (~6 min)
 ```
 
 Full build Ã¢â€°Ë† 25Ã¢â‚¬â€œ35 min. Status/down/logs (also usable directly):
 
 ```powershell
-docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml ps
-docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml down      # stop, keep volumes
-docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml down -v   # WIPE the site (tmpfs DB)
+docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ps
+docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml down      # stop, keep volumes
+docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml down -v   # WIPE the site (tmpfs DB)
 ```
 
 ## Endpoints

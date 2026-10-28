@@ -23,16 +23,16 @@ compose project (provisioned by `module-installer`).
 - Canonical command shape (`-T` is optional and harmless Ã¢â‚¬â€ opencode's shell has
   no TTY, but `docker compose exec` here works without it):
   ```bash
-  docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml exec -T bench bash -lc "cd /home/frappe/frappe-bench && <bench command>"
+  docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec -T bench bash -lc "cd /home/frappe/frappe-bench && <bench command>"
   ```
-- Reachable from your granted `bash` pattern `docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml *`,
+- Reachable from your granted `bash` pattern `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml *`,
   plus read-only `docker ps` / `docker images`, plus read-only `git` in the
   app repos. If something seems to require touching anything outside that
   project, stop and report it instead of working around the restriction.
 
 Operational facts:
 
-- Check the running project/ports first: `docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml ps`.
+- Check the running project/ports first: `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ps`.
 - **Files you author are NOT auto-synced.** Copy each changed file in
   individually with `docker compose cp` (a dir-copy will NOT refresh an
   existing file, silently defeating the change). Copy nested files in order.
@@ -197,7 +197,7 @@ ABORTS the wizard, and `app_license` must be the LOWERCASE SPDX id (`mit`, not
 `MIT`). Run it via the canonical exec shape, piping all seven answers:
 
 ```bash
-docker compose -p comp_demo -f F:\ERPNEXT\erpnext-build\docker-compose.yml exec -T bench bash -lc "cd /home/frappe/frappe-bench && printf '%s\n' \
+docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec -T bench bash -lc "cd /home/frappe/frappe-bench && printf '%s\n' \
   '<Title>' '<Description>' '<Publisher>' '<Email>' 'mit' 'N' 'version-16' \
   | bench new-app <app_name>"
 ```
