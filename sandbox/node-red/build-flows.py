@@ -142,7 +142,7 @@ def main() -> int:
         "shopify_token": args.shopify_token.strip(),
     }
 
-    with open(args.src, "r", encoding="utf-8") as handle:
+    with open(args.src, "r", encoding="utf-8-sig") as handle:
         original = json.load(handle)
     if not isinstance(original, list):
         print("ERROR: %s is not a Node-RED flow array" % args.src, file=sys.stderr)

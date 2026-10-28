@@ -182,6 +182,52 @@ function Set-EnvValue([string]$Path, [string]$Key, [string]$Value) {
     return $true
 }
 
+function Test-PlaceholderValue([string]$Value) {
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $true }
+    $v = $Value.Trim()
+    if ($v -eq '__FILL_ME__' -or $v -ieq 'changeme' -or $v -ieq 'change-me') { return $true }
+    if ($v -match '^x+$' -or $v -match '^your[-_ ]?') { return $true }
+    return $false
+}
+
+function Prompt-ShopifyCredentials([hashtable]$cfg, [string]$EnvPath) {
+    # A fresh clone has no .env (git-ignored) and placeholder Shopify values in
+    # .env.example. Collect what is missing so a new user never needs the
+    # original author's secrets. Every answer is optional (Enter keeps the
+    # current value) and is persisted to .env immediately.
+    $store = $cfg['SHOPIFY_STORE']
+    if (Test-PlaceholderValue $store) {
+        Write-Host ''
+        $store = Read-Host 'Shopify store host (e.g. your-store.myshopify.com)'
+        if ($store) { Set-EnvValue $EnvPath 'SHOPIFY_STORE' $store | Out-Null; Write-Change 'SHOPIFY_STORE set' }
+    }
+
+    $clientId     = $cfg['SHOPIFY_CLIENT_ID']
+    $clientSecret = $cfg['SHOPIFY_CLIENT_SECRET']
+    $accessToken  = $cfg['SHOPIFY_ACCESS_TOKEN']
+    $haveClient   = (-not (Test-PlaceholderValue $clientId)) -and (-not (Test-PlaceholderValue $clientSecret))
+    $haveToken    = -not (Test-PlaceholderValue $accessToken)
+
+    if (-not $haveClient -and -not $haveToken) {
+        Write-Host ''
+        Write-Warn 'Shopify is not configured. Provide client credentials (recommended - setup.ps1 then mints a fresh 24 h Admin API token) or a ready access token.'
+        $mode = Read-Host 'Enter 1 for client credentials, 2 for a ready access token'
+        if ($mode -eq '2') {
+            $accessToken = Read-Host 'Shopify Admin API access token (shpat_...)'
+            if ($accessToken) { Set-EnvValue $EnvPath 'SHOPIFY_ACCESS_TOKEN' $accessToken | Out-Null; Write-Change 'SHOPIFY_ACCESS_TOKEN set' }
+        } else {
+            if (Test-PlaceholderValue $clientId) {
+                $clientId = Read-Host 'Shopify client ID (shpca_...)'
+                if ($clientId) { Set-EnvValue $EnvPath 'SHOPIFY_CLIENT_ID' $clientId | Out-Null; Write-Change 'SHOPIFY_CLIENT_ID set' }
+            }
+            if (Test-PlaceholderValue $clientSecret) {
+                $clientSecret = Read-Host 'Shopify client secret (shpss_...)'
+                if ($clientSecret) { Set-EnvValue $EnvPath 'SHOPIFY_CLIENT_SECRET' $clientSecret | Out-Null; Write-Change 'SHOPIFY_CLIENT_SECRET set' }
+            }
+        }
+    }
+}
+
 # ---------------------------------------------------------------------------
 # HTTP helpers
 # ---------------------------------------------------------------------------
@@ -210,6 +256,48 @@ function Get-HttpStatus([string]$Url, [string]$Method = 'GET', [string]$Body = $
     } catch {
         if ($_.Exception.Response) { return [int]$_.Exception.Response.StatusCode }
         return 0
+    }
+}
+
+# ---------------------------------------------------------------------------
+# HTTP helpers (cont.): Invoke-Api wraps Invoke-RestMethod so callers never
+# throw on 4xx/5xx; it returns { Ok, Status, Data, Error } like the sibling
+# shopify-setup script's helper. Step 5b relies on it.
+# ---------------------------------------------------------------------------
+function Invoke-Api {
+    param(
+        [string]$Method = 'GET',
+        [string]$Uri,
+        $Body,
+        [hashtable]$Headers = @{},
+        [string]$ContentType,
+        [int]$TimeoutSec = 45
+    )
+    $p = @{ Method = $Method; Uri = $Uri; TimeoutSec = $TimeoutSec; ErrorAction = 'Stop' }
+    if ($null -ne $Body) { $p['Body'] = $Body }
+    if ($Headers) { $p['Headers'] = $Headers }
+    if ($ContentType) { $p['ContentType'] = $ContentType }
+    try {
+        $data = Invoke-RestMethod @p
+        return [pscustomobject]@{ Ok = $true; Status = 200; Data = $data; Error = $null }
+    } catch {
+        $status = 0
+        try { if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode } } catch { $status = 0 }
+        return [pscustomobject]@{ Ok = $false; Status = $status; Data = $null; Error = $_.Exception.Message }
+    }
+}
+
+# ---------------------------------------------------------------------------
+# 0. bootstrap .env (a fresh clone has no .env - it is git-ignored)
+# ---------------------------------------------------------------------------
+if (-not $VerifyOnly -and -not (Test-Path $EnvPath)) {
+    $example = Join-Path $DemoDir '.env.example'
+    if (Test-Path $example) {
+        Copy-Item $example $EnvPath -Force
+        Write-Change '.env created from .env.example (Shopify credentials are prompted next)'
+    } else {
+        New-Item -ItemType File -Path $EnvPath -Force | Out-Null
+        Write-Warn 'no .env.example found - created an empty .env'
     }
 }
 
@@ -270,6 +358,13 @@ if (Test-Path $PlannerEnv) {
 }
 
 $cfg = Read-EnvFile $EnvPath
+
+# Collect any missing Shopify credentials interactively (fresh clone / fresh .env).
+if (-not $VerifyOnly) {
+    Prompt-ShopifyCredentials -cfg $cfg -EnvPath $EnvPath
+    $cfg = Read-EnvFile $EnvPath
+}
+
 $erpPort      = if ($cfg['ERPNEXT_PORT'])      { $cfg['ERPNEXT_PORT'] }      else { '8000' }
 $nodeRedPort  = if ($cfg['NODE_RED_PORT'])     { $cfg['NODE_RED_PORT'] }     else { '1880' }
 $plannerPort  = if ($cfg['SCHEDULER_PORT'])    { $cfg['SCHEDULER_PORT'] }    else { '3001' }
