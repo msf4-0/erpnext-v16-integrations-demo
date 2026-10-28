@@ -42,6 +42,11 @@
 .PARAMETER ForceFlow
     Rebuild and redeploy the Node-RED flow even if it looks healthy.
 
+.PARAMETER Planner
+    After a successful converge, launch the `erpnext-planner` opencode agent so it
+    interviews you and designs custom doctypes. Without this flag the script asks
+    interactively (y/N) at the end instead.
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\setup.ps1
     # the everyday command: converge + verify, ~2-4 min
@@ -60,7 +65,8 @@ param(
     [switch]$Full,
     [switch]$Wipe,
     [switch]$SkipShopify,
-    [switch]$ForceFlow
+    [switch]$ForceFlow,
+    [switch]$Planner
 )
 
 $ErrorActionPreference = 'Stop'
@@ -883,6 +889,37 @@ if ($script:Issues.Count -gt 0) {
     $script:Issues | ForEach-Object { Write-Host "    - $_" -ForegroundColor Red }
 }
 Write-Host ''
+
+# ---------------------------------------------------------------------------
+# 11. optional: hand off to the erpnext-planner agent (custom doctypes)
+# ---------------------------------------------------------------------------
+$launchPlanner = $false
+if (-not $VerifyOnly -and $script:Issues.Count -eq 0) {
+    if ($Planner) {
+        $launchPlanner = $true
+    } else {
+        $answer = Read-Host 'Launch the erpnext-planner agent to design custom doctypes? [y/N]'
+        if ($answer -match '^(y|yes)$') { $launchPlanner = $true }
+    }
+}
+
+if ($launchPlanner) {
+    $oc = Get-Command opencode -ErrorAction SilentlyContinue
+    if (-not $oc) {
+        Write-Warn 'opencode is not on PATH - install it (npm i -g opencode-ai), then run: opencode . --agent erpnext-planner'
+    } else {
+        Write-Host ''
+        Write-Host 'Opening opencode with the erpnext-planner agent (it will start the interview).' -ForegroundColor Cyan
+        Write-Host 'Answer the questions, review the Spec + Impact Matrix, then reply "approved" to begin coding.' -ForegroundColor Cyan
+        $prevEap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & opencode $DemoDir --agent erpnext-planner --prompt 'Start a new ERPNext customization: run your interview protocol, then produce the Requirements Spec + Impact Matrix + Implementation Plan and wait for my approval.'
+        } finally {
+            $ErrorActionPreference = $prevEap
+        }
+    }
+}
 
 if ($script:Issues.Count -gt 0) { exit 1 }
 exit 0
