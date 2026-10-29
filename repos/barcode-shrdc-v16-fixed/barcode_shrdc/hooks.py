@@ -16,7 +16,7 @@ app_license = "MIT"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/barcode_shrdc/css/barcode_shrdc.css"
-# app_include_js = "/assets/barcode_shrdc/js/barcode_shrdc.js"
+app_include_js = ["/assets/barcode_shrdc/js/scanner_barcode_patch.js"]
 
 # include js, css files in header of web template
 # web_include_css = "/assets/barcode_shrdc/css/barcode_shrdc.css"

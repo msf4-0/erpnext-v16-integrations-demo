@@ -396,39 +396,51 @@ def create_barcode_printing(throw_if_missing, se_id,pr_id):
 
 @frappe.whitelist()
 def make_qrcode(doc, route):
-	qr_html = ''
-	docinfo = json.loads(doc) if isinstance(doc, str) else doc
-	docname = (docinfo or {}).get("name")
-	# A brand-new, unsaved document has a temp name ("new-barcode-printing-..."),
-	# so there is nothing to fetch yet: give a friendly message instead of a raw
-	# DoesNotExistError.
-	if not docname or str(docname).startswith("new-") or not frappe.db.exists("Barcode Printing", docname):
-		frappe.throw(_("Please save the document before generating QR codes"), frappe.ValidationError)
+	"""Generate QR codes for the item rows and return HTML <img> tags.
 
-	barcode_doc = frappe.get_doc("Barcode Printing", docname)
-	items = barcode_doc.items
+	Works on an UNSAVED document: it reads the item rows straight from the
+	passed `doc` JSON (the same contract as `get_preview_html`), so clicking
+	"Create QR" before saving no longer throws "Please save the document".
+	"""
+	docinfo = json.loads(doc) if isinstance(doc, str) else doc
+	docinfo = docinfo or {}
+	items = docinfo.get("items") or []
+	route = route or get_url()
+
+	qr_html = []
 	for item in items:
-		if item.get("qty")!= 0:
-			if item.get("serial_no") and isinstance(item.get("serial_no"), str):
-				serials = item.get("serial_no").split("\n")
-				if serials[-1] == '':
-					serials.pop()
-				for serial in serials:
-					uri  = "item_qr?"
-					if item.get("item_code"): uri += "item_code=" + urllib.parse.quote(item.get_formatted("item_code")) 
-					if item.get("barcode"): uri += "&barcode=" + urllib.parse.quote(item.get_formatted("barcode")) 
-					if serial: uri += "&serial_no=" + urllib.parse.quote(serial) 
-					if item.get("batch_no"): uri += "&batch_no=" + urllib.parse.quote(item.get_formatted("batch_no")) 
-					img_url = qr_code_img(uri, route)
-					qr_html += '<img src="' + img_url + '" width="240px"/><br>'
-			else:
-				uri  = "item_qr?"
-				if item.get("item_code"): uri += "item_code=" + urllib.parse.quote(item.get_formatted("item_code")) 
-				if item.get("barcode"): uri += "&barcode=" + urllib.parse.quote(item.get_formatted("barcode")) 
-				if item.get("batch_no"): uri += "&batch_no=" + urllib.parse.quote(item.get_formatted("batch_no")) 
-				img_url = qr_code_img(uri, route)
-				qr_html += '<img src="' + img_url + '" width="240px"/><br>'
-	return qr_html
+		item_code = (item.get("item_code") or "").strip()
+		barcode = (item.get("barcode") or "").strip()
+		batch_no = (item.get("batch_no") or "").strip()
+		serial_no = item.get("serial_no")
+		qty = flt(item.get("qty") or 0)
+		if not item_code and not barcode:
+			continue
+		serials = []
+		if qty and serial_no and isinstance(serial_no, str):
+			serials = [s for s in serial_no.split("\n") if s and s.strip()]
+		if serials:
+			for serial in serials:
+				uri = _item_qr_uri(item_code, barcode, batch_no, serial)
+				qr_html.append('<img src="' + qr_code_img(uri, route) + '" width="240px"/><br>')
+		else:
+			uri = _item_qr_uri(item_code, barcode, batch_no, None)
+			qr_html.append('<img src="' + qr_code_img(uri, route) + '" width="240px"/><br>')
+	return "".join(qr_html)
+
+
+def _item_qr_uri(item_code, barcode, batch_no, serial_no):
+	"""Build the item_qr query string the QR image encodes (shared helper)."""
+	params = []
+	if item_code:
+		params.append("item_code=" + urllib.parse.quote(item_code))
+	if barcode:
+		params.append("barcode=" + urllib.parse.quote(barcode))
+	if batch_no:
+		params.append("batch_no=" + urllib.parse.quote(batch_no))
+	if serial_no:
+		params.append("serial_no=" + urllib.parse.quote(cstr(serial_no)))
+	return "item_qr?" + "&".join(params)
 
 
 def qr_code_img(uri, route):

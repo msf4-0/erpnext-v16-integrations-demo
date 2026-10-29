@@ -234,8 +234,7 @@
   },
   {
    "fieldname": "qrcodes",
-   "fieldtype": "Code",
-   "hidden": 1,
+   "fieldtype": "HTML",
    "label": "QR Codes"
   },
   {
