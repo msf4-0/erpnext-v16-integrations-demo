@@ -289,6 +289,24 @@ def scan_barcode(search_value):
 	if not value:
 		return {}
 
+	# If the camera scanned a QR that encodes the item_qr URL
+	# (http://host/item_qr?item_code=...&barcode=...), extract the params so it
+	# resolves to the item exactly like a plain barcode scan.
+	if "item_code=" in value or "barcode=" in value:
+		qs = value.split("?", 1)[-1]
+		params = urllib.parse.parse_qs(qs)
+		item_code = (params.get("item_code") or [""])[0]
+		barcode = (params.get("barcode") or [""])[0]
+		if item_code:
+			return {
+				"item_code": item_code,
+				"barcode": barcode or item_code,
+				"batch_no": None,
+				"serial_no": None,
+			}
+		if barcode:
+			value = barcode
+
 	# 1. Item Barcode row (the normal scan path)
 	barcode_row = frappe.db.get_value(
 		"Item Barcode", {"barcode": value}, ["parent", "barcode"], as_dict=True
