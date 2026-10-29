@@ -91,6 +91,7 @@ jinja = {
 
 # before_install = "eu_einvoice.install.before_install"
 after_install = "eu_einvoice.install.after_install"
+after_migrate = "eu_einvoice.install.set_country_defaults"
 
 # Uninstallation
 # ------------

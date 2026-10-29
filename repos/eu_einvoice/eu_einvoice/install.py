@@ -19,6 +19,26 @@ CODELIST_COLUMNS = {"code": "Code", "title": "Name", "description": "Remark"}
 def after_install():
 	make_custom_fields()
 	import_code_lists()
+	set_country_defaults()
+
+
+def set_country_defaults():
+	"""Set the site country/locale defaults so e-invoicing works without manual
+	reconfiguration after a rebuild (the demo DB is tmpfs and resets on restart)."""
+	ss = frappe.get_single("System Settings")
+	changed = False
+	if not ss.country:
+		ss.country = "Malaysia"
+		changed = True
+	if not ss.language:
+		ss.language = "en"
+		changed = True
+	if not ss.time_zone:
+		ss.time_zone = "Asia/Kuala_Lumpur"
+		changed = True
+	if changed:
+		ss.save(ignore_permissions=True)
+		frappe.db.commit()
 
 
 def make_custom_fields():
