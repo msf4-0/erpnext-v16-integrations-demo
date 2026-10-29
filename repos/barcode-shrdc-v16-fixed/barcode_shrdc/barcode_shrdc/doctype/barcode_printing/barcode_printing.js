@@ -113,20 +113,29 @@ frappe.ui.form.on('Barcode Printing', {
 	},
 	create_qr: function(frm)
 	{
+		var route = window.location.origin;
 		frappe.call({
 			method: "barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.make_qrcode",
 			args: {
-				doc:frm.doc,
-				route: frappe.urllib.get_base_url()
-
+				doc: frm.doc,
+				route: route
 			},
 			callback: function(r) {
-				console.log(r.message);
-				frm.set_value("qrcodes",r.message);
-				frm.set_value("qr_created",1);
-				$(frm.fields_dict['qrcodes'].$wrapper).html(r.message)
+				if (r.exc) {
+					frappe.msgprint({
+						title: __("QR Code Generation Failed"),
+						indicator: "red",
+						message: r.exc
+					});
+					return;
+				}
+				frm.set_value("qr_created", 1);
+				var field = frm.fields_dict["qrcodes"];
+				if (field && field.$wrapper) {
+					field.$wrapper.html(r.message || "");
+				}
 			}
-		})
+		});
 
 	},
 	show_sku_barcode: function(frm) {
