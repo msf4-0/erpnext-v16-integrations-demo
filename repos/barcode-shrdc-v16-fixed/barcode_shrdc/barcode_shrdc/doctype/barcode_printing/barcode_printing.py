@@ -419,13 +419,18 @@ def make_qrcode(doc, route):
 		serials = []
 		if qty and serial_no and isinstance(serial_no, str):
 			serials = [s for s in serial_no.split("\n") if s and s.strip()]
+		label = item_code or barcode or "Item"
+		item_name = (item.get("item_name") or "").strip()
+		if item_name and item_name != label:
+			label = label + " - " + item_name
+		label_html = '<div class="qr-item-label"><b>' + escape_html(label) + '</b></div>'
 		if serials:
 			for serial in serials:
 				uri = _item_qr_uri(item_code, barcode, batch_no, serial)
-				qr_html.append('<img src="' + qr_code_img(uri, route) + '" width="240px"/><br>')
+				qr_html.append(label_html + '<img src="' + qr_code_img(uri, route) + '" width="240px"/><br>')
 		else:
 			uri = _item_qr_uri(item_code, barcode, batch_no, None)
-			qr_html.append('<img src="' + qr_code_img(uri, route) + '" width="240px"/><br>')
+			qr_html.append(label_html + '<img src="' + qr_code_img(uri, route) + '" width="240px"/><br>')
 	return "".join(qr_html)
 
 
@@ -603,7 +608,9 @@ def get_preview_html(doc, kind="sku"):
 		for item in items:
 			barcode = item.get("barcode")
 			barcode_type = item.get("barcode_type")
-			if not (barcode and barcode_type):
+			# Blank barcode_type is valid (custom alphanumeric codes default to
+			# Code128), so only require the barcode value itself.
+			if not barcode:
 				continue
 			html.append('<div class="row"><div class="barcode-label-container">'
 			            '<div class="barcode-label" id="barcode-label">')
