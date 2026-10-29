@@ -1,4 +1,4 @@
-[
+﻿[
  {
   "default_value": null,
   "doc_type": "Frepple Item",
@@ -541,7 +541,7 @@
   "parenttype": null,
   "property": "options",
   "property_type": "Text",
-  "value": "EAN\nUPC-A"
+  "value": "\nEAN\nUPC-A\nCODE-39\nEAN-13\nEAN-8\nGTIN\nGTIN-14\nCODE-128\nCustom"
  },
  {
   "default_value": null,
