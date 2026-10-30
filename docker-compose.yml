@@ -37,6 +37,14 @@ services:
       - SITE_NAME=${SITE_NAME:-frontend}
       - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin}
       - ERPNEXT_INTERNAL_URL=http://bench:8000
+      # yarn network resilience: this host's route to registry.yarnpkg.com is
+      # flaky, and `bench get-app erpnext` fails fast when `yarn install` times
+      # out (ESOCKETTIMEDOUT). One socket at a time + longer timeout + more
+      # fetch retries make the app install survive transient drops.
+      - YARN_NETWORK_TIMEOUT=600000
+      - YARN_NETWORK_CONCURRENCY=1
+      - YARN_FETCH_RETRIES=5
+      - YARN_FETCH_RETRY_MAXTIMEOUT=120000
     restart: unless-stopped
 
   db:

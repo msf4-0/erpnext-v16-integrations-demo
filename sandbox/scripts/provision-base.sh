@@ -76,14 +76,36 @@ fi
 
 cd "$BENCH_DIR" || exit 1
 
+# Yarn on this host repeatedly times out against registry.yarnpkg.com
+# (ESOCKETTIMEDOUT fetching a tarball), which makes `bench get-app erpnext`
+# abort mid-install. Set the yarn knobs IN the container as a belt-and-
+# suspenders to the compose env vars: the env vars may not reach every nested
+# `yarn install` (e.g. erpnext's own `cd banking && yarn install` postinstall),
+# while ~/.yarnrc applies to every yarn invocation for the rest of this run.
+yarn config set network-timeout 600000 >/dev/null 2>&1 || true
+yarn config set network-concurrency 1 >/dev/null 2>&1 || true
+yarn config set fetch-retries 5 >/dev/null 2>&1 || true
+yarn config set fetch-retry-maxtimeout 120000 >/dev/null 2>&1 || true
+echo "-- yarn network settings: timeout=$(yarn config get network-timeout)ms concurrency=$(yarn config get network-concurrency) retries=$(yarn config get fetch-retries) --"
+
 # bench get-app can fail on a transient network error (e.g. git clone
 # "RPC failed; curl 56 GnuTLS recv error" / "fatal: early EOF"). If we
 # don't stop here, `new-site --install-app erpnext` runs with no erpnext
 # module and half-provisions a frappe-only site that reports "SUCCESS" at
 # the end. Fail fast and clearly so the operator retries (the clone is
 # idempotent) instead of silently proceeding without ERPNext.
-if ! bench get-app erpnext --branch "$BRANCH"; then
-  echo "ERROR: bench get-app erpnext failed (likely a transient git/network error)."
+GET_APP_OK=0
+for attempt in 1 2 3; do
+  echo "-- bench get-app erpnext --branch $BRANCH (attempt $attempt/3) --"
+  if bench get-app erpnext --branch "$BRANCH"; then
+    GET_APP_OK=1
+    break
+  fi
+  echo "-- get-app attempt $attempt failed; retrying in 10s --"
+  sleep 10
+done
+if [ "$GET_APP_OK" -ne 1 ]; then
+  echo "ERROR: bench get-app erpnext failed after 3 attempts (transient git/network error)."
   echo "  Provisioning aborted — the ERPNext source was NOT fully cloned."
   echo "  Fix connectivity and re-run provision-base.sh $VERSION (get-app is idempotent)."
   exit 1
