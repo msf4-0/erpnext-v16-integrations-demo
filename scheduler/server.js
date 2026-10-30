@@ -543,9 +543,9 @@ app.post('/api/work-orders', async (req, res) => {
       qty: Number(qty),
       planned_start_date: formattedStart,
       planned_end_date: formattedEnd,
-      company: company || 'SHRDC Demo',
-      wip_warehouse: wip_warehouse || 'Work In Progress - SD',
-      fg_warehouse: fg_warehouse || 'Finished Goods - SD',
+      company: company || 'SHRDC',
+      wip_warehouse: wip_warehouse || 'Work In Progress - SHRDC',
+      fg_warehouse: fg_warehouse || 'Finished Goods - SHRDC',
       use_multi_level_bom: 1,
       skip_transfer: 0
     };
@@ -560,9 +560,13 @@ app.post('/api/work-orders', async (req, res) => {
     const response = await erpnextAPI.post('/Work Order', payload);
     const newWO = response.data.data;
 
-    // Auto-submit the Work Order so it doesn't stay as Draft
+    // Auto-submit the Work Order so it doesn't stay as Draft.
+    // Use frappe.client.submit (the real submit flow) instead of flipping the
+    // read-only `docstatus` field directly — the direct PUT is silently ignored
+    // on modern Frappe/ERPNext, which leaves the WO as Draft and generates no
+    // Job Cards or child Work Orders (the "sub orders" from the BOM).
     try {
-      await erpnextAPI.put(`/Work Order/${newWO.name}`, { docstatus: 1 });
+      await erpnextMethodAPI.post('/frappe.client.submit', { doctype: 'Work Order', name: newWO.name });
       newWO.docstatus = 1;
       newWO.status = 'Not Started';
     } catch (submitErr) {
@@ -652,12 +656,12 @@ const autoReplenishStock = async (itemCode, minQty = 100000) => {
     const receiptDoc = {
       stock_entry_type: 'Material Receipt',
       purpose: 'Material Receipt',
-      company: 'SHRDC Demo',
+      company: 'SHRDC',
       posting_date: today,
       items: [
         {
           item_code: itemCode,
-          t_warehouse: 'Stores - SD',
+          t_warehouse: 'Stores - SHRDC',
           qty: minQty,
           basic_rate: 10,
           allow_zero_valuation_rate: 1
@@ -1676,9 +1680,9 @@ app.post('/api/batch-work-orders', async (req, res) => {
           qty: Number(qty),
           planned_start_date: startDateStr,
           planned_end_date: endDateStr,
-          company: company || 'SHRDC Demo',
-          wip_warehouse: wip_warehouse || 'Work In Progress - SD',
-          fg_warehouse: fg_warehouse || 'Finished Goods - SD',
+          company: company || 'SHRDC',
+          wip_warehouse: wip_warehouse || 'Work In Progress - SHRDC',
+          fg_warehouse: fg_warehouse || 'Finished Goods - SHRDC',
           workstation: workstation,
           sales_order: sales_order,
           description: fullDesc
@@ -1753,7 +1757,7 @@ const mapStatusToVWO = (st) => {
 
       // Auto-submit the Virtual Work Order so it doesn't stay as Draft
       try {
-        await erpnextAPI.put(`/Virtual Work Order/${batchGroupId}`, { docstatus: 1 });
+        await erpnextMethodAPI.post('/frappe.client.submit', { doctype: 'Virtual Work Order', name: batchGroupId });
       } catch (submitErr) {
         console.warn(`Could not auto-submit Virtual Work Order ${batchGroupId}:`, submitErr.message);
       }
