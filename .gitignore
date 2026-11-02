@@ -19,6 +19,12 @@ __pycache__/
 sandbox/.cache/
 Thumbs.db
 
+# ---- persistent DB datadir (bind-mounted, lives on the host disk) --------
+data/
+
+# ---- baked image artifact (large binary, not source) ----------------------
+comp_demo-bench-v16.tar
+
 # ---- frontend toolchain (only needed to recompile the SPA) ----------------
 scheduler/frontend/node_modules/
 scheduler/ui-tests/node_modules/

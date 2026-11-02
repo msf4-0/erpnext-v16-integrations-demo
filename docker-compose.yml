@@ -22,8 +22,17 @@ name: comp_demo
 
 services:
   bench:
-    image: frappe/bench:latest
-    command: sleep infinity
+    # Baked image: frappe + erpnext v16 + barcode_shrdc + shopify + eu_einvoice
+    # + render deps are committed INTO the image, so up.ps1 no longer re-provisions
+    # / reinstalls apps on every recreate.
+    image: comp_demo-bench:v16
+    # Auto-start the web server + scheduler + worker as the container's main
+    # process, so the site comes back on its own after a laptop reboot or
+    # Docker Desktop restart (no manual `bench serve` needed).
+    command:
+      - bash
+      - -lc
+      - "cd /home/frappe/frappe-bench; setsid nohup bench schedule > /tmp/bench-schedule.log 2>&1 & setsid nohup bench worker --queue short,default,long >> logs/worker.log 2>&1 & exec bench serve --port 8000"
     ports:
       - "${ERPNEXT_PORT:-8000}:8000"
     volumes:
@@ -49,16 +58,12 @@ services:
 
   db:
     image: mariadb:11.8
-    # WHY THE DATADIR IS IN RAM: this host's container-storage write path is
-    # pathological for databases (host fsync 0.8 ms, in-container 600-900 ms;
-    # MariaDB DDL costs seconds per table on a named volume, so ERPNext's ~900
-    # tables take hours). Measured: named volume 100 CREATE TABLE > 300 s;
-    # tmpfs 0.20 s. Disabling fsync did not help.
-    #
-    # TRADE-OFF: the site DB lives in RAM, so a container stop / Docker Desktop
-    # restart discards it. That is why the demo is REBUILDABLE: re-run
-    # up.ps1 (it recreates the site, reinstalls the apps, re-seeds and
-    # re-verifies). Expect ~25-35 min, not hours.
+    # DURABLE DATADIR (bake track 2b): the site DB now lives on the `db_data`
+    # named volume instead of tmpfs, so a container stop / Docker restart no
+    # longer discards it. The one-time cost is the initial populate/restore on
+    # this host's slow container-storage write path (see bake/README.md). The
+    # flush knobs below trade single-transaction crash-safety for write speed;
+    # they do not affect durability across restarts.
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -70,8 +75,8 @@ services:
       - --innodb-buffer-pool-size=512M
     environment:
       MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-admin}
-    tmpfs:
-      - /var/lib/mysql:size=${DB_TMPFS_SIZE:-2g}
+    volumes:
+      - db_data:/var/lib/mysql
     restart: unless-stopped
 
   redis-cache:
