@@ -6,7 +6,7 @@
 # `frappe_docker-1` or `erpnext-ai-fix` projects: own name, own volumes, own
 # ports.
 #
-#   bench      : ERPNext v16 bench (frappe/bench:latest), provisioned by up.ps1
+#   bench      : ERPNext v16 bench, baked from bake/bench.Dockerfile
 #   db         : MariaDB 11.8 (tmpfs datadir - see the comment on the service)
 #   redis-*    : cache + queue
 #   node-red   : Shopify <-> ERPNext bridge, runs ./flows.json
@@ -23,9 +23,12 @@ name: comp_demo
 services:
   bench:
     # Baked image: frappe + erpnext v16 + barcode_shrdc + shopify + eu_einvoice
-    # + render deps are committed INTO the image, so up.ps1 no longer re-provisions
-    # / reinstalls apps on every recreate.
+    # + render deps are baked INTO the image at build time (bake/bench.Dockerfile),
+    # so a fresh clone can reproduce the exact image without re-provisioning.
     image: comp_demo-bench:v16
+    build:
+      context: .
+      dockerfile: bake/bench.Dockerfile
     # Auto-start the web server + scheduler + worker as the container's main
     # process, so the site comes back on its own after a laptop reboot or
     # Docker Desktop restart (no manual `bench serve` needed).

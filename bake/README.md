@@ -11,6 +11,25 @@ The current setup keeps three things OUT of a durable image:
 Only `bench_sites` (the site files, NOT the DB) is a named volume. The goal is
 to move all of the above into images built ahead of time.
 
+## Fresh clone — the default path
+
+`docker-compose.yml` now carries a `build:` block on the `bench` service, so a
+fresh `git clone` reproduces the exact `comp_demo-bench:v16` image straight from
+`bake/bench.Dockerfile` — no `up.ps1` needed:
+
+```powershell
+git clone https://github.com/msf4-0/erpnext-v16-integrations-demo.git
+cd erpnext-v16-integrations-demo
+copy .env.example .env        # fill in Shopify / DB secrets
+docker compose build bench    # builds comp_demo-bench:v16 from bake/bench.Dockerfile
+docker compose up -d          # starts bench, db, redis, node-red, scheduler
+```
+
+> The image bakes the **code** (frappe + erpnext v16 + barcode_shrdc + shopify +
+> eu_einvoice + render deps). It does **not** bake the live site **data** (the DB)
+> — a fresh clone starts with an empty site. See Track 2 for making the data
+> portable. Secrets stay in `.env` (gitignored); the image never embeds them.
+
 ## Track 1 — bake the CODE (safe, high value)
 
 `bench.Dockerfile` builds `comp_demo-bench:v16` with everything installed at

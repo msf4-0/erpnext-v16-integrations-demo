@@ -1,9 +1,9 @@
 # bake/bench.Dockerfile
 #
 # Builds a SELF-CONTAINED bench image for comp_demo: frappe + erpnext v16 +
-# the demo's custom apps (barcode_shrdc, shopify, eu_einvoice) + the server-side
-# barcode render deps, all installed AT BUILD TIME so `up.ps1` no longer spends
-# ~25-35 min provisioning + installing apps on every recreation.
+# the demo's custom apps (barcode_shrdc, shopify, eu_einvoice) +
+# the server-side barcode render deps, all installed AT BUILD TIME so `up.ps1`
+# no longer spends ~25-35 min provisioning + installing apps on every recreation.
 #
 # Why not `docker commit`? A naive commit of the running bench container balloons
 # to ~148 GB (see the abandoned `a4h-snap:latest` image) because it captures the
@@ -32,25 +32,32 @@ RUN apt-get update -qq \
         redis-server \
     && rm -rf /var/lib/apt/lists/*
 
-# Stage the app sources (they live in this repo under repos/).
-COPY repos/barcode-shrdc-v16-fixed /opt/apps/barcode_shrdc
-COPY repos/shopify-shrdc-v16-fixed /opt/apps/shopify
-COPY repos/eu_einvoice            /opt/apps/eu_einvoice
+# ---------------------------------------------------------------------------
+# Stage the app sources straight into the bench tree. We deliberately do NOT
+# use `bench get-app <local-path>`: bench 5.31.0 (in the current base image)
+# regressed on local paths and aborts with "'App' object has no attribute 'org'".
+# Copying into apps/ + writing the .pth files below is the equivalent install
+# and does not hit the network.
+# ---------------------------------------------------------------------------
+COPY --chown=frappe:frappe repos/barcode-shrdc-v16-fixed /home/frappe/frappe-bench/apps/barcode_shrdc
+COPY --chown=frappe:frappe repos/shopify-shrdc-v16-fixed /home/frappe/frappe-bench/apps/shopify
+COPY --chown=frappe:frappe repos/eu_einvoice            /home/frappe/frappe-bench/apps/eu_einvoice
 
-# ---------------------------------------------------------------------------
-# Bake the bench tree + custom apps as the frappe user.
-# NOTE: `bench get-app <local-path>` links a local checkout into apps/ without
-# hitting the network. erpnext is already present from the base image.
-# ---------------------------------------------------------------------------
 USER frappe
 WORKDIR /home/frappe/frappe-bench
 
-RUN bench get-app /opt/apps/barcode_shrdc \
-    && bench get-app /opt/apps/shopify \
-    && bench get-app /opt/apps/eu_einvoice
+# ---------------------------------------------------------------------------
+# Put each app on the bench venv's import path by writing its .pth file next to
+# the frappe.pth / erpnext.pth that the base image already installed.
+# ---------------------------------------------------------------------------
+RUN SP=$(dirname "$(find /home/frappe/frappe-bench/env -name 'frappe.pth' -print -quit)") \
+    && for app in barcode_shrdc shopify eu_einvoice; do \
+        printf '/home/frappe/frappe-bench/apps/%s\n' "$app" > "$SP/${app}.pth"; \
+    done \
+    && ls -la "$SP"/*.pth
 
-# Server-side rasterisation libs into the bench venv (idempotent, baked once).
-RUN /home/frappe/frappe-bench/env/bin/pip install --no-cache-dir reportlab rlPyCairo
+# Server-side rasterisation + QR libs into the bench venv (idempotent, baked once).
+RUN /home/frappe/frappe-bench/env/bin/pip install --no-cache-dir reportlab qrcode pillow
 
 # The running stack runs `sleep infinity` and drives the bench via `exec`. Keep
 # that contract so up.ps1's `Invoke-Bench` helpers work unchanged.
