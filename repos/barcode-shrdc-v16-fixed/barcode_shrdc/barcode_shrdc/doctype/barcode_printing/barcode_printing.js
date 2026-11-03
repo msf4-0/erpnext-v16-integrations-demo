@@ -57,6 +57,40 @@ frappe.ui.form.on('Barcode Printing', {
 				}
 			});
 		}, __("Get items from"));
+
+		// Print the QR preview: opens a clean print window containing only the
+		// QR labels so each unit's QR can be printed on its own label.
+		frm.add_custom_button(__('Print QR Codes'), function() {
+			const field = frm.fields_dict['qrcodes'];
+			const html = (field && field.$wrapper && field.$wrapper.html()) || '';
+			if (!html || html.trim() === '') {
+				frappe.msgprint({
+					title: __('Nothing to print'),
+					indicator: 'orange',
+					message: __('Generate QR codes first (Get QR Code or Load Tracked Items).')
+				});
+				return;
+			}
+			const w = window.open('', '_blank', 'width=900,height=700');
+			if (!w) {
+				frappe.msgprint({ title: __('Popup blocked'), indicator: 'red',
+					message: __('Allow popups for this site to print QR labels.') });
+				return;
+			}
+			w.document.write(
+				'<html><head><title>QR Codes</title>'
+				+ '<style>'
+				+ 'body{font-family:sans-serif;padding:16px;}'
+				+ '.qr-card{display:inline-block;margin:12px;text-align:center;border:1px solid #eee;padding:8px;page-break-inside:avoid;}'
+				+ '.qr-card img{width:180px;}'
+				+ '@media print{.qr-card{border:1px dashed #999;}}'
+				+ '</style></head><body>'
+				+ html
+				+ '<script>window.onload=function(){window.print();}<\/script>'
+				+ '</body></html>'
+			);
+			w.document.close();
+		});
 	},
 	validate: function(frm)
 	{
@@ -94,19 +128,22 @@ frappe.ui.form.on('Barcode Printing', {
 			{
 				if (d.item_code)
 				{
-					console.log("HELLO");
 					frappe.call({
 						method: "barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.search_item_serial_or_batch_or_barcode_number",
 						args: {
-							search_value:1,
-							item:d
+							search_value: d.barcode || d.item_code,
+							item: d
 						},
 						callback: function(r) {
-							console.log(r);
-							var barcode_val = r.message.barcode;
-							var barcode_type = r.message.barcode_type;
-							frappe.model.set_value(d.doctype,d.name,"barcode",barcode_val);
-							frappe.model.set_value(d.doctype,d.name,"barcode_type",barcode_type);		
+							// Only overwrite when the server actually returned a value.
+							// Previously a `{}` result set barcode to `undefined` and
+							// wiped a manually-typed barcode, leaving the preview empty.
+							if (r.message && r.message.barcode) {
+								frappe.model.set_value(d.doctype, d.name, "barcode", r.message.barcode);
+							}
+							if (r.message && r.message.barcode_type) {
+								frappe.model.set_value(d.doctype, d.name, "barcode_type", r.message.barcode_type);
+							}
 						}
 					})
 				}

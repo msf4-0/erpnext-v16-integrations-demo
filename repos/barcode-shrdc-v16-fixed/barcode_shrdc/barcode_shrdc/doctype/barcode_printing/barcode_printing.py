@@ -251,13 +251,20 @@ def se_make_barcode(source_name, target_doc=None):
 def search_item_serial_or_batch_or_barcode_number(search_value,item):
 	# search barcode no
 	item = json.loads(item)
-	barcode_data = frappe.db.get_value('Item Barcode', {'parent': item["item_code"]}, ['barcode', 'barcode_type', 'parent as item_code'], as_dict=True)
+	item_code = (item or {}).get("item_code")
+	barcode_data = frappe.db.get_value('Item Barcode', {'parent': item_code}, ['barcode', 'barcode_type', 'parent as item_code'], as_dict=True)
 	if barcode_data:
 		if barcode_data.barcode_type == "EAN":
 			barcode_data.barcode_type = "EAN13"
 		elif barcode_data.barcode_type == "UPC-A":
 			barcode_data.barcode_type = "UPC"
 		return barcode_data
+
+	# Fallback: many items are their own scannable value (item_code == the
+	# printed barcode) and have no `Item Barcode` child row. Return the item code
+	# itself so the "Get Items Barcode" button fills rather than wiping the field.
+	if item_code:
+		return {"item_code": item_code, "barcode": item_code, "barcode_type": "CODE128"}
 
 	# search serial no
 	serial_no_data = frappe.db.get_value('Serial No', search_value, ['name as serial_no', 'item_code'], as_dict=True)
