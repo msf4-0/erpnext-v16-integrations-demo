@@ -87,6 +87,83 @@ def bulk_create_tracked_items(item_code, qty, warehouse=None, status="In Stock")
 
 
 @frappe.whitelist()
+def bulk_transfer_tracked_items(rows):
+    """Mass-create Tracked Items (one barcode/QR per physical unit) for MANY
+    items in a single call.
+
+    `rows` is a JSON list of ``{"item_code": ..., "qty": N, "warehouse": ...}``.
+    Unlike the per-item helper above, this resolves every item in one query and
+    pre-seeds the tracking-id / serial-number sequences locally so it does NOT
+    re-scan the whole table on each row — it stays fast for hundreds of units.
+    """
+    if isinstance(rows, str):
+        rows = frappe.parse_json(rows)
+    if not rows:
+        frappe.throw("No items to transfer")
+
+    rows = [r for r in rows if r and cstr(r.get("item_code") or "").strip()]
+    if not rows:
+        frappe.throw("No item codes provided")
+
+    item_codes = list({cstr(r.get("item_code")).strip() for r in rows})
+
+    # Resolve every item name in ONE query (no per-row lookup).
+    items = frappe.db.get_all(
+        "Item",
+        filters={"name": ["in", item_codes]},
+        fields=["name", "item_name"],
+    )
+    name_map = {i.get("name"): i.get("item_name") for i in items}
+    missing = [c for c in item_codes if c not in name_map]
+    if missing:
+        frappe.throw("Items do not exist: {0}".format(", ".join(missing)))
+
+    # Seed the global serial sequence once, then increment locally.
+    serial_cur = int(cstr(_next_serial_no()).replace("SN-", "") or 0)
+
+    created = []
+    for r in rows:
+        code = cstr(r.get("item_code")).strip()
+        qty = int(r.get("qty") or 1)
+        warehouse = r.get("warehouse") or None
+        status = r.get("status") or "In Stock"
+
+        # Next tracking-id index for THIS item, from one MAX query.
+        base = "%s-" % code
+        last = frappe.db.sql(
+            "SELECT name FROM `tabTracked Item` "
+            "WHERE name LIKE %s ORDER BY name DESC LIMIT 1",
+            (base + "%",),
+        )
+        idx = 1
+        if last and last[0][0]:
+            try:
+                idx = int(cstr(last[0][0])[len(base):]) + 1
+            except (ValueError, TypeError):
+                idx = 1
+
+        for _ in range(qty):
+            tracking_id = "%s%04d" % (base, idx)
+            serial_no = "SN-%08d" % serial_cur
+            idx += 1
+            serial_cur += 1
+
+            doc = frappe.new_doc("Tracked Item")
+            doc.tracking_id = tracking_id
+            doc.serial_no = serial_no
+            doc.item_code = code
+            doc.item_name = name_map.get(code)
+            doc.current_warehouse = warehouse
+            doc.current_status = status
+            # tracking_id/serial_no are pre-set, so before_insert/validate skip
+            # the expensive _next_tracking_id / _next_serial_no table scans.
+            doc.insert(ignore_permissions=True)
+            created.append(tracking_id)
+
+    return {"created": len(created), "tracking_ids": created}
+
+
+@frappe.whitelist()
 def get_tracking_barcode_image(tracking_id, barcode_type="CODE128", width=None, height=None):
     try:
         from barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing import (

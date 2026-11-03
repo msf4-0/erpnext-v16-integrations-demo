@@ -17,6 +17,10 @@ app_include_js = ["/assets/item_tracking/js/item_tracking_scan.js"]
 # reachable from the product master rather than a detached link.
 doctype_js = {"Item": "public/js/item_tracker_item.js"}
 
+# Item list-view bulk action: select many items and mass-create their tracked
+# units (one barcode/QR each) in a single click.
+doctype_list_js = {"Item": "public/js/item_list_view.js"}
+
 # Document events: the only place locations/history change is on real
 # transaction lifecycle events (submit/cancel), never on scan.
 doc_events = {
