@@ -26,6 +26,10 @@ Anything that is not stock ERPNext/Frappe v16:
 |---|---|---|---|---|
 | `custom_manufacturing` | `repos/custom_manufacturing` | local app (bench new-app) | No — sandbox was rebuilt fresh (clean base v16); reinstall on demand | Module folder `process_manufacturing` (differs from app name on purpose). Custom Metal Fab Process Master. |
 | `chat_widget` | `chat_widget` | local app | Not yet installed anywhere | **PROTECTED — exempt from every rollback (see policy below).** Standalone AI chatbot: `/chatbot` page, floating widget (website + Desk), Chatbot Settings. |
+| `item_tracking` | `repos/item_tracking` | local app | Yes (live site `frontend`) | Per-physical-unit tracking (`Tracked Item`, `item_tracking_history`, `tracked_items` child on Stock Entry/Delivery Note), inline scan popup. See `docs/ASSESSMENT-einvoicing-barcode.md`. |
+| `barcode_shrdc` | `repos/barcode-shrdc-v16-fixed` | local app | Yes | Barcode/QR printing + scan-to-Delivery-Note/Stock-Entry. |
+| `eu_einvoice` | `repos/eu_einvoice` | alyf-de fork | Yes | EU XRechnung/EN-16931 (NOT Malaysia MyInvois). |
+| `shopify` | `repos/shopify-shrdc-v16-fixed` | local app | Yes | Shopify ↔ ERPNext bridge. |
 
 ## Standing rollback policy (human-ordered)
 
@@ -59,6 +63,8 @@ confirmation in its reply after any rollback — no silent rollbacks.
 | 17 | 2026-10-02 | — | Number Cards `Active Process Masters`, `Open Rework Job Cards` | `.../number_card/` | 2 | Installed |
 | 18 | 2026-10-02 | — | Dashboard Chart `Outsourced vs In-house Job Cards` | `.../dashboard_chart/` | 2 | Installed |
 | 19 | 2026-10-02 | — | Demo data (SANDBOX ONLY) `demo_data.py` | `.../process_manufacturing/demo_data.py` | 2 | Sandbox only |
+| 20 | 2026-11-04 | E | Stock Entry "Scan Tracked Item" now sets `s_warehouse`/`t_warehouse` from the header (fixes missing-warehouse submit error) | `item_tracking/public/js/item_tracking_scan.js` | 2 | Installed |
+| 21 | 2026-11-04 | C | `Tracked Item` QR now encodes the raw `tracking_id` (not a `/tracked_item_lookup` URL) so scans resolve inline | `item_tracking/.../doctype/tracked_item/tracked_item.py` | 2 | Installed |
 
 Legend — **Kind** (skill `frappe-doctype-builder`): A = Custom Field · B = Property
 Setter · C = doc_events/logic · D = new Custom DocType · E = Client Script.

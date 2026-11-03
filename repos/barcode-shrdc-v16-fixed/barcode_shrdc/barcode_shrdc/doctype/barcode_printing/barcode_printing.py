@@ -678,3 +678,68 @@ def get_preview_html(doc, kind="sku"):
 
 	html.append("</div>")
 	return "".join(html)
+
+
+# ---------------------------------------------------------------------------
+# Tracked Item (item_tracking) integration: print one QR per physical unit,
+# linked to the SAME tracking_id the item_tracking scanner resolves.
+# ---------------------------------------------------------------------------
+
+@frappe.whitelist()
+def get_tracked_items():
+	"""Return the full array of Tracked Items (item_tracking app) with their
+	live serial number and status — the source list for unit-label printing."""
+	return frappe.get_all(
+		"Tracked Item",
+		fields=["name", "serial_no", "item_code", "item_name",
+		        "current_status", "current_warehouse"],
+		order_by="creation asc",
+	)
+
+
+def _tracked_item_qr(tracking_id):
+	"""Render a QR PNG that encodes the RAW tracking_id.
+
+	This is the same stable link the item_tracking app scans (its QR encodes the
+	bare id and `lookup_tracked_item` resolves it), so a label printed here scans
+	identically in the item_tracking popup and always reflects the unit's LIVE
+	status — the QR itself never has to change when a status changes.
+	"""
+	qr = qrcode.QRCode(border=4, error_correction=qrcode.constants.ERROR_CORRECT_H)
+	qr.add_data(cstr(tracking_id))
+	qr.make(fit=True)
+	img = qr.make_image(fill_color="black", back_color="white")
+	buf = BytesIO()
+	img.save(buf, format="PNG")
+	return _save_public_image(buf.getvalue(), "qr")
+
+
+@frappe.whitelist()
+def make_tracked_item_qrcodes():
+	"""Build print-ready HTML: a QR + serial/status label for EVERY Tracked Item.
+
+	Called by the "Load Tracked Items" button on the Barcode Printing form. The
+	status text is read fresh on each call, so re-printing always shows the
+	current status; the QR encodes the stable tracking_id and needs no refresh.
+	"""
+	items = get_tracked_items()
+	if not items:
+		return '<p class="text-muted">' + _("No Tracked Items found.") + '</p>'
+
+	html = ['<div style="display:flex;flex-wrap:wrap;">']
+	for it in items:
+		tracking_id = it.get("name") or ""
+		serial = it.get("serial_no") or tracking_id
+		item_name = it.get("item_name") or it.get("item_code") or ""
+		status = it.get("current_status") or ""
+		qr_url = _tracked_item_qr(tracking_id)
+		html.append(
+			'<div style="margin:12px;text-align:center;border:1px solid #eee;padding:8px;">'
+			'<img src="' + qr_url + '" width="180px"/><br>'
+			'<div class="qr-item-label"><b>' + escape_html(serial) + '</b></div>'
+			'<div>' + escape_html(item_name) + '</div>'
+			'<div class="text-muted" style="font-size:12px;">' + escape_html(status) + '</div>'
+			'</div>'
+		)
+	html.append('</div>')
+	return "".join(html)

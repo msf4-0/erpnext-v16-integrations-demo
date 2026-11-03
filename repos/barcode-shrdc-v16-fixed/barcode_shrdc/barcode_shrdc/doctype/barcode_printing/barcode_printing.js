@@ -40,6 +40,23 @@ frappe.ui.form.on('Barcode Printing', {
 
 
 		}, __("Get items from"));
+
+		frm.add_custom_button(__('Load Tracked Items'), function() {
+			frappe.call({
+				method: 'barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.make_tracked_item_qrcodes',
+				freeze: true,
+				callback: function(r) {
+					if (r.exc) {
+						frappe.msgprint({ title: __('QR Code Generation Failed'), indicator: 'red', message: r.exc });
+						return;
+					}
+					const field = frm.fields_dict['qrcodes'];
+					if (field && field.$wrapper) {
+						field.$wrapper.html(r.message || '');
+					}
+				}
+			});
+		}, __("Get items from"));
 	},
 	validate: function(frm)
 	{
