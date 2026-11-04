@@ -40,7 +40,9 @@
   "reference_section",
   "ref_pr",
   "column_break_51",
-  "ref_se"
+  "ref_se",
+  "ref_po",
+  "ref_mr"
  ],
  "fields": [
   {
@@ -281,6 +283,20 @@
    "fieldtype": "Link",
    "label": "Reference Stock Entry",
    "options": "Stock Entry",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ref_po",
+   "fieldtype": "Link",
+   "label": "Purchase Order",
+   "options": "Purchase Order",
+   "read_only": 1
+  },
+  {
+   "fieldname": "ref_mr",
+   "fieldtype": "Link",
+   "label": "Material Request",
+   "options": "Material Request",
    "read_only": 1
   }
  ],

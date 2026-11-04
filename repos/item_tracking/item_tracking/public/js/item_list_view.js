@@ -69,5 +69,36 @@ frappe.listview_settings['Item'] = {
 				});
 			}, __('Create Tracked Units'), __('Create'));
 		});
+
+		listview.page.add_action_item(__('Create Tracked Units from Stock'), function () {
+			frappe.prompt([
+				{
+					fieldname: 'warehouse',
+					fieldtype: 'Link',
+					options: 'Warehouse',
+					label: __('Warehouse (leave blank for all)'),
+					reqd: 0
+				}
+			], function (values) {
+				frappe.call({
+					method: 'item_tracking.item_tracking.doctype.tracked_item.tracked_item.bulk_transfer_all_stock_items',
+					args: { warehouse: values.warehouse || null },
+					freeze: true,
+					freeze_message: __('Creating tracked units from stock…'),
+					callback: function (r) {
+						if (r.exc) {
+							frappe.msgprint({ title: __('Bulk creation failed'), indicator: 'red', message: r.exc });
+							return;
+						}
+						const count = (r.message && r.message.created) || 0;
+						frappe.msgprint({
+							title: __('Tracked units created'),
+							indicator: 'green',
+							message: __('Created {0} tracked unit(s) from current stock.', [count])
+						});
+					}
+				});
+			}, __('Create Tracked Units from Stock'), __('Create'));
+		});
 	}
 };

@@ -29,6 +29,7 @@ Anything that is not stock ERPNext/Frappe v16:
 | `item_tracking` | `repos/item_tracking` | local app | Yes (live site `frontend`) | Per-physical-unit tracking (`Tracked Item`, `item_tracking_history`, `tracked_items` child on Stock Entry/Delivery Note), inline scan popup. See `docs/ASSESSMENT-einvoicing-barcode.md`. |
 | `barcode_shrdc` | `repos/barcode-shrdc-v16-fixed` | local app | Yes | Barcode/QR printing + scan-to-Delivery-Note/Stock-Entry. |
 | `eu_einvoice` | `repos/eu_einvoice` | alyf-de fork | Yes | EU XRechnung/EN-16931 (NOT Malaysia MyInvois). |
+| `my_invois` | `repos/my_invois` | local app | Yes | Malaysia LHDN MyInvois **submit-only** layer: validate → UBL-JSON map → base64/SHA256 envelope → `POST /documentsubmissions` → record response → refresh status / cancel. Sales Invoice stays the calculation source of truth. |
 | `shopify` | `repos/shopify-shrdc-v16-fixed` | local app | Yes | Shopify ↔ ERPNext bridge. |
 
 ## Standing rollback policy (human-ordered)
@@ -65,6 +66,7 @@ confirmation in its reply after any rollback — no silent rollbacks.
 | 19 | 2026-10-02 | — | Demo data (SANDBOX ONLY) `demo_data.py` | `.../process_manufacturing/demo_data.py` | 2 | Sandbox only |
 | 20 | 2026-11-04 | E | Stock Entry "Scan Tracked Item" now sets `s_warehouse`/`t_warehouse` from the header (fixes missing-warehouse submit error) | `item_tracking/public/js/item_tracking_scan.js` | 2 | Installed |
 | 21 | 2026-11-04 | C | `Tracked Item` QR now encodes the raw `tracking_id` (not a `/tracked_item_lookup` URL) so scans resolve inline | `item_tracking/.../doctype/tracked_item/tracked_item.py` | 2 | Installed |
+| 22 | 2026-11-04 | A/C/E | MyInvois (Malaysia LHDN) submit-only layer: TIN/BRN/MSIC/SST/contact fields on Customer/Company/Supplier, Sales Invoice status/UUID/link fields, UBL-JSON `build_invoice_document` + `submit_to_myinvois`/`refresh_myinvois_status`/`cancel_myinvois_document`, Client Script buttons | `my_invois/my_invois/my_invois/api.py` + `fixtures/custom_field.json` + `fixtures/client_script.json` | 2 | Installed |
 
 Legend — **Kind** (skill `frappe-doctype-builder`): A = Custom Field · B = Property
 Setter · C = doc_events/logic · D = new Custom DocType · E = Client Script.

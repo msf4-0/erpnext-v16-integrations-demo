@@ -30,12 +30,33 @@ item_tracking._history_table = function (history) {
 
 /* Show the popup: Product Name, Serial No, Unique ID, Current Location + status table. */
 item_tracking.show_popup = function (data) {
-	if (!data || !data.tracking_id) {
+	if (!data || (!data.tracking_id && !data.is_item)) {
 		frappe.msgprint({
 			title: __('Item not found'),
 			indicator: 'red',
-			message: __('No tracked item matches that QR code, barcode, or ID.')
+			message: __('No item or tracked item matches that QR code, barcode, or ID.')
 		});
+		return;
+	}
+
+	// Item-level (SKU barcode / item code) result: show the item + stock summary.
+	if (data.is_item) {
+		const id = new frappe.ui.Dialog({
+			title: __('Item in Stock'),
+			fields: [
+				{ fieldtype: 'HTML', fieldname: 'body',
+				  options: '<h4>' + frappe.utils.escape_html(data.item_name || '') + '</h4>'
+					+ '<p><b>' + __('Item Code') + ':</b> ' + frappe.utils.escape_html(data.item_code) + '</p>'
+					+ '<p><b>' + __('Stock on hand') + ':</b> ' + frappe.utils.escape_html(data.stock_qty) + '</p>'
+					+ '<p><b>' + __('Tracked Units') + ':</b> ' + frappe.utils.escape_html(data.tracked_count) + '</p>' }
+			],
+			primary_action_label: __('Open Item'),
+			primary_action: function () {
+				frappe.set_route('Form', 'Item', data.item_code);
+				id.hide();
+			}
+		});
+		id.show();
 		return;
 	}
 	const loc = data.current_warehouse || data.current_status || __('Unknown');

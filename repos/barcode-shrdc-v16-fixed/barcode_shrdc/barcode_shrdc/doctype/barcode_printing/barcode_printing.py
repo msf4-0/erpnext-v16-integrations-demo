@@ -186,11 +186,47 @@ class BarcodePrinting(Document):
 
 
 
+def _resolve_barcode(item_code):
+	"""Return (barcode, barcode_type) for an item: its first `Item Barcode`
+	child row, falling back to the item_code itself as a CODE128 value so a
+	printed label is never blank."""
+	item_code = cstr(item_code or "").strip()
+	if not item_code:
+		return None, "CODE128"
+	bd = frappe.db.get_value("Item Barcode", {"parent": item_code}, ["barcode", "barcode_type"], as_dict=True)
+	if bd:
+		bt = (bd.get("barcode_type") or "CODE128") or "CODE128"
+		if bt == "EAN":
+			bt = "EAN13"
+		elif bt == "UPC-A":
+			bt = "UPC"
+		return (bd.get("barcode") or item_code), bt
+	return item_code, "CODE128"
+
+
+def _fill_barcodes(doc):
+	"""Populate barcode/barcode_type on every child row so labels never print
+	blank (the #1 cause of 'barcode sometimes doesn't print')."""
+	# A freshly mapped doc (opened via the "Create" button on a source document)
+	# has no naming_series yet, so default it here to keep the new record saveable.
+	if not (doc.get("naming_series") or "").strip():
+		doc.naming_series = "BP-.YYYY.-.MM.-.DD.-"
+	for row in doc.get("items") or []:
+		if row.item_code and not (row.get("barcode") or "").strip():
+			barcode, btype = _resolve_barcode(row.item_code)
+			row.barcode = barcode
+			row.barcode_type = btype
+	return doc
+
+
 @frappe.whitelist()
 def pr_make_barcode(source_name, target_doc=None):
 	doc = get_mapped_doc("Purchase Receipt", source_name, {
 		"Purchase Receipt": {
 			"doctype": "Barcode Printing",
+			"field_map": {
+				"company": "company",
+			},
 			"validation": {
 				"docstatus": ["=", 1]
 			}
@@ -209,7 +245,7 @@ def pr_make_barcode(source_name, target_doc=None):
 		}
 	}, target_doc)
 
-	return doc
+	return _fill_barcodes(doc)
 
 @frappe.whitelist()
 def se_make_barcode(source_name, target_doc=None):
@@ -226,7 +262,8 @@ def se_make_barcode(source_name, target_doc=None):
 				"docstatus": ["=", 1],
 			},
 			"field_map": {
-				"get_items_from" :"doctype"
+				"get_items_from" :"doctype",
+				"company": "company"
 			}
 		},
 		"Stock Entry Detail": {
@@ -245,7 +282,7 @@ def se_make_barcode(source_name, target_doc=None):
 		}
 	}, target_doc)
 
-	return doclist
+	return _fill_barcodes(doclist)
 
 @frappe.whitelist()
 def search_item_serial_or_batch_or_barcode_number(search_value,item):
@@ -421,11 +458,12 @@ def create_barcode_printing(throw_if_missing, se_id,pr_id):
 
 @frappe.whitelist()
 def make_qrcode(doc, route):
-	"""Generate QR codes for the item rows and return HTML <img> tags.
+	"""Generate ONE QR per physical unit from Tracked Items for the item rows.
 
-	Works on an UNSAVED document: it reads the item rows straight from the
-	passed `doc` JSON (the same contract as `get_preview_html`), so clicking
-	"Create QR" before saving no longer throws "Please save the document".
+	Each QR encodes that unit's tracking_id, so scanning a printed QR opens the
+	exact tracked unit (location + status) in the item_tracking popup — the same
+	code the auto-created tracked items use. Falls back to a single SKU QR only
+	when no tracked units exist yet for an item.
 	"""
 	docinfo = json.loads(doc) if isinstance(doc, str) else doc
 	docinfo = docinfo or {}
@@ -435,27 +473,36 @@ def make_qrcode(doc, route):
 	qr_html = []
 	for item in items:
 		item_code = (item.get("item_code") or "").strip()
-		barcode = (item.get("barcode") or "").strip()
-		batch_no = (item.get("batch_no") or "").strip()
-		serial_no = item.get("serial_no")
-		qty = flt(item.get("qty") or 0)
-		if not item_code and not barcode:
+		qty = int(flt(item.get("qty") or 0))
+		if not item_code or qty <= 0:
 			continue
-		serials = []
-		if qty and serial_no and isinstance(serial_no, str):
-			serials = [s for s in serial_no.split("\n") if s and s.strip()]
-		label = item_code or barcode or "Item"
-		item_name = (item.get("item_name") or "").strip()
-		if item_name and item_name != label:
-			label = label + " - " + item_name
-		label_html = '<div class="qr-item-label"><b>' + escape_html(label) + '</b></div>'
-		if serials:
-			for serial in serials:
-				uri = _item_qr_uri(item_code, barcode, batch_no, serial)
-				qr_html.append(label_html + '<img src="' + qr_code_img(uri, route) + '" width="240px"/><br>')
-		else:
-			uri = _item_qr_uri(item_code, barcode, batch_no, None)
+		item_name = (item.get("item_name") or item_code).strip()
+		tracked = frappe.get_all(
+			"Tracked Item",
+			filters={"item_code": item_code},
+			fields=["name", "serial_no", "item_name", "current_status", "current_warehouse"],
+			order_by="name asc",
+			limit=qty,
+		)
+		if not tracked:
+			# No tracked units yet -> single SKU-level QR as a fallback.
+			uri = _item_qr_uri(item_code, item.get("barcode"), item.get("batch_no"), item.get("serial_no"))
+			label_html = '<div class="qr-item-label"><b>' + escape_html(item_name) + '</b></div>'
 			qr_html.append(label_html + '<img src="' + qr_code_img(uri, route) + '" width="240px"/><br>')
+			continue
+		for t in tracked:
+			tracking_id = t.get("name") or ""
+			serial = t.get("serial_no") or tracking_id
+			status = t.get("current_status") or ""
+			wh = t.get("current_warehouse") or ""
+			location = (status + (" · " + wh if wh else "")) if status else (wh or "—")
+			label_html = '<div class="qr-item-label"><b>' + escape_html(serial) + '</b></div>'
+			qr_html.append(
+				label_html
+				+ '<div>' + escape_html(item_name) + '</div>'
+				+ '<img src="' + _tracked_item_qr(tracking_id) + '" width="240px"/><br>'
+				+ '<div class="text-muted" style="font-size:12px;">' + escape_html(location) + '</div>'
+			)
 	return "".join(qr_html)
 
 
@@ -631,21 +678,44 @@ def get_preview_html(doc, kind="sku"):
 
 	if kind == "sku":
 		for item in items:
-			barcode = item.get("barcode")
-			barcode_type = item.get("barcode_type")
-			# Blank barcode_type is valid (custom alphanumeric codes default to
-			# Code128), so only require the barcode value itself.
-			if not barcode:
+			item_code = (item.get("item_code") or "").strip()
+			qty = int(flt(item.get("qty") or 0))
+			barcode_type = item.get("barcode_type") or "CODE128"
+			if not item_code or qty <= 0:
 				continue
-			html.append('<div class="row"><div class="barcode-label-container">'
-			            '<div class="barcode-label" id="barcode-label">')
-			html.append(one_barcode(barcode, barcode_type))
-			html.append(code_line(item))
-			html.append('<div class="label-item-price label-field2">RM '
-			            + "%.2f" % flt(item.get("rate")) + "</div>")
-			html.append('<div style="font-weight:bold;font-family:Sans-serif;">x'
-			            + escape_html(cstr(item.get("qty"))) + "</div><hr>")
-			html.append("</div></div></div>")
+			tracked = frappe.get_all(
+				"Tracked Item",
+				filters={"item_code": item_code},
+				fields=["name", "serial_no", "item_name", "current_status", "current_warehouse"],
+				order_by="name asc",
+				limit=qty,
+			)
+			if not tracked:
+				# No tracked units yet -> single SKU barcode as a fallback.
+				barcode = item.get("barcode") or item_code
+				html.append('<div class="row"><div class="barcode-label-container">'
+				            '<div class="barcode-label" id="barcode-label">')
+				html.append(one_barcode(barcode, barcode_type))
+				html.append(code_line(item))
+				html.append('<div class="label-item-price label-field2">RM '
+				            + "%.2f" % flt(item.get("rate")) + "</div>")
+				html.append('<div style="font-weight:bold;font-family:Sans-serif;">x'
+				            + escape_html(cstr(item.get("qty"))) + "</div><hr>")
+				html.append("</div></div></div>")
+				continue
+			for t in tracked:
+				tracking_id = t.get("name") or ""
+				serial = t.get("serial_no") or tracking_id
+				status = t.get("current_status") or ""
+				wh = t.get("current_warehouse") or ""
+				location = (status + (" · " + wh if wh else "")) if status else (wh or "—")
+				html.append('<div class="row"><div class="barcode-label-container">'
+				            '<div class="barcode-label" id="barcode-label">')
+				html.append(one_barcode(tracking_id, barcode_type))
+				html.append('<div class="label-item-code label-field">' + escape_html(serial) + '</div>')
+				html.append('<div class="label-item-code label-field">' + escape_html(t.get("item_name") or item_code) + '</div>')
+				html.append('<div class="text-muted" style="font-size:12px;">' + escape_html(location) + '</div>')
+				html.append("</div></div></div>")
 
 	elif kind == "serial":
 		barcode_type = docinfo.get("serial_barcode_type") or "CODE128"
@@ -693,11 +763,15 @@ def get_preview_html(doc, kind="sku"):
 # ---------------------------------------------------------------------------
 
 @frappe.whitelist()
-def get_tracked_items():
-	"""Return the full array of Tracked Items (item_tracking app) with their
-	live serial number and status — the source list for unit-label printing."""
+def get_tracked_items(item_code=None):
+	"""Return Tracked Items (optionally filtered by item) with their live serial,
+	status and warehouse — the source list for unit-label printing."""
+	filters = {}
+	if item_code:
+		filters["item_code"] = item_code
 	return frappe.get_all(
 		"Tracked Item",
+		filters=filters,
 		fields=["name", "serial_no", "item_code", "item_name",
 		        "current_status", "current_warehouse"],
 		order_by="creation asc",
@@ -722,14 +796,14 @@ def _tracked_item_qr(tracking_id):
 
 
 @frappe.whitelist()
-def make_tracked_item_qrcodes():
-	"""Build print-ready HTML: a QR + serial/status label for EVERY Tracked Item.
+def make_tracked_item_qrcodes(item_code=None):
+	"""Build print-ready HTML: a QR + serial/status/warehouse label for Tracked
+	Items (optionally filtered to one item).
 
-	Called by the "Load Tracked Items" button on the Barcode Printing form. The
-	status text is read fresh on each call, so re-printing always shows the
-	current status; the QR encodes the stable tracking_id and needs no refresh.
+	Called by the "Load Tracked Items" button. Status/warehouse is read fresh on
+	each call; the QR encodes the stable tracking_id and needs no refresh.
 	"""
-	items = get_tracked_items()
+	items = get_tracked_items(item_code)
 	if not items:
 		return '<p class="text-muted">' + _("No Tracked Items found.") + '</p>'
 
@@ -739,14 +813,67 @@ def make_tracked_item_qrcodes():
 		serial = it.get("serial_no") or tracking_id
 		item_name = it.get("item_name") or it.get("item_code") or ""
 		status = it.get("current_status") or ""
+		warehouse = it.get("current_warehouse") or ""
 		qr_url = _tracked_item_qr(tracking_id)
 		html.append(
 			'<div style="margin:12px;text-align:center;border:1px solid #eee;padding:8px;">'
 			'<img src="' + qr_url + '" width="180px"/><br>'
 			'<div class="qr-item-label"><b>' + escape_html(serial) + '</b></div>'
 			'<div>' + escape_html(item_name) + '</div>'
-			'<div class="text-muted" style="font-size:12px;">' + escape_html(status) + '</div>'
+			'<div class="text-muted" style="font-size:12px;">' + _("Status") + ': ' + escape_html(status or "—") + '</div>'
+			'<div class="text-muted" style="font-size:12px;">' + _("Location") + ': ' + escape_html(warehouse or "—") + '</div>'
 			'</div>'
 		)
 	html.append('</div>')
 	return "".join(html)
+
+
+@frappe.whitelist()
+def po_make_barcode(source_name, target_doc=None):
+	"""Pull a submitted Purchase Order's items into Barcode Printing."""
+	doc = get_mapped_doc("Purchase Order", source_name, {
+		"Purchase Order": {
+			"doctype": "Barcode Printing",
+			"field_map": {
+				"company": "company",
+			},
+			"validation": {"docstatus": ["=", 1]},
+		},
+		"Purchase Order Item": {
+			"doctype": "Barcode Generator Items",
+			"field_map": {
+				"qty": "qty",
+				"uom": "uom",
+				"rate": "basic_rate",
+				"serial_no": "serial_no",
+				"batch_no": "batch_no",
+				"parent": "ref_po",
+				"warehouse": "warehouse",
+			},
+		},
+	}, target_doc)
+	return _fill_barcodes(doc)
+
+
+@frappe.whitelist()
+def mr_make_barcode(source_name, target_doc=None):
+	"""Pull a submitted Material Request's items into Barcode Printing."""
+	doc = get_mapped_doc("Material Request", source_name, {
+		"Material Request": {
+			"doctype": "Barcode Printing",
+			"field_map": {
+				"company": "company",
+			},
+			"validation": {"docstatus": ["=", 1]},
+		},
+		"Material Request Item": {
+			"doctype": "Barcode Generator Items",
+			"field_map": {
+				"qty": "qty",
+				"uom": "uom",
+				"parent": "ref_mr",
+				"warehouse": "warehouse",
+			},
+		},
+	}, target_doc)
+	return _fill_barcodes(doc)

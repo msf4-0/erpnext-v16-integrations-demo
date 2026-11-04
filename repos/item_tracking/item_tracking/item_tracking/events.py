@@ -59,7 +59,35 @@ def validate_stock_entry_tracked_items(doc, method):
             )
 
 
+def _auto_create_tracked_items(item_code, qty, warehouse):
+    """Create one Tracked Item (QR + barcode) per physical unit received, so
+    every item has its label from the moment it enters stock — no manual
+    "Create Tracked Units" step."""
+    try:
+        from item_tracking.item_tracking.doctype.tracked_item.tracked_item import bulk_create_tracked_items
+        qty = int(qty or 0)
+        if qty > 0 and item_code:
+            return bulk_create_tracked_items(item_code, qty, warehouse)
+    except Exception:
+        frappe.log_error(title="item_tracking auto-create failed", message=frappe.get_traceback())
+    return []
+
+
+def on_purchase_receipt_submit(doc, method):
+    """Auto-create Tracked Items for every unit received on a Purchase Receipt."""
+    for item in doc.items:
+        if (item.qty or 0) > 0:
+            _auto_create_tracked_items(item.item_code, item.qty, item.warehouse or doc.set_warehouse)
+
+
 def on_stock_entry_submit(doc, method):
+    # Auto-create tracked units for inbound receipts (Material Receipt /
+    # Manufacture output) so no manual tracking step is needed.
+    if doc.stock_entry_type in ("Material Receipt", "Manufacture"):
+        for item in doc.items:
+            if item.t_warehouse and (item.qty or 0) > 0:
+                _auto_create_tracked_items(item.item_code, item.qty, item.t_warehouse)
+
     for row in _tracked_rows(doc):
         tid = row.tracked_item
         if not tid or not frappe.db.exists("Tracked Item", tid):

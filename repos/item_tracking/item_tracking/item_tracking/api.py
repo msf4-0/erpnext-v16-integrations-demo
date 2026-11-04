@@ -3,7 +3,8 @@
 from __future__ import unicode_literals
 
 import frappe
-from frappe.utils import cstr
+from frappe.utils import cstr, flt
+from urllib.parse import unquote
 
 
 @frappe.whitelist()
@@ -19,14 +20,18 @@ def lookup_tracked_item(search_value):
     if not value:
         return {}
 
-    # QR encodes a URL — pull the tracking_id out of the query string.
-    if "tracking_id=" in value:
+    # QR encodes a URL: item_qr?item_code=..&barcode=.. (SKU label) or
+    # tracked_item_lookup?tracking_id=.. (unit label). Extract the value.
+    if "?" in value and "=" in value:
         qs = value.split("?", 1)[-1]
-        params = frappe.parse_json("{}")  # noqa
+        params = {}
         for part in qs.split("&"):
             k, _, v = part.partition("=")
-            if k == "tracking_id":
-                value = v
+            if k:
+                params[k] = unquote(v)
+        for key in ("tracking_id", "item_code", "barcode", "serial_no", "batch_no"):
+            if params.get(key):
+                value = params[key]
                 break
 
     tracked = frappe.db.get_value(
@@ -43,7 +48,7 @@ def lookup_tracked_item(search_value):
             as_dict=True,
         )
     if not tracked:
-        return {}
+        return _lookup_item(value)
 
     history = frappe.get_all(
         "Item Tracking History",
@@ -65,6 +70,44 @@ def lookup_tracked_item(search_value):
         "in_transit": tracked.current_warehouse is None
         and tracked.current_status in ("Dispatched", "Delivered", "In Transit"),
         "status_history": history,
+    }
+
+
+def _lookup_item(value):
+    """Resolve a SKU barcode / item code / serial / batch to an Item summary
+    (used when the scanned value is not a per-unit tracked item)."""
+    value = cstr(value).strip()
+    item_code = None
+
+    barcode_row = frappe.db.get_value("Item Barcode", {"barcode": value}, "parent")
+    if barcode_row:
+        item_code = barcode_row
+    elif frappe.db.exists("Item", value):
+        item_code = value
+    else:
+        serial = frappe.db.get_value("Serial No", value, "item_code")
+        if serial:
+            item_code = serial
+        else:
+            batch = frappe.db.get_value("Batch", value, "item")
+            if batch:
+                item_code = batch
+
+    if not item_code or not frappe.db.exists("Item", item_code):
+        return {}
+
+    item_name = frappe.db.get_value("Item", item_code, "item_name")
+    stock_qty = frappe.db.sql(
+        "SELECT COALESCE(SUM(actual_qty), 0) FROM `tabBin` WHERE item_code = %s", item_code
+    )[0][0] or 0
+    tracked_count = frappe.db.count("Tracked Item", {"item_code": item_code})
+
+    return {
+        "item_code": item_code,
+        "item_name": item_name,
+        "stock_qty": flt(stock_qty),
+        "tracked_count": tracked_count,
+        "is_item": True,
     }
 
 

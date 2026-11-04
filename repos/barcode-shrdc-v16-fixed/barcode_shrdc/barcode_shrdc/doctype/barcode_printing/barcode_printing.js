@@ -7,6 +7,30 @@ frappe.ui.form.on('Barcode Printing', {
 		frm.set_value("show_serial_no",0);
 		frm.set_value("show_batch_no",0);
 	},
+	load_tracked_items: function(frm) {
+		frappe.prompt([
+			{ fieldname: 'item_code', fieldtype: 'Link', options: 'Item', label: __('Item (leave blank for all)'), reqd: 0 }
+		], function (values) {
+			frappe.call({
+				method: 'barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.make_tracked_item_qrcodes',
+				args: { item_code: (values && values.item_code) || null },
+				freeze: true,
+				callback: function(r) {
+					if (r.exc) {
+						frappe.msgprint({ title: __('QR Code Generation Failed'), indicator: 'red', message: r.exc });
+						return;
+					}
+					const field = frm.fields_dict['qrcodes'];
+					if (field && field.$wrapper) {
+						field.$wrapper.html(r.message || '');
+					}
+					if (!r.message || r.message.indexOf('<img') === -1) {
+						frappe.msgprint({ title: __('No Tracked Items'), indicator: 'orange', message: __('No Tracked Items found for that item.') });
+					}
+				}
+			});
+		}, __('Load Tracked Items'), __('Load'));
+	},
 	refresh: function(frm) {
 		frm.add_custom_button(__('Purchase Receipt'), function() {
 			erpnext.utils.map_current_doc({
@@ -41,21 +65,48 @@ frappe.ui.form.on('Barcode Printing', {
 
 		}, __("Get items from"));
 
-		frm.add_custom_button(__('Load Tracked Items'), function() {
-			frappe.call({
-				method: 'barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.make_tracked_item_qrcodes',
-				freeze: true,
-				callback: function(r) {
-					if (r.exc) {
-						frappe.msgprint({ title: __('QR Code Generation Failed'), indicator: 'red', message: r.exc });
-						return;
-					}
-					const field = frm.fields_dict['qrcodes'];
-					if (field && field.$wrapper) {
-						field.$wrapper.html(r.message || '');
-					}
+		frm.add_custom_button(__('Material Receipt'), function() {
+			erpnext.utils.map_current_doc({
+				method: "barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.se_make_barcode",
+				source_doctype: "Stock Entry",
+				target: frm,
+				date_field: "posting_date",
+				get_query_filters: {
+					docstatus: 1,
+					stock_entry_type: "Material Receipt"
 				}
-			});
+			})
+		}, __("Get items from"));
+
+		frm.add_custom_button(__('Material Request'), function() {
+			erpnext.utils.map_current_doc({
+				method: "barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.mr_make_barcode",
+				source_doctype: "Material Request",
+				target: frm,
+				date_field: "transaction_date",
+				get_query_filters: {
+					docstatus: 1
+				}
+			})
+		}, __("Get items from"));
+
+		frm.add_custom_button(__('Purchase Order'), function() {
+			erpnext.utils.map_current_doc({
+				method: "barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.po_make_barcode",
+				source_doctype: "Purchase Order",
+				target: frm,
+				date_field: "transaction_date",
+				setters: {
+					supplier: frm.doc.supplier || undefined,
+				},
+				get_query_filters: {
+					docstatus: 1
+				}
+			})
+		}, __("Get items from"));
+
+		frm.add_custom_button(__('Load Tracked Items'), function() {
+			frm.trigger('load_tracked_items');
 		}, __("Get items from"));
 
 		// Print the QR preview: opens a clean print window containing only the

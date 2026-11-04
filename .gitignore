@@ -29,3 +29,6 @@ comp_demo-bench-v16.tar
 scheduler/frontend/node_modules/
 scheduler/ui-tests/node_modules/
 scheduler/ui-tests/*.png
+
+# ---- agent/harness session artifacts (never commit) -----------------------
+_session_extract/

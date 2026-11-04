@@ -184,3 +184,36 @@ def get_tracking_qr_image(tracking_id):
     """
     from item_tracking.item_tracking.doctype.tracked_item.raster import render_qr
     return render_qr(cstr(tracking_id))
+
+
+@frappe.whitelist()
+def bulk_transfer_all_stock_items(warehouse=None):
+    """Create a Tracked Item (QR + barcode) for every unit currently in stock,
+    grouped by item + warehouse so a full stocktake converts in one click."""
+    filters = {"actual_qty": [">", 0]}
+    if warehouse:
+        filters["warehouse"] = warehouse
+    bins = frappe.db.get_all("Bin", filters=filters, fields=["item_code", "warehouse", "actual_qty"])
+
+    stock = {}
+    for b in bins:
+        code = cstr(b.get("item_code") or "").strip()
+        wh = cstr(b.get("warehouse") or "").strip()
+        if not code:
+            continue
+        stock[(code, wh)] = stock.get((code, wh), 0) + (b.get("actual_qty") or 0)
+
+    created = 0
+    details = []
+    for (code, wh), qty in stock.items():
+        qty = int(qty)
+        if qty <= 0:
+            continue
+        existing = frappe.db.count("Tracked Item", {"item_code": code, "current_warehouse": wh})
+        to_create = qty - existing
+        if to_create <= 0:
+            continue
+        bulk_create_tracked_items(code, to_create, wh)
+        created += to_create
+        details.append({"item_code": code, "warehouse": wh, "created": to_create, "stock_qty": qty})
+    return {"created": created, "items": details}
