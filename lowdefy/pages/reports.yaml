@@ -1,0 +1,20 @@
+id: reports
+type: PageSiderMenu
+properties:
+  title: Reports & Analytics
+blocks:
+  - id: content
+    type: Box
+    properties:
+      style:
+        padding: 24
+    blocks:
+      - id: title
+        type: Title
+        properties:
+          content: Reports & Analytics
+          level: 2
+      - id: note
+        type: Paragraph
+        properties:
+          content: Charts are added per business question once live data is available. No placeholder graphs.

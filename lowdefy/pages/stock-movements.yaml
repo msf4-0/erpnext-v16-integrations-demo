@@ -1,0 +1,38 @@
+id: stock-movements
+type: PageSiderMenu
+properties:
+  title: Stock Movements
+requests:
+  - id: entries
+    type: AxiosHttp
+    connectionId: erpnext
+    properties:
+      url: /api/resource/Stock Entry
+      method: GET
+      params:
+        fields: '["name","stock_entry_type","from_warehouse","to_warehouse","docstatus","posting_date"]'
+        limit_page_length: 1000
+blocks:
+  - id: content
+    type: Box
+    properties:
+      style:
+        padding: 24
+    blocks:
+      - id: title
+        type: Title
+        properties:
+          content: Stock Movements
+          level: 2
+      - id: table
+        type: AgGrid
+        properties:
+          rowData:
+            _state: entries.data
+          columnDefs:
+            - field: name
+            - field: stock_entry_type
+            - field: from_warehouse
+            - field: to_warehouse
+            - field: docstatus
+            - field: posting_date

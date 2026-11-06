@@ -1,0 +1,15 @@
+import frappe
+se = frappe.get_all("Stock Entry", filters={"stock_entry_type": "Manufacture", "docstatus": 1}, order_by="modified desc", limit=1)
+print("SE:", se)
+if se:
+    doc = frappe.get_doc("Stock Entry", se[0]["name"])
+    finished = [d for d in doc.items if d.t_warehouse and (d.qty or 0) > 0]
+    print("finished rows:", len(finished))
+    from item_tracking.item_tracking.events import _create_finished_good_barcode_printing
+    bp = _create_finished_good_barcode_printing(doc)
+    print("BP:", bp.name if bp else None)
+    if bp:
+        for r in bp.items:
+            print("item", r.item_code, "qty", r.qty, "serials", (r.serial_no or "").replace("\n", ","))
+else:
+    print("no submitted manufacture SE")

@@ -1,0 +1,88 @@
+# Lowdefy v4 app skeleton.
+# NOTE: target version must be confirmed at install time (no Lowdefy was pre-installed).
+# Secrets are resolved server-side via `_secret`; nothing is hardcoded.
+
+name: lowdefy-smart-inventory
+version: 1.0.0
+
+app:
+  html:
+    appendHead: |
+      <style>
+        :root { color-scheme: dark; }
+      </style>
+
+# ERPNext connection — token lives only server-side.
+connections:
+  - id: erpnext
+    type: AxiosHttp
+    properties:
+      baseURL:
+        _secret: ERPNEXT_URL
+      headers:
+        Authorization:
+          _secret: ERPNEXT_AUTH_HEADER
+      timeout: 15000
+
+# Exception Service (server-side detection + lifecycle metadata).
+connections:
+  - id: exceptions
+    type: AxiosHttp
+    properties:
+      baseURL:
+        _secret: EXCEPTION_URL
+
+menus:
+  - id: default
+    links:
+      - id: overview
+        type: MenuLink
+        pageId: overview
+        properties:
+          title: Overview
+          icon: DashboardOutlined
+      - id: inventory
+        type: MenuLink
+        pageId: inventory
+        properties:
+          title: Inventory Management
+          icon: DatabaseOutlined
+      - id: scanner
+        type: MenuLink
+        pageId: scanner
+        properties:
+          title: QR / Barcode Scanner
+          icon: ScanOutlined
+      - id: stock-movements
+        type: MenuLink
+        pageId: stock-movements
+        properties:
+          title: Stock Movements
+          icon: SwapOutlined
+      - id: exceptions
+        type: MenuLink
+        pageId: exceptions
+        properties:
+          title: Exception Centre
+          icon: AlertOutlined
+      - id: reports
+        type: MenuLink
+        pageId: reports
+        properties:
+          title: Reports & Analytics
+          icon: BarChartOutlined
+      - id: settings
+        type: MenuLink
+        pageId: settings
+        properties:
+          title: Settings
+          icon: SettingOutlined
+
+pages:
+  - _ref: pages/overview.yaml
+  - _ref: pages/inventory.yaml
+  - _ref: pages/scanner.yaml
+  - _ref: pages/stock-movements.yaml
+  - _ref: pages/exceptions.yaml
+  - _ref: pages/reports.yaml
+  - _ref: pages/settings.yaml

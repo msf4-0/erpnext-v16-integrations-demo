@@ -1,0 +1,1 @@
+import frappe; d = frappe.get_doc("Metabase Dashboard", "ERPNext Monitoring"); print("ERPNext record dashboard_id:", d.dashboard_id, "active:", d.is_active)

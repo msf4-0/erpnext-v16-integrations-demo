@@ -1,0 +1,87 @@
+id: inventory
+type: PageSiderMenu
+properties:
+  title: Inventory Management
+requests:
+  - id: bins
+    type: AxiosHttp
+    connectionId: erpnext
+    properties:
+      url: /api/resource/Bin
+      method: GET
+      params:
+        fields: '["item_code","item_name","warehouse","actual_qty","projected_qty","stock_value"]'
+        limit_page_length: 1000
+  - id: reorder
+    type: AxiosHttp
+    connectionId: erpnext
+    properties:
+      url: /api/resource/Item Reorder
+      method: GET
+      params:
+        fields: '["parent","warehouse","warehouse_reorder_level"]'
+        limit_page_length: 1000
+blocks:
+  - id: content
+    type: Box
+    properties:
+      style:
+        padding: 24
+    blocks:
+      - id: title
+        type: Title
+        properties:
+          content: Inventory
+          level: 2
+      - id: search
+        type: TextInput
+        properties:
+          placeholder: Search by item code or name
+          value:
+            _state: search
+      - id: table
+        type: AgGrid
+        properties:
+          rowData:
+            _js: |
+              () => {
+                const q = (state.search || '').toLowerCase();
+                const rows = state.bins.data || [];
+                if (!q) return rows;
+                return rows.filter(r => (r.item_code||'').toLowerCase().includes(q) || (r.item_name||'').toLowerCase().includes(q));
+              }
+          columnDefs:
+            - field: item_code
+            - field: item_name
+            - field: warehouse
+            - field: actual_qty
+            - field: stock_value
+          rowSelection: single
+          onRowClicked:
+            - id: open_detail
+              type: SetState
+              params:
+                selected:
+                  _event: row.data
+              # opens the right-side Drawer
+      - id: detail
+        type: Drawer
+        properties:
+          title:
+            _js: "() => state.selected?.item_name || 'Item detail'"
+          open:
+            _js: "() => !!state.selected"
+        blocks:
+          - id: d
+            type: Descriptions
+            properties:
+              items:
+                - key: Item code
+                  value:
+                    _js: "() => state.selected?.item_code"
+                - key: Warehouse
+                  value:
+                    _js: "() => state.selected?.warehouse"
+                - key: Available
+                  value:
+                    _js: "() => state.selected?.actual_qty"

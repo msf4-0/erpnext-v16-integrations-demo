@@ -1,0 +1,1 @@
+import frappe; cs = frappe.get_doc("Client Script", "metabase-dashboard-embed"); print("dt:", cs.dt, "view:", cs.view, "enabled:", cs.enabled); print("script length:", len(cs.script or "")); print("has iframe:", "iframe" in (cs.script or ""))

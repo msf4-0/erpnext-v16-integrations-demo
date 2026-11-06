@@ -1,0 +1,74 @@
+id: exceptions
+type: PageSiderMenu
+properties:
+  title: Exception Centre
+requests:
+  - id: list
+    type: AxiosHttp
+    connectionId: exceptions
+    properties:
+      url: /exceptions
+      method: GET
+blocks:
+  - id: content
+    type: Box
+    properties:
+      style:
+        padding: 24
+    blocks:
+      - id: title
+        type: Title
+        properties:
+          content: Exception Centre
+          level: 2
+      - id: table
+        type: AgGrid
+        properties:
+          rowData:
+            _state: list.data
+          columnDefs:
+            - field: id
+              headerName: Exception ID
+            - field: title
+              headerName: Issue
+            - field: category
+            - field: severity
+            - field: status
+            - field: detected_at
+          rowSelection: single
+          onRowClicked:
+            - id: open
+              type: SetState
+              params:
+                selected:
+                  _event: row.data
+      - id: detail
+        type: Drawer
+        properties:
+          title:
+            _js: "() => state.selected?.title || 'Exception'"
+          open:
+            _js: "() => !!state.selected"
+        blocks:
+          - id: desc
+            type: Descriptions
+            properties:
+              items:
+                - key: Category
+                  value:
+                    _js: "() => state.selected?.category"
+                - key: Severity
+                  value:
+                    _js: "() => state.selected?.severity"
+                - key: Description
+                  value:
+                    _js: "() => state.selected?.description"
+                - key: Rule
+                  value:
+                    _js: "() => state.selected?.rule"
+                - key: Related record
+                  value:
+                    _js: "() => state.selected?.related_record"
+                - key: Assigned to
+                  value:
+                    _js: "() => state.selected?.assigned_to"

@@ -1,0 +1,58 @@
+id: overview
+type: PageSiderMenu
+properties:
+  title: Overview
+requests:
+  - id: bin
+    type: AxiosHttp
+    connectionId: erpnext
+    properties:
+      url: /api/resource/Bin
+      method: GET
+      params:
+        fields: '["item_code","warehouse","actual_qty","stock_value"]'
+        limit_page_length: 1000
+  - id: item_count
+    type: AxiosHttp
+    connectionId: erpnext
+    properties:
+      url: /api/resource/Item
+      method: GET
+      params:
+        fields: '["name"]'
+        limit_page_length: 1
+blocks:
+  - id: content
+    type: Box
+    properties:
+      style:
+        padding: 24
+    blocks:
+      - id: title
+        type: Title
+        properties:
+          content: Inventory Overview
+          level: 2
+      - id: kpis
+        type: Row
+        blocks:
+          - id: k_total
+            type: Card
+            properties:
+              title: Total stock quantity
+            blocks:
+              - id: v_total
+                type: Statistic
+                properties:
+                  title: Units
+                  value:
+                    _js: "() => (state.overview.data?.reduce((s,r)=>s+(Number(r.actual_qty)||0),0) ?? 0)"
+      - id: recent
+        type: AgGrid
+        properties:
+          rowData:
+            _state: bin.data
+          columnDefs:
+            - field: item_code
+            - field: warehouse
+            - field: actual_qty

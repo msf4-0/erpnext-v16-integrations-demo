@@ -1,0 +1,1 @@
+import frappe; ws = frappe.get_doc("Workspace", "Manufacturing"); print("MFG content:", repr(ws.content)[:2500])

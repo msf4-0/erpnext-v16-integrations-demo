@@ -73,6 +73,63 @@ def _auto_create_tracked_items(item_code, qty, warehouse):
     return []
 
 
+def _create_finished_good_barcode_printing(doc):
+    """Assemble a ready-to-print Barcode Printing document for the finished goods
+    of a Manufacture Stock Entry and surface a bottom-right notification linking
+    to it.
+
+    Each finished unit already has a Tracked Item (unique serial_no + barcode +
+    QR) created by `_auto_create_tracked_items` above; this only assembles the
+    print document (one row per finished good, serial numbers pre-filled) so the
+    operator opens the link and the barcodes/QRs are already generated.
+    """
+    finished = [d for d in doc.items if d.t_warehouse and (d.qty or 0) > 0]
+    if not finished:
+        return None
+
+    try:
+        from barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing import (
+            se_make_barcode,
+        )
+        bp = se_make_barcode(doc.name)  # unsaved Barcode Printing (finished-goods rows only)
+    except Exception:
+        frappe.log_error(title="manufacture barcode: se_make_barcode failed", message=frappe.get_traceback())
+        return None
+
+    # Pre-fill each row's serial_no with the serial numbers minted for this
+    # finished good, so the "serial" barcode preview is ready to print.
+    for row in bp.get("items") or []:
+        if not row.item_code:
+            continue
+        limit = int(row.qty or 0)
+        tracked = frappe.get_all(
+            "Tracked Item",
+            filters={"item_code": row.item_code},
+            fields=["serial_no"],
+            order_by="creation desc",
+            limit=limit or None,
+        )
+        serials = [t.serial_no for t in tracked if t.serial_no]
+        if serials:
+            row.serial_no = "\n".join(serials)
+
+    try:
+        bp.insert(ignore_permissions=True)
+    except Exception:
+        frappe.log_error(title="manufacture barcode: insert failed", message=frappe.get_traceback())
+        return None
+
+    link = "/desk/barcode-printing/{0}".format(bp.name)
+    frappe.msgprint(
+        _("Finished goods complete. Serial numbers and QR codes are ready — "
+          "<a href='{0}'>Open Barcode Printing</a>.").format(link),
+        title=_("Finished Good"),
+        indicator="green",
+        alert=True,
+    )
+    return bp
+
+
 def on_purchase_receipt_submit(doc, method):
     """Auto-create Tracked Items for every unit received on a Purchase Receipt."""
     for item in doc.items:
@@ -87,6 +144,11 @@ def on_stock_entry_submit(doc, method):
         for item in doc.items:
             if item.t_warehouse and (item.qty or 0) > 0:
                 _auto_create_tracked_items(item.item_code, item.qty, item.t_warehouse)
+
+    # Manufacture: finished goods get serial numbers + barcodes + QR, and a
+    # ready-made Barcode Printing document linked from a bottom-right notification.
+    if doc.stock_entry_type == "Manufacture":
+        _create_finished_good_barcode_printing(doc)
 
     for row in _tracked_rows(doc):
         tid = row.tracked_item

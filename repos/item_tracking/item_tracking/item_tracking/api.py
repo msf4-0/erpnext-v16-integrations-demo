@@ -79,6 +79,12 @@ def _lookup_item(value):
     value = cstr(value).strip()
     item_code = None
 
+    # A 1D barcode label sometimes carries the Barcode Printing document name
+    # (e.g. "BP-2026-11-05-00008") instead of a product code. Resolve it to the
+    # item it holds so the popup shows a product name, not a raw document id.
+    if frappe.db.exists("Barcode Printing", value):
+        item_code = frappe.db.get_value("Barcode Generator Items", {"parent": value}, "item_code")
+
     barcode_row = frappe.db.get_value("Item Barcode", {"barcode": value}, "parent")
     if barcode_row:
         item_code = barcode_row

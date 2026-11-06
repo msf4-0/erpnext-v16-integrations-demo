@@ -12,7 +12,7 @@
 # Values mirror the Metabase block in .env. Override any with -<Param> <value>.
 
 param(
-  [string]$BaseUrl       = "http://localhost:3000",
+  [string]$BaseUrl       = "http://localhost:3005",
   [string]$DbHost        = "db",
   [int]   $DbPort        = 3306,
   [string]$ErpnextDb     = "_35e1999d62da474b",
@@ -42,12 +42,19 @@ Wait-Health
 Write-Host "      Metabase is healthy."
 
 Write-Host "[2/4] Ensuring admin account ..."
+# Metabase v0.58+ requires a setup token on first run; it is exposed on the
+# public /api/session/properties endpoint while the instance is unconfigured.
 $setupBody = @{
   user  = @{ first_name = "Demo"; last_name = "Admin"; email = $AdminEmail; password = $AdminPassword }
   prefs = @{ site_name = "comp_demo"; allow_tracking = $false }
-} | ConvertTo-Json -Depth 5
+}
 try {
-  Invoke-RestMethod -Uri "$BaseUrl/api/setup" -Method Post -ContentType "application/json" -Body $setupBody | Out-Null
+  $props = Invoke-RestMethod -Uri "$BaseUrl/api/session/properties" -TimeoutSec 5
+  if ($props.'setup-token') { $setupBody.token = $props.'setup-token' }
+} catch { }
+$setupJson = $setupBody | ConvertTo-Json -Depth 5
+try {
+  Invoke-RestMethod -Uri "$BaseUrl/api/setup" -Method Post -ContentType "application/json" -Body $setupJson | Out-Null
   Write-Host "      Admin account created ($AdminEmail)."
 } catch {
   if ($_.Exception.Message -match "already|set up") {

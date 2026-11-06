@@ -1,0 +1,6 @@
+from frappe.desk.form.meta import get_meta
+m = get_meta("Metabase Dashboard")
+cs = m.get("__custom_js") or ""
+print("has __custom_js:", bool(cs), "len:", len(cs))
+print("contains iframe:", "iframe" in cs, "contains get_url:", "get_url" in cs)
+print("preview:", cs[:300].replace("\n", " "))

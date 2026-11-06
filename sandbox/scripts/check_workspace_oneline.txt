@@ -1,0 +1,1 @@
+import frappe; ws = frappe.get_doc("Workspace", "Metabase"); print("name", ws.name, "label", ws.label, "public", ws.public, "hidden", ws.is_hidden, "seq", ws.sequence_id, "module", ws.module); print("content", repr(ws.content)[:800])

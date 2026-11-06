@@ -31,6 +31,7 @@ Anything that is not stock ERPNext/Frappe v16:
 | `eu_einvoice` | `repos/eu_einvoice` | alyf-de fork | Yes | EU XRechnung/EN-16931 (NOT Malaysia MyInvois). |
 | `my_invois` | `repos/my_invois` | local app | Yes | Malaysia LHDN MyInvois **submit-only** layer: validate → UBL-JSON map → base64/SHA256 envelope → `POST /documentsubmissions` → record response → refresh status / cancel. Sales Invoice stays the calculation source of truth. |
 | `shopify` | `repos/shopify-shrdc-v16-fixed` | local app | Yes | Shopify ↔ ERPNext bridge. |
+| `metabase_integration` | `apps/metabase_integration` (cloned from `rover96/frappe-metabase`) | third-party app | Yes | Embeds Metabase dashboards into ERPNext via signed iframe (`Metabase Dashboard` + `Metabase Settings` doctypes). Installed on 2026-11-05 (was missing after the clean v16 rebuild). |
 
 ## Standing rollback policy (human-ordered)
 
@@ -67,6 +68,9 @@ confirmation in its reply after any rollback — no silent rollbacks.
 | 20 | 2026-11-04 | E | Stock Entry "Scan Tracked Item" now sets `s_warehouse`/`t_warehouse` from the header (fixes missing-warehouse submit error) | `item_tracking/public/js/item_tracking_scan.js` | 2 | Installed |
 | 21 | 2026-11-04 | C | `Tracked Item` QR now encodes the raw `tracking_id` (not a `/tracked_item_lookup` URL) so scans resolve inline | `item_tracking/.../doctype/tracked_item/tracked_item.py` | 2 | Installed |
 | 22 | 2026-11-04 | A/C/E | MyInvois (Malaysia LHDN) submit-only layer: TIN/BRN/MSIC/SST/contact fields on Customer/Company/Supplier, Sales Invoice status/UUID/link fields, UBL-JSON `build_invoice_document` + `submit_to_myinvois`/`refresh_myinvois_status`/`cancel_myinvois_document`, Client Script buttons | `my_invois/my_invois/my_invois/api.py` + `fixtures/custom_field.json` + `fixtures/client_script.json` | 2 | Installed |
+| 23 | 2026-11-05 | C | Stock Entry `on_submit` (Manufacture only): after auto-creating Tracked Items for finished goods, assemble a ready-made `Barcode Printing` doc (serial numbers pre-filled per finished good) and show a bottom-right `alert=True` notification linking to it | `item_tracking/item_tracking/item_tracking/events.py` (`_create_finished_good_barcode_printing`) | 1 | Installed |
+| 24 | 2026-11-05 | — | Website page `/metabase_dashboard` (iframe embed of the Metabase "ERPNext Monitoring" public dashboard) | `item_tracking/item_tracking/www/metabase_dashboard.py` + `.html` | 2 | Installed |
+| 25 | 2026-11-05 | C | Scan lookup (`lookup_tracked_item`) also resolves a scanned `Barcode Printing` doc name (`BP-…`) to its item so the Shift+I popup shows the item name; Manufacture submit toast link fixed from the v14 `/app/` path to the v16 `/desk/` route | `item_tracking/item_tracking/item_tracking/api.py` + `events.py` | 1 | Installed |
 
 Legend — **Kind** (skill `frappe-doctype-builder`): A = Custom Field · B = Property
 Setter · C = doc_events/logic · D = new Custom DocType · E = Client Script.

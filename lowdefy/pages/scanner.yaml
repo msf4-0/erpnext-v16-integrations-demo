@@ -1,0 +1,61 @@
+id: scanner
+type: PageSiderMenu
+properties:
+  title: QR / Barcode Scanner
+requests:
+  - id: lookup
+    type: AxiosHttp
+    connectionId: erpnext
+    properties:
+      url: /api/resource/Serial No/{id}
+      method: GET
+      params:
+        fields: '["name","item_code","item_name","warehouse","status","purchase_document_no"]'
+blocks:
+  - id: content
+    type: Box
+    properties:
+      style:
+        padding: 24
+    blocks:
+      - id: title
+        type: Title
+        properties:
+          content: QR / Barcode Scanner
+          level: 2
+      - id: manual
+        type: TextInput
+        properties:
+          placeholder: Enter item code or serial number
+          value:
+            _state: manual_id
+      - id: go
+        type: Button
+        properties:
+          title: Lookup
+        events:
+          onClick:
+            - id: run_lookup
+              type: Request
+              params:
+                id: lookup
+                id: "{{state.manual_id}}"
+      - id: result
+        type: Descriptions
+        properties:
+          items:
+            - key: Product
+              value:
+                _state: lookup.data.item_name
+            - key: Item code
+              value:
+                _state: lookup.data.item_code
+            - key: Serial
+              value:
+                _state: lookup.data.name
+            - key: Warehouse
+              value:
+                _state: lookup.data.warehouse
+            - key: Availability
+              value:
+                _state: lookup.data.status

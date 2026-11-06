@@ -1,0 +1,1 @@
+import frappe, json; print("WORKSPACES:", [w.name for w in frappe.get_all("Workspace", fields=["name"], limit=50)]); print("DASHBOARD CHARTS:", [c.name for c in frappe.get_all("Dashboard Chart", fields=["name"], limit=50)])

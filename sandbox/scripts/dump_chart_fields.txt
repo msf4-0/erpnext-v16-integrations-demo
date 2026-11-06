@@ -1,0 +1,1 @@
+import frappe, json; d = frappe.get_doc("Dashboard Chart", "Delivery Trends"); print(json.dumps({k: d.get(k) for k in ["chart_name","chart_type","document_type","based_on","value_based_on","group_by_type","group_by_based_on","type","filters_json","timespan","time_interval","number_of_groups","is_public","module","name"]}, default=str))

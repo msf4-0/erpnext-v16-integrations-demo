@@ -42,7 +42,6 @@ EINVOICE_TYPE_CODES = {
 }
 
 # LHDN tax type codes (https://sdk.myinvois.hasil.gov.my/codes/tax-types/)
-# 01 = Sales Tax, 02 = Service Tax, 03 = Tourism Tax, 04 = High-Value Goods Tax, 05 = Low-Value Goods Tax, 06 = Any tax not listed above
 TAX_TYPE_CODES = {
     "sales": "01", "sales tax": "01",
     "service": "02", "service tax": "02",
@@ -65,6 +64,14 @@ UBL_NS = {
     "_A": "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
     "_B": "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
 }
+
+
+def _n(value, **attrs):
+    """UBL-JSON node: ``{"_": value}`` plus any schemeID/listID/etc attributes."""
+    node = {"_": value}
+    if attrs:
+        node.update(attrs)
+    return node
 
 
 # ---------------------------------------------------------------------------
@@ -152,9 +159,8 @@ def validate_for_myinvois(doc_name):
 # Document mapping (UBL 2.1 Invoice -> JSON)
 # ---------------------------------------------------------------------------
 
-def _v(value):
-    """Wrap a scalar as a UBL-JSON ``{"_": value}`` node."""
-    return {"_": value}
+def _country_node():
+    return {"IdentificationCode": [_n("MYS", listID="ISO3166-1", listAgencyID="6")]}
 
 
 def _party_address(doctype, name):
@@ -169,25 +175,24 @@ def _party_address(doctype, name):
             "parent",
         )
 
-    empty = {
-        "CityName": [_v("NA")],
-        "PostalZone": [_v("NA")],
-        "CountrySubentityCode": [_v("17")],
-        "AddressLine": [{"Line": [_v("NA")]}],
-        "Country": [{"IdentificationCode": [_v("MYS"), "listID": "ISO3166-1", "listAgencyID": "6"]}],
-    }
     if not addr_name:
-        return empty
+        return {
+            "CityName": [_n("NA")],
+            "PostalZone": [_n("NA")],
+            "CountrySubentityCode": [_n("17")],
+            "AddressLine": [{"Line": [_n("NA")]}],
+            "Country": [_country_node()],
+        }
 
     a = frappe.get_doc("Address", addr_name)
-    state_code = a.get("state") or "17"  # LHDN state code stored on the Address.state field
+    state_code = a.get("state") or "17"
     lines = [l for l in (a.get("address_line1"), a.get("address_line2")) if l] or ["NA"]
     return {
-        "CityName": [_v(a.get("city") or "NA")],
-        "PostalZone": [_v(a.get("pincode") or "NA")],
-        "CountrySubentityCode": [_v(cstr(state_code))],
-        "AddressLine": [{"Line": [_v(l)]} for l in lines],
-        "Country": [{"IdentificationCode": [_v("MYS"), "listID": "ISO3166-1", "listAgencyID": "6"]}],
+        "CityName": [_n(a.get("city") or "NA")],
+        "PostalZone": [_n(a.get("pincode") or "NA")],
+        "CountrySubentityCode": [_n(cstr(state_code))],
+        "AddressLine": [{"Line": [_n(l)]} for l in lines],
+        "Country": [_country_node()],
     }
 
 
@@ -199,30 +204,30 @@ def _party(party, doctype):
 
     identifications = []
     if tin:
-        identifications.append({"ID": [_v(tin), "schemeID": "TIN"]})
+        identifications.append({"ID": [_n(tin, schemeID="TIN")]})
     if brn:
-        identifications.append({"ID": [_v(brn), "schemeID": tin_type if tin_type != "TIN" else "BRN"]})
+        scheme = "BRN" if tin_type == "TIN" else tin_type
+        identifications.append({"ID": [_n(brn, schemeID=scheme)]})
     else:
-        # LHDN requires at least one registration identifier.
-        identifications.append({"ID": [_v("NA"), "schemeID": "BRN"]})
-    identifications.append({"ID": [_v(party.get("myinvois_sst_registration_no") or "NA"), "schemeID": "SST"]})
-    identifications.append({"ID": [_v("NA"), "schemeID": "TTX"]})
+        identifications.append({"ID": [_n("NA", schemeID="BRN")]})
+    identifications.append({"ID": [_n(party.get("myinvois_sst_registration_no") or "NA", schemeID="SST")]})
+    identifications.append({"ID": [_n("NA", schemeID="TTX")]})
 
     name = party.get("customer_name") or party.get("company_name") or party.get("supplier_name") or party.name
-    party_json = {
+    msic = party.get("myinvois_msic_code") or "00000"
+    activity = party.get("myinvois_business_activity") or "NA"
+    return {
         "Party": [{
-            "IndustryClassificationCode": [_v(party.get("myinvois_msic_code") or "00000",
-                                             name=party.get("myinvois_business_activity") or "NA")],
+            "IndustryClassificationCode": [_n(msic, name=activity)],
             "PartyIdentification": identifications,
             "PostalAddress": [_party_address(doctype, party.name)],
-            "PartyLegalEntity": [{"RegistrationName": [_v(name)]}],
+            "PartyLegalEntity": [{"RegistrationName": [_n(name)]}],
             "Contact": [{
-                "Telephone": [_v(party.get("myinvois_contact_number") or "+60000000000")],
-                "ElectronicMail": [_v(party.get("myinvois_email") or "NA")],
+                "Telephone": [_n(party.get("myinvois_contact_number") or "+60000000000")],
+                "ElectronicMail": [_n(party.get("myinvois_email") or "NA")],
             }],
         }]
     }
-    return party_json
 
 
 def _tax_profile(doc):
@@ -230,9 +235,8 @@ def _tax_profile(doc):
     tax_type_code = "06"
     tax_rate = 0.0
     total_tax = flt(doc.total_taxes_and_charges)
-    charges = doc.get("taxes") or []
-    for ch in charges:
-        if not ch.get("charge_type") or ch.get("charge_type") == "Actual":
+    for ch in (doc.get("taxes") or []):
+        if ch.get("charge_type") == "Actual":
             continue
         desc = " ".join([cstr(ch.get("description")), cstr(ch.get("account_head"))]).lower()
         if "service" in desc:
@@ -241,9 +245,13 @@ def _tax_profile(doc):
             tax_type_code = "03"
         elif "sales" in desc or "sst" in desc:
             tax_type_code = "01"
-        tax_rate = flt(ch.get("rate")) if flt(ch.get("rate")) is not None else tax_rate
+        tax_rate = flt(ch.get("rate"))
         break
     return tax_type_code, tax_rate, total_tax
+
+
+def _tax_scheme():
+    return [{"ID": [_n("OTH", schemeID="UN/ECE 5153", schemeAgencyID="6")]}]
 
 
 @frappe.whitelist()
@@ -262,66 +270,66 @@ def build_invoice_document(doc_name):
     net_total = flt(doc.net_total)
     lines = []
     for i, d in enumerate(doc.items, start=1):
-        line_total = flt(d.amount)  # qty * rate (ERPNext "Amount" is already before tax)
-        # Distribute header tax proportionally across lines.
+        line_total = flt(d.amount)  # qty * rate (ERPNext "Amount" is before tax)
         line_tax = (line_total / net_total * total_tax) if net_total else 0.0
         lines.append({
-            "ID": [_v(cstr(i))],
-            "InvoicedQuantity": [_v(flt(d.qty), unitCode=UOM_CODES.get((d.uom or "").lower(), "C62"))],
-            "LineExtensionAmount": [_v(line_total, currencyID="MYR")],
+            "ID": [_n(cstr(i))],
+            "InvoicedQuantity": [_n(flt(d.qty), unitCode=UOM_CODES.get((d.uom or "").lower(), "C62"))],
+            "LineExtensionAmount": [_n(line_total, currencyID="MYR")],
             "TaxTotal": [{
-                "TaxAmount": [_v(line_tax, currencyID="MYR")],
+                "TaxAmount": [_n(line_tax, currencyID="MYR")],
                 "TaxSubtotal": [{
-                    "TaxableAmount": [_v(line_total, currencyID="MYR")],
-                    "TaxAmount": [_v(line_tax, currencyID="MYR")],
-                    "Percent": [_v(tax_rate)],
+                    "TaxableAmount": [_n(line_total, currencyID="MYR")],
+                    "TaxAmount": [_n(line_tax, currencyID="MYR")],
+                    "Percent": [_n(tax_rate)],
                     "TaxCategory": [{
-                        "ID": [_v(tax_type_code)],
-                        "TaxScheme": [{"ID": [_v("OTH", schemeID="UN/ECE 5153", schemeAgencyID="6")]}],
+                        "ID": [_n(tax_type_code)],
+                        "TaxScheme": _tax_scheme(),
                     }],
                 }],
             }],
             "Item": [{
                 "CommodityClassification": [{
-                    "ItemClassificationCode": [_v("000", listID="CLASS")],
+                    "ItemClassificationCode": [_n("000", listID="CLASS")],
                 }],
-                "Description": [_v(d.item_name or d.item_code)],
+                "Description": [_n(d.item_name or d.item_code)],
             }],
-            "Price": [{"PriceAmount": [_v(flt(d.rate), currencyID="MYR")]}],
-            "ItemPriceExtension": [{"Amount": [_v(line_total, currencyID="MYR")]}],
+            "Price": [{"PriceAmount": [_n(flt(d.rate), currencyID="MYR")]}],
+            "ItemPriceExtension": [{"Amount": [_n(line_total, currencyID="MYR")]}],
         })
 
     now = now_datetime()
     document = dict(UBL_NS)
-    document["Invoice"] = [{
-        "ID": [_v(doc.name)],
-        "IssueDate": [_v(cstr(doc.posting_date or nowdate()))],
-        "IssueTime": [_v(now.strftime("%H:%M:%SZ"))],
-        "InvoiceTypeCode": [_v(type_code, listVersionID="1.0")],
-        "DocumentCurrencyCode": [_v("MYR")],
-        "TaxCurrencyCode": [_v("MYR")],
+    invoice = {
+        "ID": [_n(doc.name)],
+        "IssueDate": [_n(cstr(doc.posting_date or nowdate()))],
+        "IssueTime": [_n(now.strftime("%H:%M:%SZ"))],
+        "InvoiceTypeCode": [_n(type_code, listVersionID="1.0")],
+        "DocumentCurrencyCode": [_n("MYR")],
+        "TaxCurrencyCode": [_n("MYR")],
         "AccountingSupplierParty": [_party(company, "Company")],
         "TaxTotal": [{
-            "TaxAmount": [_v(total_tax, currencyID="MYR")],
+            "TaxAmount": [_n(total_tax, currencyID="MYR")],
             "TaxSubtotal": [{
-                "TaxableAmount": [_v(net_total, currencyID="MYR")],
-                "TaxAmount": [_v(total_tax, currencyID="MYR")],
+                "TaxableAmount": [_n(net_total, currencyID="MYR")],
+                "TaxAmount": [_n(total_tax, currencyID="MYR")],
                 "TaxCategory": [{
-                    "ID": [_v(tax_type_code)],
-                    "TaxScheme": [{"ID": [_v("OTH", schemeID="UN/ECE 5153", schemeAgencyID="6")]}],
+                    "ID": [_n(tax_type_code)],
+                    "TaxScheme": _tax_scheme(),
                 }],
             }],
         }],
         "LegalMonetaryTotal": [{
-            "LineExtensionAmount": [_v(net_total, currencyID="MYR")],
-            "TaxExclusiveAmount": [_v(net_total, currencyID="MYR")],
-            "TaxInclusiveAmount": [_v(flt(doc.grand_total), currencyID="MYR")],
-            "PayableAmount": [_v(flt(doc.grand_total), currencyID="MYR")],
+            "LineExtensionAmount": [_n(net_total, currencyID="MYR")],
+            "TaxExclusiveAmount": [_n(net_total, currencyID="MYR")],
+            "TaxInclusiveAmount": [_n(flt(doc.grand_total), currencyID="MYR")],
+            "PayableAmount": [_n(flt(doc.grand_total), currencyID="MYR")],
         }],
         "InvoiceLine": lines,
-    }]
+    }
     if customer:
-        document["Invoice"][0]["AccountingCustomerParty"] = [_party(customer, "Customer")]
+        invoice["AccountingCustomerParty"] = [_party(customer, "Customer")]
+    document["Invoice"] = [invoice]
 
     # v1.0 has signature validation disabled; no cac:Signature emitted.
     return document

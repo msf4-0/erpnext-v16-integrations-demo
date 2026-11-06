@@ -1,0 +1,20 @@
+id: settings
+type: PageSiderMenu
+properties:
+  title: Settings
+blocks:
+  - id: content
+    type: Box
+    properties:
+      style:
+        padding: 24
+    blocks:
+      - id: title
+        type: Title
+        properties:
+          content: Settings
+          level: 2
+      - id: note
+        type: Paragraph
+        properties:
+          content: Exception detection thresholds (reorder, unusual-movement qty, expiry windows, transfer age) are configured here and applied server-side by the exception service.
