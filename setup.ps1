@@ -516,6 +516,58 @@ if ($siteCheck.Code -ne 0 -or -not $siteCheck.Output.Trim()) {
         Write-Change 'disable_async set - stops the /socket.io 404 storm (no socketio server here)'
     }
 
+    # --- setup wizard / desk boot (THE reload loop) -----------------------
+    # `System Settings.setup_complete` was 0 on this image. With that flag unset
+    # Frappe boots /desk into the setup wizard on EVERY document load:
+    #   - POST setup_wizard.load_languages fires on every single desk request
+    #   - the wizard's step route resolves to `undefined` -> GET /undefined 404
+    #   - the desk reloads and does the whole thing again, ~1 load/second, forever
+    # The flag lives in the database, so a hard reload, a cache wipe and an
+    # incognito window all loop exactly the same way. This is the actual fix.
+    # (The asset-symlink and disable_async blocks above were real bugs too, but
+    #  neither of them was what kept the page reloading.)
+    # Singles are rows in `tabSingles`, so this is a plain SQL upsert. The
+    # literals are hex encoded on purpose: Invoke-Bench hands the command to
+    # `bash -lc`, and a JSON/quoted argument survives PowerShell's native
+    # quoting badly. Hex has no quotes to mangle.
+    $ssDoc = '0x53797374656d2053657474696e6773'   # System Settings
+    $ssFld = '0x73657475705f636f6d706c657465'     # setup_complete
+    $sqlRead = "select ifnull((select value from tabSingles where doctype = $ssDoc and field = $ssFld limit 1), 0) as v"
+    $setupVal = (Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName mariadb -N -B -e '$sqlRead'" -Capture).Output.Trim()
+    if ($setupVal -match '^\s*(1|True)\s*$') {
+        Write-Ok 'setup_complete=1 (desk boots straight to the workspace, no wizard loop)'
+    } elseif ($VerifyOnly) {
+        Write-Fail 'setup_complete is not 1 - the desk will boot the setup wizard on every load and reload-loop'
+    } else {
+        $sqlSet = "insert into tabSingles (doctype, field, value) values ($ssDoc, $ssFld, 0x31) on duplicate key update value = 0x31"
+        Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName mariadb -e '$sqlSet'" | Out-Null
+        Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName clear-cache" | Out-Null
+        Write-Change 'setup_complete set to 1 - stops the desk setup-wizard reload loop'
+    }
+
+    # The stale default that ACTUALLY caused the reload loop: `desktop:home_page`
+    # was left pointing at the setup-wizard page. boot.py resolves it with
+    # frappe.desk.desk_page.get() and puts it in frappe.boot.home_page, so the
+    # desk routed to `setup-wizard/0` on every single load - and that page
+    # reloads the document. Measured: a clean ~2 document loads/second, forever,
+    # with no JS error at all (proved with an injected beforeunload beacon).
+    # setup_complete=1 alone does NOT fix it; this default has to move too.
+    $hpKey = '0x6465736b746f703a686f6d655f70616765'   # desktop:home_page
+    $hpRoot = '0x5f5f64656661756c74'                   # __default
+    $hpGood = '0x776f726b737061636573'                 # workspaces
+    $sqlHp = "select ifnull((select defvalue from tabDefaultValue where defkey = $hpKey and parent = $hpRoot limit 1), 0) as v"
+    $hpVal = (Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName mariadb -N -B -e '$sqlHp'" -Capture).Output.Trim()
+    if ($hpVal -ne 'setup-wizard') {
+        Write-Ok ("desk home page is '" + $hpVal + "' (not the setup wizard)")
+    } elseif ($VerifyOnly) {
+        Write-Fail 'desktop:home_page is setup-wizard - the desk routes there on every load and reload-loops'
+    } else {
+        $sqlHpSet = "update tabDefaultValue set defvalue = $hpGood where defkey = $hpKey and parent = $hpRoot"
+        Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName mariadb -e '$sqlHpSet'" | Out-Null
+        Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName clear-cache" | Out-Null
+        Write-Change 'desk home page moved off setup-wizard - stops the reload loop'
+    }
+
     # --- MariaDB grant self-heal -----------------------------------------
     # `bench new-site` creates the site's db_user scoped to the bench
     # container's IP AT THAT MOMENT (e.g. _3b8...@172.20.0.5). Every

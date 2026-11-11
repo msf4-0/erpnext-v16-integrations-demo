@@ -464,6 +464,52 @@ foreach ($app in @($installed -split "`n" | ForEach-Object { $_.Trim() } | Where
     }
 }
 
+# ---------------------------------------------------------------------------
+# 7d. setup wizard must be marked complete
+# ---------------------------------------------------------------------------
+# `System Settings.setup_complete` ships as 0 in this image, and with it unset
+# Frappe boots /desk into the setup wizard on EVERY document load:
+#   - POST setup_wizard.load_languages fires on every single desk request
+#   - the wizard's step route resolves to `undefined` -> GET /undefined 404
+#   - the desk reloads and repeats, ~1 load/second, forever
+# It is database state, so hard reloads, cache wipes and incognito all loop
+# identically - which is why it looked like a client bug and was not one.
+# The literals below are hex encoded: Invoke-Bench passes the command through
+# `bash -lc`, and quoted/JSON arguments do not survive PowerShell's native
+# quoting reliably. Hex has nothing to mangle.
+Write-Step '7d/11  marking the setup wizard complete'
+$siteExpr = '$(cat /home/frappe/frappe-bench/sites/currentsite.txt 2>/dev/null || echo frontend)'
+$ssDoc = '0x53797374656d2053657474696e6773'   # System Settings
+$ssFld = '0x73657475705f636f6d706c657465'     # setup_complete
+$sqlRead = "select ifnull((select value from tabSingles where doctype = $ssDoc and field = $ssFld limit 1), 0) as v"
+$setupVal = (Invoke-Bench ("cd /home/frappe/frappe-bench && bench --site " + $siteExpr + " mariadb -N -B -e '" + $sqlRead + "'") -Capture).Output.Trim()
+if ($setupVal -match '^\s*(1|True)\s*$') {
+    Write-Info 'setup_complete already 1'
+} else {
+    $sqlSet = "insert into tabSingles (doctype, field, value) values ($ssDoc, $ssFld, 0x31) on duplicate key update value = 0x31"
+    Invoke-Bench ("cd /home/frappe/frappe-bench && bench --site " + $siteExpr + " mariadb -e '" + $sqlSet + "'") | Out-Null
+    Invoke-Bench ("cd /home/frappe/frappe-bench && bench --site " + $siteExpr + " clear-cache") | Out-Null
+    Write-Info 'setup_complete set to 1 (stops the desk setup-wizard reload loop)'
+}
+
+# The stale default that ACTUALLY caused the reload loop: `desktop:home_page`
+# pointed at the setup-wizard page. boot.py resolves it into frappe.boot.home_page,
+# so the desk routed to `setup-wizard/0` on every load and that page reloads the
+# document - a clean ~2 document loads/second, forever, with no JS error at all.
+$hpKey = '0x6465736b746f703a686f6d655f70616765'   # desktop:home_page
+$hpRoot = '0x5f5f64656661756c74'                   # __default
+$hpGood = '0x776f726b737061636573'                 # workspaces
+$sqlHp = "select ifnull((select defvalue from tabDefaultValue where defkey = $hpKey and parent = $hpRoot limit 1), 0) as v"
+$hpVal = (Invoke-Bench ("cd /home/frappe/frappe-bench && bench --site " + $siteExpr + " mariadb -N -B -e '" + $sqlHp + "'") -Capture).Output.Trim()
+if ($hpVal -eq 'setup-wizard') {
+    $sqlHpSet = "update tabDefaultValue set defvalue = $hpGood where defkey = $hpKey and parent = $hpRoot"
+    Invoke-Bench ("cd /home/frappe/frappe-bench && bench --site " + $siteExpr + " mariadb -e '" + $sqlHpSet + "'") | Out-Null
+    Invoke-Bench ("cd /home/frappe/frappe-bench && bench --site " + $siteExpr + " clear-cache") | Out-Null
+    Write-Info 'desk home page moved off setup-wizard (stops the reload loop)'
+} else {
+    Write-Info ("desk home page is '" + $hpVal + "'")
+}
+
 # capture the minted API token
 $tokenResult = Invoke-ComposeCapture @('exec', '-T', 'bench', 'cat', '/tmp/export/erpnext_token.txt')
 $token = $tokenResult.Output.Trim()
