@@ -96,7 +96,7 @@ services:
       - "${NODE_RED_PORT:-1880}:1880"
     volumes:
       - node_red_data:/data
-      - ${FLOWS_PATH:-./node-red/flows.json}:/data/flows.json
+      - ${FLOWS_PATH:-./sandbox/node-red/flows.json}:/data/flows.json
     environment:
       - TZ=${TZ:-UTC}
       - ERPNEXT_INTERNAL_URL=${ERPNEXT_INTERNAL_URL:-http://bench:8000}

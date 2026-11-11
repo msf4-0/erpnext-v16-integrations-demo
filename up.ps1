@@ -165,7 +165,18 @@ function Wait-Url([string]$Url, [int]$TimeoutSec = 180) {
 Write-Step '0/11  configuration'
 
 if (-not (Test-Path $ComposeFile)) { throw "compose file not found: $ComposeFile" }
-if (-not (Test-Path $EnvPath)) { throw "env file not found: $EnvPath" }
+# A fresh clone has no .env (it is git-ignored). Auto-create it from the example
+# so a first-time user does not have to guess - they only fill in the Shopify /
+# DB secrets afterwards. This was the #1 failure on a friend's machine.
+if (-not (Test-Path $EnvPath)) {
+    $envExample = Join-Path $DemoDir '.env.example'
+    if (Test-Path $envExample) {
+        Copy-Item -LiteralPath $envExample -Destination $EnvPath -Force
+        Write-Warn '.env was missing - created from .env.example (fill in DB_ROOT_PASSWORD / Shopify secrets)'
+    } else {
+        throw "env file not found and no .env.example to copy: $EnvPath"
+    }
+}
 
 # Self-containment guard (must run after the helpers exist so it can warn).
 $vendored = Test-Path (Join-Path $SandboxDir 'scripts')
@@ -215,6 +226,15 @@ $env:NGROK_AUTHTOKEN = $ngrokToken
 $env:NGROK_URL_FLAG = if ($cfg['NGROK_PUBLIC_URL']) { '--url=' + $cfg['NGROK_PUBLIC_URL'] } else { '' }
 $env:ERPNEXT_API_TOKEN = $erpToken
 if ($cfg['NGROK_PUBLIC_URL']) { Write-Info "pinning the tunnel to $($cfg['NGROK_PUBLIC_URL'])" }
+
+# Self-heal the Node-RED flow paths. The .env.example ships stale absolute paths
+# (F:\ERPNEXT\erpnext-build\...) that do not exist on a fresh clone; a bind-mount
+# to a missing source makes `docker compose create` fail, which is the "could not
+# build the image" error a fresh machine sees. Force both paths to resolve inside
+# THIS project, whatever its clone location. Process env wins over --env-file for
+# compose interpolation, so these override any stale .env value.
+$env:FLOWS_PATH = Join-Path $SandboxDir 'node-red\flows.json'
+$env:NODE_RED_SOURCE_FLOW = Join-Path $SandboxDir 'node-red\source-flow.json'
 
 Write-Info "project      : $Project"
 Write-Info "ERPNext      : http://localhost:$erpnextPort  (site '$siteName', v$erpVersion)"
@@ -454,6 +474,18 @@ if (-not $SkipInstall) {
 }
 
 # ---------------------------------------------------------------------------
+# 8c. demo user role + login (non-admin, for "ready for user use")
+# ---------------------------------------------------------------------------
+if (-not $SkipProvision) {
+    Write-Step '8c/11  demo user role + login (Demo User role, demo@comp_demo.local)'
+    if ((Invoke-Bench 'cd /home/frappe/frappe-bench && SITE_NAME=frontend ./env/bin/python /tmp/scripts/create-demo-user.py') -ne 0) {
+        Write-Warn 'demo user creation reported errors - review the output above'
+    } else {
+        Write-Info 'Demo User role + demo@comp_demo.local / demo ready (non-admin)'
+    }
+}
+
+# ---------------------------------------------------------------------------
 # 9. the production planner (standalone compose service, not a bench app)
 # ---------------------------------------------------------------------------
 # scheduler-up.ps1 owns everything planner-specific: the token, the demo
@@ -500,7 +532,6 @@ if (-not $flowSrc -or -not (Test-Path $flowSrc)) {
     # vendored next to the flow builder (the old F:\shopify_erpnext_integration.json
     # is outside the project and would break a copy of comp_demo)
     $fallback = Join-Path $SandboxDir 'node-red\source-flow.json'
-    if (-not (Test-Path $fallback)) { $fallback = 'F:\shopify_erpnext_integration.json' }
     if (Test-Path $fallback) { $flowSrc = $fallback }
 }
 if (-not $flowSrc -or -not (Test-Path $flowSrc)) {
@@ -628,6 +659,7 @@ Write-Host '  ERPNEXT-AI-FIX is up' -ForegroundColor Green
 Write-Host ('=' * 72) -ForegroundColor Green
 Write-Host "  ERPNext        : $erpUrl" -ForegroundColor Green
 Write-Host '  Login          : Administrator / admin' -ForegroundColor Green
+Write-Host '  Demo user      : demo@comp_demo.local / demo (Demo User role, non-admin)' -ForegroundColor Green
 Write-Host "  Node-RED       : http://localhost:$nodeRedPort" -ForegroundColor Green
 Write-Host "  Planner        : http://localhost:$($cfg['SCHEDULER_PORT'])" -ForegroundColor Green
 if ($publicUrl) { Write-Host "  Public tunnel  : $publicUrl" -ForegroundColor Green }
