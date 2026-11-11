@@ -35,7 +35,41 @@ services:
     command:
       - bash
       - -lc
-      - "cd /home/frappe/frappe-bench; setsid nohup bench schedule > /tmp/bench-schedule.log 2>&1 & setsid nohup bench worker --queue short,default,long >> logs/worker.log 2>&1 & exec bench serve --port 8000"
+      - |
+        cd /home/frappe/frappe-bench
+        # --- self-heal the site DB grant on EVERY container start -------------
+        # `bench new-site` creates the site's db_user bound to the bench
+        # container's IP at that moment (e.g. _3b8...@172.20.0.5). Any
+        # `docker compose down/up`, `create`, or Docker Desktop restart hands
+        # the container a NEW bridge IP, the grant stops matching, and the
+        # whole site 500s with:
+        #   (1045) Access denied for user '...'@'172.20.0.x' (using password: YES)
+        # Re-asserting a host-agnostic ('%') grant here makes the stack
+        # self-healing on every start without touching the data. Bounded
+        # (60 x 2 s) and best-effort - it must never block `bench serve`.
+        # NOTE: every shell `$` is written `$$` on purpose. Compose interpolates
+        # `$VAR` / `${VAR}` in this file, so a single `$` is consumed before the
+        # container ever sees it (`$CFG` would expand to empty). `$$` is Compose's
+        # escape for a literal `$` and reaches bash intact.
+        CFG="sites/$${SITE_NAME:-frontend}/site_config.json"
+        if [ -f "$$CFG" ]; then
+          DU=$$(sed -n 's/.*"db_user"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$$CFG")
+          DP=$$(sed -n 's/.*"db_password"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$$CFG")
+          DN=$$(sed -n 's/.*"db_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$$CFG")
+          if [ -n "$$DU" ] && [ -n "$$DP" ]; then
+            for i in $$(seq 1 60); do
+              if MYSQL_PWD="$$DB_ROOT_PASSWORD" mariadb -h db -uroot -e "SELECT 1" >/dev/null 2>&1; then
+                MYSQL_PWD="$$DB_ROOT_PASSWORD" mariadb -h db -uroot -e "CREATE USER IF NOT EXISTS '$$DU'@'%' IDENTIFIED BY '$$DP'; ALTER USER '$$DU'@'%' IDENTIFIED BY '$$DP'; GRANT ALL PRIVILEGES ON \`$${DN:-$$DU}\`.* TO '$$DU'@'%'; FLUSH PRIVILEGES;" \
+                  && echo "db-grant: re-asserted $$DU@%" || echo "db-grant: WARN could not re-assert $$DU@%"
+                break
+              fi
+              sleep 2
+            done
+          fi
+        fi
+        setsid nohup bench schedule > /tmp/bench-schedule.log 2>&1 &
+        setsid nohup bench worker --queue short,default,long >> logs/worker.log 2>&1 &
+        exec bench serve --port 8000
     ports:
       - "${ERPNEXT_PORT:-8000}:8000"
     volumes:

@@ -34,7 +34,8 @@
 
 .PARAMETER Wipe
     Destructive; only with -Full. Passes -Fresh to up.ps1, which deletes the
-    volumes. The site database is tmpfs, so this is how you get a clean slate.
+    volumes - including `db_data`, which holds the site database. This is the
+    only way to get a clean slate; a plain stop/start keeps the data.
 
 .PARAMETER SkipShopify
     Do not mint a new Shopify token (leave .env and the flow unchanged).
@@ -153,11 +154,11 @@ function Invoke-Compose {
 }
 function Invoke-Bench {
     param([string]$Command, [switch]$Capture)
-    Invoke-Docker -Arguments @('exec', '-u', 'frappe', $BenchName, 'bash', '-lc', $Command) -Capture:$Capture
+    Invoke-Docker -Arguments @('exec', '-u', 'frappe', $BenchName, 'bash', '-lc', "$Command < /dev/null") -Capture:$Capture
 }
 function Invoke-BenchRoot {
     param([string]$Command, [switch]$Capture)
-    Invoke-Docker -Arguments @('exec', '-u', 'root', $BenchName, 'bash', '-lc', $Command) -Capture:$Capture
+    Invoke-Docker -Arguments @('exec', '-u', 'root', $BenchName, 'bash', '-lc', "$Command < /dev/null") -Capture:$Capture
 }
 
 # ---------------------------------------------------------------------------
@@ -410,16 +411,17 @@ if ($VerifyOnly) {
         if ($running -match [regex]::Escape($n)) { Write-Ok "$n running" } else { Write-Fail "$n not running" }
     }
 } else {
-    # bench and db hold irreplaceable state: the bench app tree lives in the
-    # container's writable layer and the site DB is tmpfs. Recreating either of
-    # them destroys the site, so a missing one is a -Full situation, not a
-    # "start it again" one.
+    # bench and db both hold state worth protecting. The bench app tree
+    # (apps/, env/) lives in the container's writable layer - only sites/ is a
+    # named volume. The site DB is on the durable `db_data` volume, so recreating
+    # db keeps the data but can strand the site's grants. Recreating EITHER still
+    # means a -Full situation, not a "start it again" one.
     foreach ($critical in @('bench', 'db')) {
         $cn = "$Project-$critical-1"
         if (-not $running -match [regex]::Escape($cn)) {
             $exists = (Invoke-Docker -Arguments @('ps', '-a', '--format', '{{.Names}}') -Capture).Output
             if ($exists -match [regex]::Escape($cn)) {
-                Write-Info "$cn is stopped - starting it (the tmpfs site survives a stop only while the container exists)"
+                Write-Info "$cn is stopped - starting it (db data lives on the db_data volume, so it survives a stop)"
                 Invoke-Docker -Arguments @('start', $cn) | Out-Null
                 Write-Change "$cn started"
             } else {
@@ -466,7 +468,7 @@ Write-Step '5/10  bench site'
 
 $siteCheck = (Invoke-Bench "ls -d /home/frappe/frappe-bench/sites/$siteName 2>/dev/null" -Capture)
 if ($siteCheck.Code -ne 0 -or -not $siteCheck.Output.Trim()) {
-    Write-Fail "site '$siteName' is missing - the tmpfs DB was discarded; run with -Full"
+    Write-Fail "site '$siteName' is missing - the sites volume is empty; run with -Full"
 } else {
     Write-Ok "site '$siteName' present"
     $apps = (Invoke-Bench 'cat /home/frappe/frappe-bench/sites/apps.txt' -Capture).Output
@@ -492,6 +494,38 @@ if ($siteCheck.Code -ne 0 -or -not $siteCheck.Output.Trim()) {
         Invoke-Bench "cd /home/frappe/frappe-bench && bench set-config -g server_script_enabled 1" | Out-Null
         Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName clear-cache" | Out-Null
         Write-Change 'server_script_enabled set to 1 (required for Job Card drags)'
+    }
+
+    # --- MariaDB grant self-heal -----------------------------------------
+    # `bench new-site` creates the site's db_user scoped to the bench
+    # container's IP AT THAT MOMENT (e.g. _3b8...@172.20.0.5). Every
+    # `compose down`/`create` - i.e. every up.ps1 run - recreates the bench
+    # container with a NEW bridge IP, so the grant stops matching and every
+    # query dies with:
+    #   (1045) Access denied for user '_3b8...'@'172.20.0.3' (using password: YES)
+    # The data is fine; only the host half of the grant is stale. Result is a
+    # 500 on the whole site and "could not mint an API token", which looks like
+    # corruption but is not. Re-asserting a '%' grant on every converge fixes it
+    # for good and costs ~0.2 s (idempotent).
+    $dbCfg = (Invoke-Bench "cat /home/frappe/frappe-bench/sites/$siteName/site_config.json" -Capture).Output
+    if ($dbCfg -match '"db_user"\s*:\s*"([^"]+)"') {
+        $dbUser = $Matches[1]
+        $dbName = if ($dbCfg -match '"db_name"\s*:\s*"([^"]+)"') { $Matches[1] } else { $dbUser }
+        $dbPass = if ($dbCfg -match '"db_password"\s*:\s*"([^"]+)"') { $Matches[1] } else { '' }
+        $rootPw = if ($cfg['DB_ROOT_PASSWORD']) { $cfg['DB_ROOT_PASSWORD'] } else { 'admin' }
+        $dbC = "$Project-db-1"
+        # single-quoted template: backticks are literal here, and '' is a quote
+        $grantSql = 'CREATE USER IF NOT EXISTS ''{0}''@''%'' IDENTIFIED BY ''{1}''; ALTER USER ''{0}''@''%'' IDENTIFIED BY ''{1}''; GRANT ALL PRIVILEGES ON `{2}`.* TO ''{0}''@''%''; FLUSH PRIVILEGES;' -f $dbUser, $dbPass, $dbName
+
+        if ($VerifyOnly) {
+            $hostAgnostic = (Invoke-Docker -Arguments @('exec', '-e', "MYSQL_PWD=$rootPw", $dbC, 'mariadb', '-uroot', '-N', '-B', '-e', "SELECT 1 FROM mysql.user WHERE User='$dbUser' AND Host='%';") -Capture).Output.Trim()
+            if ($hostAgnostic -eq '1') { Write-Ok "db grant for $dbUser accepts any host" }
+            else { Write-Fail "db grant for $dbUser is pinned to an old container IP - ERPNext will 500 (fix: re-run setup.ps1)" }
+        } else {
+            $grantRes = Invoke-Docker -Arguments @('exec', '-e', "MYSQL_PWD=$rootPw", $dbC, 'mariadb', '-uroot', '-e', $grantSql) -Capture
+            if ($grantRes.Code -eq 0) { Write-Ok "db grant for $dbUser re-asserted for any host" }
+            else { Write-Warn "could not re-assert the db grant for $dbUser : $($grantRes.Output.Trim())" }
+        }
     }
 }
 

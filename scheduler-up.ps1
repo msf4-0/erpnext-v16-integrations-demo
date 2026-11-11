@@ -218,13 +218,14 @@ if ($Seed -or $Reseed) {
     $counts | Select-String -Pattern '^count (Work Order|Job Card|Workstation|BOM)\s' |
         ForEach-Object { Write-Info $_.Line }
 
-    # The site DB is tmpfs, so a Docker restart can leave a provisioned-looking site
+    # The site DB lives on the durable db_data volume, but a re-provisioned or
+    # recreated stack can leave a provisioned-looking site with no Work Orders
     # with zero manufacturing data. That also invalidates the planner's token (its
     # user is gone), hence the rotate + restart before seeding.
     $woMatch = $counts | Select-String -Pattern '^count Work Order\s+(\d+)'
     $woTotal = if ($woMatch) { [int]$woMatch.Matches[0].Groups[1].Value } else { 0 }
     if ($woTotal -eq 0) {
-        Write-Warn 'no Work Orders on the site (tmpfs DB reset) - rotating the token and seeding'
+        Write-Warn 'no Work Orders on the site (empty/re-provisioned DB) - rotating the token and seeding'
         Set-PlannerToken -Force
 Start-Scheduler
 # (container start handled by Start-Scheduler)
@@ -274,7 +275,7 @@ if (@($schedule.workOrders).Count -gt 0) {
     $original = $wo.planned_start_date
     if (-not $original) {
         # The planner API exposed no planned_start_date for this order (fresh
-        # tmpfs DB / just-seeded order). Skip the round-trip rather than crash on
+        # empty DB / just-seeded order). Skip the round-trip rather than crash on
         # [datetime]$null.
         Write-Warn "planner self-check skipped: $($wo.name) exposes no planned_start_date"
     } else {
