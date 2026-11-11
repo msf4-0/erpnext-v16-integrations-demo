@@ -496,6 +496,26 @@ if ($siteCheck.Code -ne 0 -or -not $siteCheck.Output.Trim()) {
         Write-Change 'server_script_enabled set to 1 (required for Job Card drags)'
     }
 
+    # --- realtime / socket.io --------------------------------------------
+    # Nothing serves /socket.io in this compose stack: `bench serve` is a plain
+    # werkzeug process, there is no nginx in front, and port 9000 is not
+    # published. So the desk's realtime client retried /socket.io every ~0.5 s
+    # and got 404 forever, which reads as a page that keeps reloading itself.
+    # `disable_async` is Frappe's own boot flag (frappe/sessions.py) that tells
+    # the client not to open a socket at all. Server-side scheduler and worker
+    # are unaffected - only the browser's live-update channel is off.
+    # If you later add an nginx that proxies /socket.io, delete this block.
+    $asyncSet = (Invoke-Bench "grep -c disable_async /home/frappe/frappe-bench/sites/$siteName/site_config.json" -Capture).Output.Trim()
+    if ($asyncSet -ne '0') {
+        Write-Ok 'disable_async set (desk will not poll /socket.io)'
+    } elseif ($VerifyOnly) {
+        Write-Fail 'disable_async not set - the desk will hammer /socket.io for 404s and look like a reload loop'
+    } else {
+        Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName set-config disable_async 1" | Out-Null
+        Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName clear-cache" | Out-Null
+        Write-Change 'disable_async set - stops the /socket.io 404 storm (no socketio server here)'
+    }
+
     # --- MariaDB grant self-heal -----------------------------------------
     # `bench new-site` creates the site's db_user scoped to the bench
     # container's IP AT THAT MOMENT (e.g. _3b8...@172.20.0.5). Every
