@@ -1,18 +1,10 @@
-# Lowdefy v4 app skeleton.
-# NOTE: target version must be confirmed at install time (no Lowdefy was pre-installed).
-# Secrets are resolved server-side via `_secret`; nothing is hardcoded.
-
-name: lowdefy-smart-inventory
+lowdefy: 6.1.0
+name: Lowdefy Smart Inventory & Exception Management
 version: 1.0.0
 
-app:
-  html:
-    appendHead: |
-      <style>
-        :root { color-scheme: dark; }
-      </style>
+# ERPNext stays the source of truth. Secrets resolve server-side via `_secret`;
+# nothing is hardcoded or shipped to the browser.
 
-# ERPNext connection — token lives only server-side.
 connections:
   - id: erpnext
     type: AxiosHttp
@@ -24,8 +16,6 @@ connections:
           _secret: ERPNEXT_AUTH_HEADER
       timeout: 15000
 
-# Exception Service (server-side detection + lifecycle metadata).
-connections:
   - id: exceptions
     type: AxiosHttp
     properties:

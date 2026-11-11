@@ -32,3 +32,6 @@ scheduler/ui-tests/*.png
 
 # ---- agent/harness session artifacts (never commit) -----------------------
 _session_extract/
+
+# ---- lowdefy runtime data (rebuilt on startup, not source) ------------------
+lowdefy/server/exceptions.db

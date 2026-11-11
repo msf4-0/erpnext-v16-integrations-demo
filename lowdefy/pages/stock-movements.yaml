@@ -18,6 +18,12 @@ blocks:
     properties:
       style:
         padding: 24
+    events:
+      onInitAsync:
+        - id: load
+          type: Request
+          params:
+            requestId: entries
     blocks:
       - id: title
         type: Title
@@ -25,14 +31,20 @@ blocks:
           content: Stock Movements
           level: 2
       - id: table
-        type: AgGrid
+        type: AgGridBalham
         properties:
           rowData:
-            _state: entries.data
+            _request: entries.data
           columnDefs:
             - field: name
+              headerName: Stock Entry
             - field: stock_entry_type
+              headerName: Type
             - field: from_warehouse
+              headerName: Source Warehouse
             - field: to_warehouse
+              headerName: Destination Warehouse
             - field: docstatus
+              headerName: Status
             - field: posting_date
+              headerName: Date

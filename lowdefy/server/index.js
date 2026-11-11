@@ -21,11 +21,13 @@ import path from 'node:path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const ERP_URL = process.env.ERPNEXT_URL || 'http://localhost:8000';
-const AUTH = process.env.ERPNEXT_AUTH_HEADER || (() => {
-  const k = process.env.ERPNEXT_API_KEY;
-  const s = process.env.ERPNEXT_API_SECRET;
-  return k && s ? `token ${k}:${s}` : '';
-})();
+const AUTH = process.env.ERPNEXT_AUTH_HEADER
+  || (process.env.ERPNEXT_API_TOKEN ? `token ${process.env.ERPNEXT_API_TOKEN}` : '')
+  || (() => {
+      const k = process.env.ERPNEXT_API_KEY;
+      const s = process.env.ERPNEXT_API_SECRET;
+      return k && s ? `token ${k}:${s}` : '';
+    })();
 const PORT = Number(process.env.EXCEPTION_PORT || 4000);
 const DB_PATH = process.env.EXCEPTION_DB_PATH || path.join(__dirname, 'exceptions.db');
 
@@ -100,7 +102,7 @@ function upsert({ id, category, severity, title, description, rule, relatedRecor
 
 async function detect() {
   // A. Low stock + B. Out of stock (from Bin — real current quantity).
-  const bins = await pageAll('Bin', ['item_code','warehouse','actual_qty','stock_value','item_name']);
+  const bins = await pageAll('Bin', ['item_code','warehouse','actual_qty','stock_value','projected_qty']);
   const reorder = await pageAll('Item Reorder', ['parent','warehouse','warehouse_reorder_level']);
   const reorderMap = new Map();
   for (const r of reorder.data || []) reorderMap.set(`${r.parent}|${r.warehouse}`, r.warehouse_reorder_level);

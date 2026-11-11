@@ -10,16 +10,7 @@ requests:
       url: /api/resource/Bin
       method: GET
       params:
-        fields: '["item_code","item_name","warehouse","actual_qty","projected_qty","stock_value"]'
-        limit_page_length: 1000
-  - id: reorder
-    type: AxiosHttp
-    connectionId: erpnext
-    properties:
-      url: /api/resource/Item Reorder
-      method: GET
-      params:
-        fields: '["parent","warehouse","warehouse_reorder_level"]'
+        fields: '["item_code","warehouse","actual_qty","projected_qty","stock_value"]'
         limit_page_length: 1000
 blocks:
   - id: content
@@ -27,61 +18,39 @@ blocks:
     properties:
       style:
         padding: 24
+    events:
+      onInitAsync:
+        - id: load_bins
+          type: Request
+          params:
+            requestId: bins
     blocks:
       - id: title
         type: Title
         properties:
-          content: Inventory
+          content: Inventory Management
           level: 2
       - id: search
         type: TextInput
         properties:
-          placeholder: Search by item code or name
+          placeholder: Search by item code or warehouse
           value:
             _state: search
       - id: table
-        type: AgGrid
+        type: AgGridBalham
         properties:
           rowData:
-            _js: |
-              () => {
-                const q = (state.search || '').toLowerCase();
-                const rows = state.bins.data || [];
-                if (!q) return rows;
-                return rows.filter(r => (r.item_code||'').toLowerCase().includes(q) || (r.item_name||'').toLowerCase().includes(q));
-              }
+            _request: bins.data
+          quickFilterText:
+            _state: search
           columnDefs:
             - field: item_code
-            - field: item_name
+              headerName: Item Code
             - field: warehouse
+              headerName: Warehouse
             - field: actual_qty
+              headerName: Available
+            - field: projected_qty
+              headerName: Projected
             - field: stock_value
-          rowSelection: single
-          onRowClicked:
-            - id: open_detail
-              type: SetState
-              params:
-                selected:
-                  _event: row.data
-              # opens the right-side Drawer
-      - id: detail
-        type: Drawer
-        properties:
-          title:
-            _js: "() => state.selected?.item_name || 'Item detail'"
-          open:
-            _js: "() => !!state.selected"
-        blocks:
-          - id: d
-            type: Descriptions
-            properties:
-              items:
-                - key: Item code
-                  value:
-                    _js: "() => state.selected?.item_code"
-                - key: Warehouse
-                  value:
-                    _js: "() => state.selected?.warehouse"
-                - key: Available
-                  value:
-                    _js: "() => state.selected?.actual_qty"
+              headerName: Stock Value
