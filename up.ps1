@@ -510,6 +510,22 @@ if ($hpVal -eq 'setup-wizard') {
     Write-Info ("desk home page is '" + $hpVal + "'")
 }
 
+# eu_einvoice's python deps. `bench install-app` skips an app's pyproject
+# dependencies, so without these every eu_einvoice doctype throws
+#   ModuleNotFoundError: No module named 'drafthorse'
+# and the desk says "Module import failed for E Invoice Import".
+Write-Step '7e/11  app python dependencies'
+$depCmd = "/home/frappe/frappe-bench/env/bin/python -c 'import drafthorse, facturx, saxonche'"
+$depOk = (Invoke-Bench "$depCmd && echo DEPSOK" -Capture).Output
+if ($depOk -match 'DEPSOK') {
+    Write-Info 'eu_einvoice deps already present'
+} else {
+    Invoke-Bench "/home/frappe/frappe-bench/env/bin/pip install --no-input 'factur-x~=3.1' 'drafthorse~=2025.2.0' 'saxonche>=12.5.0,<13.0.0'" | Out-Null
+    $depOk = (Invoke-Bench "$depCmd && echo DEPSOK" -Capture).Output
+    if ($depOk -match 'DEPSOK') { Write-Info 'installed eu_einvoice deps' }
+    else { Write-Warn 'eu_einvoice deps still missing - E-Invoicing forms will not load' }
+}
+
 # capture the minted API token
 $tokenResult = Invoke-ComposeCapture @('exec', '-T', 'bench', 'cat', '/tmp/export/erpnext_token.txt')
 $token = $tokenResult.Output.Trim()

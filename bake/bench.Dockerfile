@@ -59,6 +59,15 @@ RUN SP=$(dirname "$(find /home/frappe/frappe-bench/env -name 'frappe.pth' -print
 # Server-side rasterisation + QR libs into the bench venv (idempotent, baked once).
 RUN /home/frappe/frappe-bench/env/bin/pip install --no-cache-dir reportlab qrcode pillow
 
+# eu_einvoice's own runtime dependencies (its pyproject: factur-x, drafthorse,
+# saxonche, lxml). These were never installed, so every request that touched an
+# eu_einvoice doctype died in `load_doctype_module` with
+#   ModuleNotFoundError: No module named 'drafthorse'
+# i.e. clicking E-Invoicing / E Invoice Import threw "Module import failed".
+# Pinned to the ranges in repos/eu_einvoice/pyproject.toml.
+RUN /home/frappe/frappe-bench/env/bin/pip install --no-cache-dir \
+        "factur-x~=3.1" "drafthorse~=2025.2.0" "saxonche>=12.5.0,<13.0.0"
+
 # The running stack runs `sleep infinity` and drives the bench via `exec`. Keep
 # that contract so up.ps1's `Invoke-Bench` helpers work unchanged.
 USER frappe
