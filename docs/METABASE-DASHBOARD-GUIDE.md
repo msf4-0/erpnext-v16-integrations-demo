@@ -156,3 +156,31 @@ do **not** reuse `metabase_user` for app writes; it is SELECT-only.)
 ## 4. Registering this change (required by workspace policy)
 Add a row to `Customisations.md` (Kind **C** doc_events) and list the new files. Rollback
 tier **1** (disable) — simply remove the `doc_events` entry.
+
+---
+
+## 2026-11-11 — Metabase restored after `docker compose down`
+
+Metabase keeps its metadata in the **`metabase` schema of the `db` MariaDB**
+(no volume of its own). Recreating `db_data` therefore wipes the admin account,
+the `ERPNext` data source and every saved question/dashboard — which is what
+happened here. `up.ps1` now starts the `metabase` container and runs
+`sandbox/scripts/ensure_metabase.ps1`, which is idempotent and does:
+
+1. `CREATE DATABASE metabase` + `metabase_user` + `GRANT SELECT, SHOW VIEW` on
+   the **live** site DB (the db name changes whenever the site is recreated —
+   this guide's old `_35e1999d62da474b` is gone; the current one is
+   `_3b87344c91a8f6dd`)
+2. waits for `http://localhost:3005/api/health`
+3. admin (`admin@demo.local`) + `ERPNext` data source via `metabase-seed.ps1`
+4. the 4 questions + `ERPNext Monitoring` dashboard, only if absent
+
+Current dashboard: id 2, 4 cards (Sales Order pie, Purchase Order bar,
+Workstation table, Delivery status table).
+
+**Data caveat:** this site DB currently holds `Job Card` 24, `Item` 70,
+`Sales Invoice` 1, `Delivery Note` 1 but **`Sales Order` 0 and
+`Purchase Order` 0**. The Workstation card returns rows; the Sales/Purchase
+cards render empty because there are no rows to aggregate — not a connection
+problem. Load sales/purchase demo data (or restore the dump in
+`.cache/comp_demo-site-dump.sql`) to populate them.

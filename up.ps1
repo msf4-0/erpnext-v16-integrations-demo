@@ -308,7 +308,7 @@ if ((Invoke-Compose @('create')) -ne 0) { throw 'docker compose create failed' }
 # up subcommand; it affects the standalone docker-compose.exe shim too). `create`
 # returns fine, and `docker start` on the created containers takes ~15 s, so we
 # split the two - measured, not guessed.
-$demoServices = @('db', 'redis-cache', 'redis-queue', 'bench', 'node-red')
+$demoServices = @('db', 'redis-cache', 'redis-queue', 'bench', 'node-red', 'metabase')
 $demoNames = $demoServices | ForEach-Object { "$Project-$_-1" }
 if ((Invoke-Native -Exe 'docker' -Arguments (@('start') + $demoNames)) -ne 0) {
     throw 'docker start failed for the demo stack'
@@ -524,6 +524,23 @@ if ($depOk -match 'DEPSOK') {
     $depOk = (Invoke-Bench "$depCmd && echo DEPSOK" -Capture).Output
     if ($depOk -match 'DEPSOK') { Write-Info 'installed eu_einvoice deps' }
     else { Write-Warn 'eu_einvoice deps still missing - E-Invoicing forms will not load' }
+}
+
+# ---------------------------------------------------------------------------
+# 7f. Metabase: schema + grant + dashboard
+# ---------------------------------------------------------------------------
+# Metabase keeps its own metadata in the `metabase` schema of the `db` MariaDB,
+# not in a volume, so anything that recreates db_data silently wipes the admin
+# account, the ERPNext data source and every saved question/dashboard. The
+# script below re-creates the schema/user/grant, waits for health, seeds the
+# admin + data source if missing, and rebuilds the `ERPNext Monitoring`
+# dashboard only when it is absent. Non-fatal: BI must not block the stack.
+Write-Step '7f/11  Metabase schema + dashboard'
+try {
+    & (Join-Path $PSScriptRoot 'sandbox\scripts\ensure_metabase.ps1')
+} catch {
+    Write-Warn ("metabase setup did not complete: " + $_.Exception.Message)
+    Write-Warn 'run .\sandbox\scripts\ensure_metabase.ps1 once the container is healthy'
 }
 
 # capture the minted API token

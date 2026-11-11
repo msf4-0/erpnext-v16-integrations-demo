@@ -10,6 +10,15 @@ $sess = Invoke-RestMethod -Uri "$BaseUrl/api/session" -Method Post -ContentType 
   -Body (@{ username = $AdminEmail; password = $AdminPassword } | ConvertTo-Json)
 $hdr = @{ "X-Metabase-Session" = $sess.id }
 
+# Resolve the ERPNext data source by name instead of hard-coding id=2: the id
+# depends on the order databases were added, and the site DB name changes
+# whenever the site is recreated.
+$dbs = Invoke-RestMethod -Uri "$BaseUrl/api/database" -Headers $hdr
+$dbEntry = $dbs.data | Where-Object { $_.name -eq "ERPNext" } | Select-Object -First 1
+if (-not $dbEntry) { throw "No data source named 'ERPNext' in Metabase - run metabase-seed.ps1 first." }
+$dbId = $dbEntry.id
+Write-Host ("using data source 'ERPNext' id={0}" -f $dbId)
+
 $sql1 = @'
 SELECT status AS Status, COUNT(*) AS Orders FROM `tabSales Order` GROUP BY status ORDER BY Orders DESC
 '@
@@ -40,7 +49,7 @@ foreach ($c in $cards) {
   $body = @{
     name = $c.name
     display = $c.display
-    dataset_query = @{ database = 2; type = "native"; native = @{ query = $c.sql; "template-tags" = @{} } }
+    dataset_query = @{ database = $dbId; type = "native"; native = @{ query = $c.sql; "template-tags" = @{} } }
     visualization_settings = @{}
     parameters = @()
   } | ConvertTo-Json -Depth 8
