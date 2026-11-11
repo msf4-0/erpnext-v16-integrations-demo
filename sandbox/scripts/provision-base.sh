@@ -65,13 +65,36 @@ if [ -d "$BENCH_DIR" ] && [ "$(stat -c '%U' "$BENCH_DIR")" != "frappe" ]; then
   exit 1
 fi
 
-if [ -d "$BENCH_DIR" ]; then
-  echo "-- Existing bench dir found (partial run, or sites/ is a volume
-   mount point that survives recreation) — chown + --ignore-exist --"
-  chown -R frappe:frappe "$BENCH_DIR" 2>/dev/null
-  bench init --frappe-branch "$BRANCH" --ignore-exist "${PY_INIT_ARGS[@]}" frappe-bench
-else
-  bench init --frappe-branch "$BRANCH" "${PY_INIT_ARGS[@]}" frappe-bench
+# The bench image (comp_demo-bench:v16) already ships a fully initialised bench
+# tree (env/ + apps/frappe + apps/erpnext + the custom apps). Re-running
+# `bench init` over it is not only wasted work (~2-5 min of uv/yarn/build), it
+# is BROKEN in bench v5: with --ignore-exist and a RELATIVE path, bench
+# re-installs frappe from "frappe-bench/apps/frappe" while it is already
+# chdir'ed into frappe-bench, so uv exits 2 with
+# "Distribution not found at: file:///home/frappe/frappe-bench/frappe-bench/apps/frappe".
+# bench then asks "Do you want to rollback these changes?" on stdin - and under
+# `docker compose exec -T` that prompt is invisible to the caller, so up.ps1
+# sat there at 0% CPU forever instead of failing.
+# Hence: only init when the existing tree is genuinely unusable, always pass an
+# ABSOLUTE path, bound the runtime, and give bench /dev/null as stdin so any
+# prompt aborts immediately instead of hanging.
+BENCH_READY=0
+if [ -d "$BENCH_DIR/apps/frappe" ] && "$BENCH_DIR/env/bin/python" -c 'import frappe' >/dev/null 2>&1; then
+  BENCH_READY=1
+  echo "-- Reusing the bench already present at $BENCH_DIR (frappe $("$BENCH_DIR/env/bin/python" -c 'import frappe; print(frappe.__version__)' 2>/dev/null)) --"
+fi
+
+if [ "$BENCH_READY" -ne 1 ]; then
+  # Only pay for a recursive chown when the tree actually needs initialising:
+  # the baked bench is already frappe-owned, and `chown -R` over venv/ +
+  # node_modules costs minutes on this host's slow container-storage path.
+  chown -R frappe:frappe "$BENCH_DIR" 2>/dev/null || true
+  echo "-- Initialising bench at $BENCH_DIR (absolute path, 30 min cap, stdin closed) --"
+  if ! timeout 1800 bench init --frappe-branch "$BRANCH" --ignore-exist "${PY_INIT_ARGS[@]}" "$BENCH_DIR" < /dev/null; then
+    echo "ERROR: bench init failed or timed out - see the output above."
+    echo "  Re-run after fixing the cause; the venv/ and apps/ tree may be partial."
+    exit 1
+  fi
 fi
 
 cd "$BENCH_DIR" || exit 1
@@ -95,9 +118,19 @@ echo "-- yarn network settings: timeout=$(yarn config get network-timeout)ms con
 # the end. Fail fast and clearly so the operator retries (the clone is
 # idempotent) instead of silently proceeding without ERPNext.
 GET_APP_OK=0
+# The bench image already contains apps/erpnext installed into the venv, so a
+# git clone + uv install + asset build here costs minutes and fetches nothing
+# new. Only fetch when the tree is actually missing/unusable. (stdin is closed
+# for the same reason as bench init above: no invisible prompts.)
+if "$BENCH_DIR/env/bin/python" -c 'import erpnext' >/dev/null 2>&1; then
+  echo "-- apps/erpnext already present and importable; skipping get-app --"
+  GET_APP_OK=1
+fi
+
 for attempt in 1 2 3; do
+  [ "$GET_APP_OK" -eq 1 ] && break
   echo "-- bench get-app erpnext --branch $BRANCH (attempt $attempt/3) --"
-  if bench get-app erpnext --branch "$BRANCH"; then
+  if timeout 1800 bench get-app erpnext --branch "$BRANCH" < /dev/null; then
     GET_APP_OK=1
     break
   fi
@@ -152,12 +185,24 @@ else
   ROOT_USER_FLAG="--db-root-username"
 fi
 
-if ! bench new-site "$SITE_NAME" --admin-password admin \
-      "$ROOT_PW_FLAG" "$DB_ROOT_PASSWORD" "$ROOT_USER_FLAG" root --install-app erpnext; then
-  echo "-- new-site failed (likely partial DB setup from a prior attempt),"
-  echo "   retrying with --force --"
-  bench new-site "$SITE_NAME" --force --admin-password admin \
-      "$ROOT_PW_FLAG" "$DB_ROOT_PASSWORD" "$ROOT_USER_FLAG" root --install-app erpnext
+SITE_DIR="$BENCH_DIR/sites/$SITE_NAME"
+# A normal up.ps1 run recreates the bench CONTAINER but keeps the bench_sites
+# and db_data volumes, so the site is usually already there. `bench new-site`
+# on an existing site fails, and the --force retry below then DROPS the site
+# and replays the entire erpnext migration (3-5 min of pure waste, and it
+# destroys any data the operator put on the site). Only build when missing.
+if [ -f "$SITE_DIR/site_config.json" ] \
+   && bench --site "$SITE_NAME" list-apps 2>/dev/null | grep -q '^erpnext'; then
+  echo "-- site $SITE_NAME already exists with erpnext installed - reusing it --"
+  echo "   (rebuild from scratch with: up.ps1 -Fresh, or setup.ps1 -Full -Wipe)"
+else
+  if ! bench new-site "$SITE_NAME" --admin-password admin \
+        "$ROOT_PW_FLAG" "$DB_ROOT_PASSWORD" "$ROOT_USER_FLAG" root --install-app erpnext; then
+    echo "-- new-site failed (likely partial DB setup from a prior attempt),"
+    echo "   retrying with --force --"
+    bench new-site "$SITE_NAME" --force --admin-password admin \
+        "$ROOT_PW_FLAG" "$DB_ROOT_PASSWORD" "$ROOT_USER_FLAG" root --install-app erpnext
+  fi
 fi
 
 # Serve regardless of host header (a site named e.g. 'frontend' otherwise

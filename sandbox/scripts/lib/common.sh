@@ -329,13 +329,21 @@ install_local_app_dir() {
 }
 
 restart_bench_serve() {
-  # The serve process runs as `frappe serve` (via `bench_helper frappe
-  # serve`), NOT `bench serve` — a `pkill -f 'bench serve'` silently
-  # misses it and leaves a stale process serving with an outdated .pth
-  # (which then 500s on any app added after it started). Match both.
-  pkill -f 'frappe serve' 2>/dev/null
-  pkill -f 'bench serve' 2>/dev/null
-  sleep 3
+  # The bench service runs the server as the container's PID 1
+  # (`bash -lc "... exec bench serve --port 8000"`), so it CANNOT be restarted
+  # from inside: the image ships no procps (no pkill/ps), and killing the serve
+  # child takes the whole container - and this exec session - down with it.
+  # The old pkill-based version therefore silently did nothing, then a second
+  # server failed with "Address already in use", leaving the ORIGINAL process
+  # (started before the site existed, so it does not know default_site) to
+  # answer 404 "localhost does not exist" for every request.
+  # So: only start a server when nothing is listening; otherwise leave it and
+  # let the caller restart the bench container (up.ps1 does this right after
+  # provisioning).
+  if curl -fsS -o /dev/null --max-time 3 -H "Host: $SITE_NAME" "http://localhost:8000/api/method/ping"; then
+    log "bench is already serving $SITE_NAME on :8000 - caller must restart the container to reload config"
+    return 0
+  fi
   # Must be DETACHED: a plain `( … &)` dies when the exec session ends, and
   # `nohup … &` without a stdin redirect can hold the exec pipe open so the
   # tool call appears to hang. `setsid nohup … < /dev/null & disown` is the
@@ -348,7 +356,10 @@ restart_bench_serve() {
 wait_for_site() {
   local timeout="${1:-120}" waited=0
   while [ "$waited" -lt "$timeout" ]; do
-    if curl -s -o /dev/null -H "Host: $SITE_NAME" "http://localhost:8000/api/method/ping"; then
+    # -f is essential: plain `curl` exits 0 for a 404, so the old loop reported
+    # "site responding" while every request was returning "localhost does not
+    # exist". Also accept the bare host header form the browser will use.
+    if curl -fsS -o /dev/null --max-time 5 -H "Host: $SITE_NAME" "http://localhost:8000/api/method/ping"; then
       return 0
     fi
     sleep 3

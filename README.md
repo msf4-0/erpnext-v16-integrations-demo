@@ -187,7 +187,7 @@ The session log contains secrets read during troubleshooting (database password,
 
 | Service | URL | Notes |
 |---|---|---|
-| ERPNext | http://localhost:8000 | Login `Administrator` / `admin` (System Manager), or the demo user `demo@comp_demo.local` / `demo` (non-admin `Demo User` role), site `frontend` |
+| ERPNext | http://localhost:8000 | Login `Administrator` / `admin` (System Manager), or the demo user `demo@compdemo.local` / `demo` (non-admin `Demo User` role), site `frontend` |
 | Production planner | http://localhost:3001 | Also linked in the Manufacturing workspace |
 | Node-RED | http://localhost:1880 | 47-node flow, 3 webhook endpoints |
 | ngrok API | http://localhost:4040 | Public URL changes on each tunnel start unless pinned |
@@ -200,7 +200,7 @@ for real users, not just the build agent:
 | Login | Password | Role | Scope |
 |---|---|---|---|
 | `Administrator` | `admin` | System Manager | build/maintenance only — do not hand to end users |
-| `demo@comp_demo.local` | `demo` | `Demo User` (+ Employee Self Service) | read/write/create/submit on Items, Stock, Delivery Note, Sales Invoice/Order, Work Order, Job Card, Barcode Printing, E Invoice Import, Shopify — read-only on masters (Company, Warehouse, Customer, Supplier, …) |
+| `demo@compdemo.local` | `demo` | `Demo User` (+ Employee Self Service) | read/write/create/submit on Items, Stock, Delivery Note, Sales Invoice/Order, Work Order, Job Card, Barcode Printing, E Invoice Import, Shopify — read-only on masters (Company, Warehouse, Customer, Supplier, …) |
 
 The `Demo User` role has **no** System Manager or Setup access, so the account
 cannot reach financial setup or destructive actions. Change the `demo` password

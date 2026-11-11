@@ -12,7 +12,7 @@ This script (idempotent) creates:
      permission set across every doctype the demo exercises - stock, sales,
      manufacturing, barcode printing, e-invoicing and Shopify - plus read-only
      access to the master data those documents depend on.
-  2. User `demo@comp_demo.local` / password `demo`, assigned the `Demo User`
+  2. User `demo@compdemo.local` / password `demo`, assigned the `Demo User`
      role (plus Employee Self Service so the account is a normal desk login).
 
 Run inside the bench container:
@@ -28,6 +28,8 @@ import os
 
 import frappe
 
+from frappe.permissions import copy_perms
+
 SITE = os.environ.get("SITE_NAME", "frontend")
 os.chdir("/home/frappe/frappe-bench/sites")
 frappe.init(site=SITE, sites_path=".")
@@ -35,7 +37,7 @@ frappe.connect()
 frappe.set_user("Administrator")
 
 ROLE = "Demo User"
-EMAIL = "demo@comp_demo.local"
+EMAIL = "demo@compdemo.local"
 PASSWORD = "demo"
 
 # full transaction access: read/write/create/submit/cancel/amend/print/export/report
@@ -82,22 +84,52 @@ def upsert_role():
         role = frappe.get_doc({"doctype": "Role", "role_name": ROLE, "desk_access": 1})
         role.insert(ignore_permissions=True)
 
-    # Rebuild the permission table deterministically (idempotent across runs).
-    role.set("permissions", [])
-    for dt in TRANSACTIONAL:
-        row = dict(FULL)
-        row["doctype"] = dt
-        role.append("permissions", row)
-    for dt in MASTERS:
-        row = dict(READ)
-        row["doctype"] = dt
-        role.append("permissions", row)
+    # frappe 16 dropped the Role.permissions child table entirely (roles no
+    # longer own the rules; the rules point AT the role). Role-specific grants
+    # now live in `Custom DocPerm`, keyed by parent=<doctype>, role=<role>, which
+    # is what the Permission Manager writes. Rebuild them deterministically so a
+    # re-run converges instead of duplicating.
+    #
+    # The critical detail: the mere existence of ONE Custom DocPerm row makes
+    # frappe ignore the app-shipped DocPerm table for that doctype. Writing the
+    # demo role's rows without first copying the shipped rules therefore strips
+    # System Manager / Manufacturing User / etc. from the doctype - which took
+    # the whole planner API down with "Insufficient Permission". `copy_perms()`
+    # snapshots every shipped rule into Custom DocPerm first; only then is it
+    # safe to add ours.
+    desired = [(dt, FULL) for dt in TRANSACTIONAL] + [(dt, READ) for dt in MASTERS]
+
+    missing = []
+    for dt, flags in desired:
+        if not frappe.db.exists("DocType", dt):
+            missing.append(dt)
+            continue
+
+        existing = frappe.get_all("Custom DocPerm", {"parent": dt}, ["role"])
+        if existing and all(r.role == ROLE for r in existing):
+            # Leftover from the earlier broken version of this script (custom
+            # table holds only the demo role). Drop it so copy_perms can rebuild
+            # the full, correct table instead of the site staying locked down.
+            frappe.db.delete("Custom DocPerm", {"parent": dt})
+            frappe.db.commit()
+            existing = []
+        if not existing:
+            copy_perms(dt)
+
+        frappe.db.delete("Custom DocPerm", {"parent": dt, "role": ROLE})
+        row = {"doctype": "Custom DocPerm", "parent": dt, "parenttype": "DocType",
+               "parentfield": "permissions", "role": ROLE}
+        row.update(flags)
+        frappe.get_doc(row).insert(ignore_permissions=True, ignore_if_duplicate=True)
 
     role.desk_access = 1
     role.save(ignore_permissions=True)
     frappe.db.commit()
     print(f"[demo-user] role '{ROLE}' ready: "
-          f"{len(TRANSACTIONAL)} full + {len(MASTERS)} read-only doctypes")
+          f"{len(desired) - len(missing)} doctypes granted, {len(TRANSACTIONAL)} transaction + "
+          f"{len(MASTERS)} read-only requested")
+    if missing:
+        print(f"[demo-user] skipped doctypes not installed yet: {missing}")
 
 
 def upsert_user():
@@ -115,13 +147,26 @@ def upsert_user():
             "enabled": 1,
             "new_password": PASSWORD,
         })
+        # Site password policy rejects short dictionary words ("Common words are
+        # easy to guess"), and "demo" is the documented demo login - telling the
+        # operator "demo / demo" and then shipping something else would be worse.
+        # This is a local sandbox account with no System Manager rights; the note
+        # at the top of this file tells the operator to change it.
+        user.flags.ignore_password_policy = True
         user.insert(ignore_permissions=True)
 
-    # Ensure the role is attached (roles is a child table keyed by role).
+    # Ensure the role is attached (roles is a child table keyed by role). Only
+    # link roles that exist on this site: erpnext v16 does not ship
+    # "Employee Self Service" here, and a missing Role fails the whole save with
+    # LinkValidationError, which used to cost the demo user entirely.
     existing_roles = {r.role for r in user.get("roles", [])}
     for r in (ROLE, "Employee Self Service"):
-        if r not in existing_roles:
-            user.append("roles", {"role": r})
+        if r in existing_roles:
+            continue
+        if not frappe.db.exists("Role", r):
+            print(f"[demo-user] role '{r}' is not installed on this site - not linked")
+            continue
+        user.append("roles", {"role": r})
     user.save(ignore_permissions=True)
 
     # The password is set once at creation via `new_password` (above). We do NOT
@@ -133,4 +178,4 @@ def upsert_user():
 if __name__ == "__main__":
     upsert_role()
     upsert_user()
-    print("[demo-user] done - login with demo@comp_demo.local / demo")
+    print("[demo-user] done - login with demo@compdemo.local / demo")

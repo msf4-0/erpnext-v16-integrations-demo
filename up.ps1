@@ -49,6 +49,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
+$script:RunStart = Get-Date
 
 $DemoDir = $PSScriptRoot
 # SELF-CONTAINED BY DEFAULT: everything this script stages (sandbox scripts,
@@ -66,9 +67,10 @@ $NgrokYml = Join-Path $env:LOCALAPPDATA 'Packages\ngrok.ngrok_1g87z0zv29zzc\Loca
 # helpers
 # ---------------------------------------------------------------------------
 function Write-Step([string]$Message) {
+    $elapsed = [int]((Get-Date) - $script:RunStart).TotalSeconds
     Write-Host ''
     Write-Host ('=' * 72) -ForegroundColor DarkCyan
-    Write-Host "  $Message" -ForegroundColor Cyan
+    Write-Host "  $Message   [+${elapsed}s]" -ForegroundColor Cyan
     Write-Host ('=' * 72) -ForegroundColor DarkCyan
 }
 function Write-Info([string]$Message) { Write-Host "  $Message" }
@@ -113,18 +115,22 @@ function Invoke-Native {
     # Relax it for the duration of the call and flatten ErrorRecords to text.
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
+    $lines = New-Object System.Collections.Generic.List[string]
     try {
-        $raw = & $Exe @Arguments 2>&1
+        # Stream output AS THE COMMAND RUNS. The old `$raw = & $Exe @Arguments`
+        # buffered every line until exit, so a 5-minute get-app/migrate/yarn step
+        # printed nothing at all - long steps were indistinguishable from a hang,
+        # and an interactive prompt from a child process could never be seen.
+        & $Exe @Arguments 2>&1 | ForEach-Object {
+            $text = if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.Exception.Message } else { "$_" }
+            $lines.Add($text)
+            if (-not $Capture) { Write-Host $text }
+        }
         $code = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previous
     }
-    $lines = @(foreach ($item in $raw) {
-        if ($item -is [System.Management.Automation.ErrorRecord]) { $item.Exception.Message }
-        else { "$item" }
-    })
     if ($Capture) { return [pscustomobject]@{ Output = ($lines -join [Environment]::NewLine); Code = $code } }
-    $lines | ForEach-Object { Write-Host $_ }
     return $code
 }
 function Invoke-Docker { param([string[]]$Arguments, [switch]$Capture) Invoke-Native -Exe 'docker' -Arguments $Arguments -Capture:$Capture }
@@ -144,8 +150,12 @@ if ($script:ComposeExe) {
 }
 function Invoke-Compose { param([string[]]$Arguments) Invoke-Native -Exe $script:ComposeExe -Arguments ($script:composeBase + $Arguments) }
 function Invoke-ComposeCapture { param([string[]]$Arguments) Invoke-Native -Exe $script:ComposeExe -Arguments ($script:composeBase + $Arguments) -Capture }
-function Invoke-Bench { param([string]$Command) Invoke-Native -Exe $script:ComposeExe -Arguments ($script:composeBase + @('exec', '-T', 'bench', 'bash', '-lc', $Command)) }
-function Invoke-BenchRoot { param([string]$Command) Invoke-Native -Exe $script:ComposeExe -Arguments ($script:composeBase + @('exec', '-T', '-u', 'root', 'bench', 'bash', '-lc', $Command)) }
+# stdin is always redirected from /dev/null: `docker compose exec -T` leaves a
+# pipe on stdin, so a bench/click prompt ("Do you want to rollback...?") waits
+# for an answer that up.ps1 buffers and never shows - an invisible, CPU-free
+# hang. With /dev/null the prompt hits EOF and aborts with a real error.
+function Invoke-Bench { param([string]$Command) Invoke-Native -Exe $script:ComposeExe -Arguments ($script:composeBase + @('exec', '-T', 'bench', 'bash', '-lc', "$Command < /dev/null")) }
+function Invoke-BenchRoot { param([string]$Command) Invoke-Native -Exe $script:ComposeExe -Arguments ($script:composeBase + @('exec', '-T', '-u', 'root', 'bench', 'bash', '-lc', "$Command < /dev/null")) }
 
 function Wait-Url([string]$Url, [int]$TimeoutSec = 180) {
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
@@ -317,7 +327,11 @@ Write-Info ("running services: " + (($services | Where-Object { $_ }) -join ', '
 # 4. root-level container prep
 # ---------------------------------------------------------------------------
 Write-Step '4/11  root prep inside the bench container'
-Invoke-BenchRoot 'chown -R frappe:frappe /home/frappe/frappe-bench 2>/dev/null || true; echo chown-done' | Out-Null
+# `chown -R` over the whole bench tree is minutes of work on Docker Desktop's
+# Windows filesystem (venv + node_modules = ~200k files) and it is pointless
+# when the tree already belongs to frappe, which is the normal case for the
+# baked image. Only fix ownership when the bench root is actually wrong.
+Invoke-BenchRoot 'if [ "$(stat -c %U /home/frappe/frappe-bench)" = frappe ]; then echo bench already frappe-owned; else chown -R frappe:frappe /home/frappe/frappe-bench; fi; echo chown-done' | Out-Null
 Invoke-BenchRoot 'which redis-server >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq redis-server); echo redis-ok' | Out-Null
 
 # ---------------------------------------------------------------------------
@@ -379,6 +393,18 @@ if (-not $SkipProvision) {
     Write-Step "6/9  provisioning the ERPNext v$erpVersion base site (long step)"
     if ((Invoke-Bench "bash /tmp/scripts/provision-base.sh $erpVersion") -ne 0) {
         throw 'base provisioning failed (see the output above)'
+    }
+    # The bench service runs `exec bench serve` as the container's PID 1, started
+    # before the site existed. It cannot be restarted from inside (no procps in
+    # the image, and killing it kills this exec session) and keeps replying
+    # 404 "localhost does not exist" until the container is restarted, so do
+    # that from here and wait for the site to answer.
+    Write-Info 'restarting the bench container so bench serve reloads the new site'
+    Invoke-Native -Exe 'docker' -Arguments @('restart', "$Project-bench-1") | Out-Null
+    if (Wait-Url "http://localhost:$erpnextPort/api/method/ping" 180) {
+        Write-Info "ERPNext is serving site '$siteName' on port $erpnextPort"
+    } else {
+        throw "ERPNext did not answer /api/method/ping on port $erpnextPort after the restart"
     }
 } else {
     Write-Step '6/11  provisioning skipped (-SkipProvision)'
@@ -477,11 +503,11 @@ if (-not $SkipInstall) {
 # 8c. demo user role + login (non-admin, for "ready for user use")
 # ---------------------------------------------------------------------------
 if (-not $SkipProvision) {
-    Write-Step '8c/11  demo user role + login (Demo User role, demo@comp_demo.local)'
+    Write-Step '8c/11  demo user role + login (Demo User role, demo@compdemo.local)'
     if ((Invoke-Bench 'cd /home/frappe/frappe-bench && SITE_NAME=frontend ./env/bin/python /tmp/scripts/create-demo-user.py') -ne 0) {
         Write-Warn 'demo user creation reported errors - review the output above'
     } else {
-        Write-Info 'Demo User role + demo@comp_demo.local / demo ready (non-admin)'
+        Write-Info 'Demo User role + demo@compdemo.local / demo ready (non-admin)'
     }
 }
 
@@ -519,6 +545,12 @@ if (-not $SkipInstall) {
         Write-Warn 'Virtual Work Order seeding reported errors - planner batch groups may be unavailable'
     } else {
         Write-Info 'Virtual Work Order doctype + demo batch group ready'
+        # `Virtual Work Order` is created here, after step 8c granted the demo
+        # role its permissions, so on a fresh site the demo user would have no
+        # access to it. The script is idempotent and only re-syncs the rules.
+        if (-not $SkipProvision) {
+            Invoke-Bench 'cd /home/frappe/frappe-bench && SITE_NAME=frontend ./env/bin/python /tmp/scripts/create-demo-user.py' | Out-Null
+        }
     }
 }
 
@@ -581,10 +613,15 @@ if (-not $alreadyTunnelling -and $ngrokExe) {
     $cacheDir = Join-Path $RootDir '.cache'
     New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
     Write-Info "starting ngrok: http localhost:$nodeRedPort (the containerised Node-RED)"
-    Start-Process -FilePath $ngrokExe -ArgumentList @('http', $nodeRedPort, '--log', 'stdout') `
-        -WindowStyle Hidden `
-        -RedirectStandardOutput (Join-Path $cacheDir 'ngrok.log') `
-        -RedirectStandardError (Join-Path $cacheDir 'ngrok.err.log') | Out-Null
+    # Let ngrok write its own log file and launch it fully detached. Using
+    # -RedirectStandardOutput/-RedirectStandardError here handed the pipe that
+    # up.ps1's output was captured on to ngrok, which then outlives the script:
+    # the parent PowerShell could not exit until the tunnel closed, so a
+    # 3.5-minute run looked like a 7.5-minute one with nothing left to print.
+    $ngrokLog = Join-Path $cacheDir 'ngrok.log'
+    Remove-Item -LiteralPath $ngrokLog -ErrorAction SilentlyContinue
+    Start-Process -FilePath $ngrokExe -ArgumentList @('http', $nodeRedPort, '--log', $ngrokLog) `
+        -WindowStyle Hidden | Out-Null
     Start-Sleep -Seconds 6
 } elseif (-not $ngrokExe) {
     Write-Warn 'no ngrok binary found - the public tunnel will not come up'
@@ -611,7 +648,7 @@ if ($publicUrl) {
     }
 } else {
     Write-Warn 'no ngrok tunnel came up - webhooks left unconfigured'
-    Write-Warn ("see " + (Join-Path $RootDir '.cache\ngrok.err.log'))
+    Write-Warn ("see " + (Join-Path $RootDir '.cache\ngrok.log'))
 }
 
 # ---------------------------------------------------------------------------
@@ -659,7 +696,7 @@ Write-Host '  ERPNEXT-AI-FIX is up' -ForegroundColor Green
 Write-Host ('=' * 72) -ForegroundColor Green
 Write-Host "  ERPNext        : $erpUrl" -ForegroundColor Green
 Write-Host '  Login          : Administrator / admin' -ForegroundColor Green
-Write-Host '  Demo user      : demo@comp_demo.local / demo (Demo User role, non-admin)' -ForegroundColor Green
+Write-Host '  Demo user      : demo@compdemo.local / demo (Demo User role, non-admin)' -ForegroundColor Green
 Write-Host "  Node-RED       : http://localhost:$nodeRedPort" -ForegroundColor Green
 Write-Host "  Planner        : http://localhost:$($cfg['SCHEDULER_PORT'])" -ForegroundColor Green
 if ($publicUrl) { Write-Host "  Public tunnel  : $publicUrl" -ForegroundColor Green }

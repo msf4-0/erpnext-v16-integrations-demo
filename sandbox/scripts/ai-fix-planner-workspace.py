@@ -83,13 +83,39 @@ def main():
 		frappe.cache.delete_key("bootinfo")
 		print("MARK marked setup complete for %s (desk wizard skipped)" % ", ".join(pending))
 
-	from frappe.desk.doctype.custom_workspace.custom_workspace import (
-		get_customization,
-		upsert_content_customization,
-	)
-
 	ws = frappe.get_doc("Workspace", WORKSPACE)
-	standard = bool(ws.standard) and not frappe.conf.developer_mode
+
+	# frappe 16.3x (the version baked into this image) has no Custom Workspace
+	# doctype, so the delta API this file was written against does not exist.
+	# The desk's own save_page()/save_new_widget() is the supported way to
+	# rewrite a public workspace plus its shortcut rows, and its clean_up pass
+	# already reconciles duplicates by label, so it is idempotent too.
+	try:
+		from frappe.desk.doctype.custom_workspace.custom_workspace import (  # noqa: F401
+			get_customization,
+			upsert_content_customization,
+		)
+	except ImportError:
+		from frappe.desk.doctype.workspace.workspace import save_page
+
+		content = json.loads(ws.content or "[]")
+		existing = [s for s in ws.shortcuts if s.label == LABEL]
+		if existing and has_block(content) and existing[0].url == args.url:
+			print("MARK shortcut already present -> %s" % args.url)
+			return
+		if not has_block(content):
+			content.append(shortcut_block())
+		save_page(
+			WORKSPACE,
+			ws.public,
+			json.dumps({"shortcut": [shortcut_row(args.url)]}),
+			json.dumps(content),
+		)
+		frappe.db.commit()
+		print("MARK shortcut added to %r workspace -> %s" % (WORKSPACE, args.url))
+		return
+
+	standard = bool(getattr(ws, "standard", False)) and not frappe.conf.developer_mode
 
 	custom = get_customization(WORKSPACE) if standard else None
 	content = json.loads((custom.content if custom and custom.content else ws.content) or "[]")

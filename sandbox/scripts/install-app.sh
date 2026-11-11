@@ -57,6 +57,16 @@ cd "$BENCH_DIR" || exit 1
 
 echo "== Installing $APP (branch: ${BRANCH:-default}) =="
 
+# Re-run fast path. The bench image and the bench_sites/db_data volumes survive
+# a normal `up.ps1`, so the app is normally already installed on the site. The
+# clone + install + migrate below costs minutes (`bench migrate` alone is 1-2
+# min per app), so short-circuit as soon as list-apps reports it.
+if bench --site "$SITE_NAME" list-apps 2>/dev/null | grep -qE "^$APP([[:space:]]|$)"; then
+  echo "-- $APP is already installed on site $SITE_NAME - skipping clone/install/migrate --"
+  echo "== $APP install run complete (nothing to do) =="
+  exit 0
+fi
+
 # Register an app that is already present at apps/<APP> (no git clone).
 # Shared by the local-source path and the get-app failure recovery. Also
 # fixes the apps.txt trailing-newline bug: a file whose last line lacks a
