@@ -439,6 +439,31 @@ if (-not $SkipInstall) {
     Write-Step '7/11  app install skipped (-SkipInstall)'
 }
 
+# ---------------------------------------------------------------------------
+# 7c. app asset links
+# ---------------------------------------------------------------------------
+# `bench install-app` does NOT create the sites/assets/<app> symlink - only
+# `bench build` does. Without it every entry in the app's `app_include_js`
+# (/assets/<app>/js/*.js) 404s, and the desk reacts by RELOADING ITSELF in a
+# loop, which looks like a broken site rather than a missing symlink.
+Write-Step '7c/11  linking app assets (bench build)'
+$nodeBin = 'export PATH=$(ls -d /home/frappe/.nvm/versions/node/*/bin 2>/dev/null | tail -1):$PATH'
+$installed = (Invoke-Bench 'cat /home/frappe/frappe-bench/sites/apps.txt' -Capture).Output
+foreach ($app in @($installed -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })) {
+    if ($app -in @('frappe', 'erpnext')) { continue }
+    # An app with no public/ directory ships no browser assets - nothing to link.
+    if ((Invoke-Bench "test -d /home/frappe/frappe-bench/apps/$app/$app/public") -ne 0) { continue }
+    # `test -e` succeeds only when the symlink target resolves
+    if ((Invoke-Bench "test -e /home/frappe/frappe-bench/sites/assets/$app") -eq 0) {
+        Write-Info "$app assets already linked"
+        continue
+    }
+    Write-Info "linking $app assets"
+    if ((Invoke-Bench "$nodeBin; cd /home/frappe/frappe-bench && bench build --app $app") -ne 0) {
+        Write-Warn "bench build failed for $app - its app_include_js will 404 and the desk may reload-loop"
+    }
+}
+
 # capture the minted API token
 $tokenResult = Invoke-ComposeCapture @('exec', '-T', 'bench', 'cat', '/tmp/export/erpnext_token.txt')
 $token = $tokenResult.Output.Trim()

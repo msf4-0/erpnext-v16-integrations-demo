@@ -527,6 +527,36 @@ if ($siteCheck.Code -ne 0 -or -not $siteCheck.Output.Trim()) {
             else { Write-Warn "could not re-assert the db grant for $dbUser : $($grantRes.Output.Trim())" }
         }
     }
+
+    # --- app asset links --------------------------------------------------
+    # `bench install-app` does NOT create sites/assets/<app> - only `bench build`
+    # does. A missing symlink 404s every path in that app's `app_include_js`,
+    # and the desk responds by RELOADING ITSELF in a loop, which reads as a
+    # broken site instead of a missing link. Test the symlink itself rather
+    # than trusting a previous build, and build only when it is missing.
+    $nodeBin = 'export PATH=$(ls -d /home/frappe/.nvm/versions/node/*/bin 2>/dev/null | tail -1):$PATH'
+    $installedList = @((Invoke-Bench 'cat /home/frappe/frappe-bench/sites/apps.txt' -Capture).Output -split "`n" |
+        ForEach-Object { $_.Trim() } |
+        Where-Object { $_ -and $_ -notin @('frappe', 'erpnext') })
+    foreach ($app in $installedList) {
+        # An app with no public/ directory ships no browser assets, so there is
+        # nothing to link and no app_include_js to 404 (e.g. shopify).
+        if ((Invoke-Bench "test -d /home/frappe/frappe-bench/apps/$app/$app/public") -ne 0) { continue }
+        if ((Invoke-Bench "test -e /home/frappe/frappe-bench/sites/assets/$app") -eq 0) {
+            Write-Ok "$app assets linked"
+            continue
+        }
+        if ($VerifyOnly) {
+            Write-Fail "$app assets missing - its app_include_js 404s and the desk reload-loops (fix: re-run setup.ps1)"
+            continue
+        }
+        Write-Info "linking $app assets (bench build)"
+        if ((Invoke-Bench "$nodeBin; cd /home/frappe/frappe-bench && bench build --app $app") -eq 0) {
+            Write-Change "$app assets built and linked"
+        } else {
+            Write-Warn "bench build failed for $app - its app_include_js will 404"
+        }
+    }
 }
 
 # ---------------------------------------------------------------------------
