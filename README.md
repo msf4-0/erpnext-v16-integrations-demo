@@ -255,6 +255,8 @@ before any shared use.
 | A valid barcode is not found | Barcode not in that item's Barcodes table | Open the Item and add the barcode |
 | Barcode Printing image is broken | Image-rendering deps on the server | `setup.ps1 -VerifyOnly`, then `docker logs comp_demo-bench-1` |
 | Everything is empty after a restart | tmpfs DB wiped | Run `up.ps1` |
+| `AttributeError: is_ajax` in the browser | Masking error — a real exception fired inside `frappe.init()` before `frappe.local` was populated | Read the **first** traceback in `docker logs comp_demo-bench-1`, not the `is_ajax` one. Most common real cause: `ModuleNotFoundError: No module named '<app>'` |
+| `ModuleNotFoundError` for an app that `bench list-apps` shows as installed | The running server's `sys.path` predates the app | `bench install-app` only writes a `.pth` that Python reads at startup — **restart the bench** (`docker restart comp_demo-bench-1`) after installing any app |
 
 | If this happens | Likely cause | What to check |
 |---|---|---|

@@ -33,5 +33,12 @@ scheduler/ui-tests/*.png
 # ---- agent/harness session artifacts (never commit) -----------------------
 _session_extract/
 
+# ---- ad-hoc metabase wiring scratch files (hold/read live credentials) -----
+_mb_secret.txt
+_mb_cfg.py
+_mb_wire.sh
+_mb_app.sh
+_mb_app2.sh
+
 # ---- lowdefy runtime data (rebuilt on startup, not source) ------------------
 lowdefy/server/exceptions.db
