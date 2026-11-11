@@ -538,6 +538,7 @@ if ($depOk -match 'DEPSOK') {
 Write-Step '7f/11  Metabase schema + dashboard'
 try {
     & (Join-Path $PSScriptRoot 'sandbox\scripts\ensure_metabase.ps1')
+    & (Join-Path $PSScriptRoot 'sandbox\scripts\ensure_metabase_app.ps1')
 } catch {
     Write-Warn ("metabase setup did not complete: " + $_.Exception.Message)
     Write-Warn 'run .\sandbox\scripts\ensure_metabase.ps1 once the container is healthy'
