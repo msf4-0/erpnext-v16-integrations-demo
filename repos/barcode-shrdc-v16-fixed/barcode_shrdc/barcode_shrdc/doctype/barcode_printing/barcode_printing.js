@@ -192,31 +192,68 @@ frappe.ui.form.on('Barcode Printing', {
 	},
 	get_barcode: function(frm)
 	{
-		frm.doc.items.forEach(d =>			
-			{
-				if (d.item_code)
-				{
-					frappe.call({
-						method: "barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.search_item_serial_or_batch_or_barcode_number",
-						args: {
-							search_value: d.barcode || d.item_code,
-							item: d
-						},
-						callback: function(r) {
-							// Only overwrite when the server actually returned a value.
-							// Previously a `{}` result set barcode to `undefined` and
-							// wiped a manually-typed barcode, leaving the preview empty.
-							if (r.message && r.message.barcode) {
-								frappe.model.set_value(d.doctype, d.name, "barcode", r.message.barcode);
-							}
-							if (r.message && r.message.barcode_type) {
-								frappe.model.set_value(d.doctype, d.name, "barcode_type", r.message.barcode_type);
-							}
-						}
-					})
-				}
-	
-			})
+		// One click: every row gets its own unique serial number (existing ones
+		// reused first, missing ones created), and the barcode mirrors it.
+		const rows = (frm.doc.items || []).filter(d => d.item_code);
+		if (!rows.length) {
+			frappe.msgprint(__("Add at least one item first."));
+			return;
+		}
+
+		let used = [];
+		let created_total = 0;
+
+		const finish = () => {
+			frm.refresh_field("items");
+			if (created_total) {
+				frappe.show_alert({
+					message: __("{0} new serial number(s) created.", [created_total]),
+					indicator: "green"
+				}, 7);
+			}
+		};
+
+		const next = (i) => {
+			if (i >= rows.length) {
+				finish();
+				return;
+			}
+			const d = rows[i];
+			const qty = Math.max(1, Math.floor(flt(d.qty) || 1));
+
+			frappe.call({
+				method: "barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.ensure_serials",
+				args: {
+					item_code: d.item_code,
+					qty: qty,
+					warehouse: d.s_warehouse || d.t_warehouse || "",
+					exclude: used
+				},
+				freeze: true,
+				freeze_message: __("Preparing serial numbers for {0}...", [d.item_code]),
+				callback: (r) => {
+					const res = r.message || {};
+					const serials = res.serials || [];
+					created_total += cint(res.created || 0);
+
+					const values = {};
+					if (serials.length) {
+						used = used.concat(serials);
+						values.serial_no = res.serials_text;
+						values.qty = serials.length;
+						values.barcode = serials[0];
+						values.barcode_type = "CODE128";
+					}
+					if (Object.keys(values).length) {
+						frappe.model.set_value(d.doctype, d.name, values);
+					}
+					next(i + 1);
+				},
+				error: () => next(i + 1)
+			});
+		};
+
+		next(0);
 	},
 	show_sku: function(frm) {
 		frm.trigger("show_sku_barcode");
