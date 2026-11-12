@@ -11,10 +11,10 @@ constant.
 import frappe
 from frappe.utils import cstr, escape_html, flt
 
-# Physical width of the barcode on a label. The A4 label is 51.5 mm wide, so
-# 40 mm leaves a comfortable margin and prints smaller than the old
-# "fill the whole label" behaviour. Tune here only.
-BARCODE_MAX_WIDTH_MM = 40
+# Physical width of the barcode on a label. The A4 label is 51.5 mm wide; the
+# image is capped to this width and scales down inside narrower containers.
+# Tune here only - preview and every print format read this constant.
+BARCODE_MAX_WIDTH_MM = 60
 
 # A Code 128 module narrower than ~0.25 mm stops scanning reliably on cheap
 # laser printers, so refuse to shrink below this.
