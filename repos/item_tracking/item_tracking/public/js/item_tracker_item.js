@@ -9,6 +9,14 @@ frappe.ui.form.on('Item', {
 			frappe.set_route('List', 'Tracked Item', { item_code: frm.doc.name });
 		}, __('Item Tracking'));
 
+		frm.add_custom_button(__('All Units (Grouped by Item)'), function () {
+			window.location.href = '/tracked_units';
+		}, __('Item Tracking'));
+
+		frappe.db.count('Tracked Item', { filters: { item_code: frm.doc.name } }).then((n) => {
+			if (n) { frm.dashboard.add_indicator(__('{0} tracked unit(s)', [n]), 'blue'); }
+		});
+
 		frm.add_custom_button(__('Create Tracked Units'), function () {
 			frappe.prompt([
 				{ fieldname: 'qty', fieldtype: 'Int', label: __('Quantity'), reqd: 1, default: 1 },

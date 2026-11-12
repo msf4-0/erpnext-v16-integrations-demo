@@ -17,13 +17,25 @@ frappe.ui.form.on('Tracked Item', {
 						const barcode = r2.message || '';
 						const field = frm.fields_dict['qr_barcode_preview'];
 						if (field && field.$wrapper) {
+							const item_qr = frm.doc.item_qr_image || '';
+							const item_bc = frm.doc.item_barcode || '';
+							const cell = (img, label, extra) =>
+								'<div style="text-align:center;margin:8px 18px;display:inline-block;vertical-align:top;">'
+								+ (img ? '<img src="' + img + '" ' + (extra || 'width="180px"') + '/><br>' : '')
+								+ '<span class="text-muted">' + label + '</span></div>';
+
 							field.$wrapper.html(
-								(qr ? '<div style="text-align:center;margin-bottom:12px;">'
-									+ '<img src="' + qr + '" width="180px"/><br>'
-									+ '<span class="text-muted">' + __('QR Code') + '</span></div>' : '')
-								+ (barcode ? '<div style="text-align:center;">'
-									+ '<img src="' + barcode + '" style="max-width:100%;"/><br>'
-									+ '<span class="text-muted">' + __('Barcode') + '</span></div>' : '')
+								'<div style="display:flex;flex-wrap:wrap;justify-content:center;">'
+								+ cell(qr, __('Unit QR') + ' (' + (frm.doc.serial_no || tracking_id) + ')')
+								+ cell(barcode, __('Unit Barcode'), 'style="max-width:220px;"')
+								+ cell(item_qr, __('Item QR') + ' (' + (frm.doc.item_code || '') + ')')
+								+ (item_bc
+									? '<div style="text-align:center;margin:8px 18px;display:inline-block;">'
+										+ '<div style="font-family:monospace;font-size:13px;padding:10px 6px;">'
+										+ frappe.utils.escape_html(item_bc) + '</div>'
+										+ '<span class="text-muted">' + __('Item Barcode') + '</span></div>'
+									: '')
+								+ '</div>'
 							);
 						}
 					}
