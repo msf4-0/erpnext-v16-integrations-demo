@@ -70,3 +70,11 @@ docker exec comp_demo-bench-1 bench --site frontend list-apps
 
 Expected: `200`, a match for `shift+i`, and both `item_tracking` and
 `metabase_integration` listed.
+
+## barcode_shrdc (Get Items Barcode / serial numbers)
+
+The image ships an old `barcode_shrdc` (22 KB `barcode_printing.py`, 11.8 KB JS) that
+has no `get_serial_summary` / `ensure_serials`, while the source repo has the
+complete flow (36 KB py, 21 KB JS, commit `e89d712`). The mounted repo is now
+authoritative, so the "existing serial or new serial" prompt has its backend and
+survives restarts.

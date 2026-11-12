@@ -100,6 +100,11 @@ services:
       # Bind-mount the host repo so the app code is permanent across restarts.
       - ./repos/item_tracking:/home/frappe/frappe-bench/apps/item_tracking
       - ./repos/metabase_integration:/home/frappe/frappe-bench/apps/metabase_integration
+      # barcode_shrdc has the same failure mode: the image ships an old copy
+      # (no get_serial_summary/ensure_serials) while the source repo has the
+      # version the Get Items Barcode button expects. Mount the repo so the
+      # serial-number flow exists and survives restarts.
+      - ./repos/barcode-shrdc-v16-fixed:/home/frappe/frappe-bench/apps/barcode_shrdc
     depends_on:
       - db
       - redis-cache
