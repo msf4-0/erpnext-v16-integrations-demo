@@ -6,13 +6,11 @@ from __future__ import unicode_literals
 import frappe, json, urllib
 from frappe.model.document import Document
 from frappe.model.mapper import get_mapped_doc
-from frappe import msgprint, _ 
-from six import string_types, iteritems
+from frappe import _
 import qrcode, io, os
 from io import BytesIO	
 import base64
-from frappe.integrations.utils import make_get_request, make_post_request, create_request_log
-from frappe.utils import cstr, flt, cint, nowdate, add_days, comma_and, now_datetime, ceil, get_url, escape_html
+from frappe.utils import cstr, flt, cint, nowdate, get_url, escape_html
 from erpnext.manufacturing.doctype.work_order.work_order import get_item_details
 import requests
 from PIL import Image
@@ -22,91 +20,25 @@ from PIL import Image
 
 class BarcodePrinting(Document):
 	pass
-# 	def get_open_purchase_receipt(self):
-# 		""" Pull Purchase Receipt based on criteria selected"""
-# 		open_pr = get_purchase_receipts(self)
 
-# 		if open_pr:
-# 			self.add_pr_in_table(open_pr)
-# 		else:
-# 			frappe.msgprint(_("Purchase Order not available"))
 
-# 	def add_pr_in_table(self, open_pr):
-# 		""" Add sales orders in the table"""
-# 		self.set('purchase_receipt', [])
 
-# 		for data in open_pr:
-# 			self.append('purchase_receipts', {
-# 				'purchase_receipt': data.name,
-# 				'pr_date': data.posting_date,
-# 				'supplier': data.supplier,
-# 				'grand_total': data.total
-# 			})
 
-# 	def get_items(self):
-# 		if self.get_items_from == "Purchase Receipt":
-# 			self.get_pr_items()
-# 		elif self.get_items_from == "Stock Entry":
-# 			self.get_se_items()
 	
-# 	def get_pr_se_list(self, field, table):
-# 		"""Returns a list of Purchase Orders or Stock Entries from the respective tables"""
-# 		pr_se_list = [d.get(field) for d in self.get(table) if d.get(field)]
-# 		return pr_se_list
 
-# 	def get_pr_items(self):
-# 		# Check for empty table or empty rows
-# 		if not self.get("purchase_receipts") or not self.get_pr_se_list("purchase_receipt", "purchase_receipts"):
-# 			frappe.throw(_("Please fill the Purchase Receipt table"), title=_("Purchase Receipt Required"))
 
 # 		pr_list = self.get_pr_se_list("purchase_receipt", "purchase_receipts")
 		
-# 		item_condition = ""
-# 		if self.item_code:
-# 			item_condition = ' and pr_item.item_code = {0}'.format(frappe.db.escape(self.item_code))
-# 		items = frappe.db.sql("""select distinct pr_item.parent, pr_item.item_code, pr_item.warehouse,
-# 			pr_item.qty, pr_item.description, pr_item.name, pr_item.uom, pr.supplier, pr_item.barcode, 
-# 			pr_item.serial_no, pr_item.batch_no, 
-# 			item.barcode
-# 			from `tabPurchase Receipt Item` pr_item , `tabPurchase Receipt` pr, `tabItem Barcode` item
-# 			where pr_item.parent in (%s) and pr_item.docstatus = 1  and item.parent = %s""" % \
-# 			(", ".join(["%s"] * len(pr_list))),self.item_code, tuple(pr_list), as_dict=1)
 
 # 		if self.item_code:
 # 			item_condition = ' and so_item.item_code = {0}'.format(frappe.db.escape(self.item_code))
 
 # 		self.add_items(items)
 	
-# 	def add_items(self, items):
-# 		self.set('items', [])
-# 		for data in items:
-# 			pi = self.append('items', {
-# 				'warehouse': data.warehouse,
-# 				'item_code': data.item_code,
 				
-# 				'description': data.description,
-# 				'qty': data.qty,
-# 				'supplier': data.supplier,
-# 				'uom': data.uom,
-# 				'barcode': data.barcode,
-# 				'serial_no': data.serial_no,
-# 				'batch_no': data.batch_no
-# 			})
 
-# 			if self.get_items_from == "Purchase Receipt":
-# 				pi.ref_pr = data.parent
-# 				pi.description = data.description
 
-# 			elif self.get_items_from == "Stock Entry":
-# 				pi.ref_se = data.parent
-# 				pi.description = data.description
 	
-# 	def get_item_barcode(self):
-# 		print(self.items)
-# 		item = frappe.db.sql("""select barcode, barcode_type
-# 			from `tabItem Barcode` 
-# 			where parent=%s""",
-# 			"ITM-001", as_dict = 1)
 
 # 		if not item:
 # 			frappe.throw(_("Item {0} is not active or end of life has been reached"))
@@ -153,35 +85,10 @@ class BarcodePrinting(Document):
 
 	
 
-# def get_purchase_receipts(self):
-# 	pr_filter = item_filter = ""
-# 	if self.from_date:
-# 		pr_filter += " and pr.posting_date >= %(from_date)s"
-# 	if self.to_date:
-# 		pr_filter += " and pr.posting_date <= %(to_date)s"
-# 	if self.warehouse:
-# 		pr_filter += " and pr.set_warehouse = %(warehouse)s"
-# 	if self.supplier:
-# 		pr_filter += " and pr.supplier = %(supplier)s"
 
 # 	if self.item_code:
 # 		item_filter += " and pr_item.item_code = %(item)s"
 
-# 	open_pr = frappe.db.sql("""
-# 		select distinct pr.name, pr.posting_date, pr.supplier, pr.base_grand_total
-# 		from `tabPurchase Receipt` pr, `tabPurchase Receipt Item` pr_item
-# 		where pr_item.parent = pr.name
-# 			and pr.docstatus = 1 and pr.status not in ("Stopped", "Closed")
-# 			and pr.company = %(company)s
-# 		""".format(pr_filter, item_filter), {
-# 			"from_date": self.from_date,
-# 			"to_date": self.to_date,
-# 			"supplier": self.supplier,
-# 			"set_warehouse": self.warehouse,
-# 			"item": self.item_code,
-# 			"company": self.company
-# 		}, as_dict=1)
-# 	return open_pr
 
 
 
@@ -505,9 +412,6 @@ def search_item_serial_or_batch_or_barcode_number(search_value,item):
 			barcode_data.barcode_type = "UPC"
 		return barcode_data
 
-	# Fallback: many items are their own scannable value (item_code == the
-	# printed barcode) and have no `Item Barcode` child row. Return the item code
-	# itself so the "Get Items Barcode" button fills rather than wiping the field.
 	if item_code:
 		return {"item_code": item_code, "barcode": item_code, "barcode_type": "CODE128"}
 
@@ -760,10 +664,6 @@ def get_barcode_image(barcode, barcode_type=None, width=None, height=None, displ
 	from reportlab.graphics.barcode import createBarcodeDrawing
 
 	barcode_type = (barcode_type or "CODE128").upper()
-	# reportlab uses its own names for a few formats. 'Code39' is NOT registered
-	# (createBarcodeDrawing raises KeyError) - the registered name is
-	# 'Standard39' (and 'Standard93' for CODE93), so the previous mapping made
-	# every CODE39 label render as Code128 without any error.
 	rl_map = {
 		"EAN": "EAN13",
 		"UPC": "UPCA",
@@ -776,9 +676,6 @@ def get_barcode_image(barcode, barcode_type=None, width=None, height=None, displ
 	}
 	rl_type = rl_map.get(barcode_type, barcode_type)
 
-	# Validate the digit count BEFORE handing the value to reportlab. reportlab
-	# happily pads/accepts short numeric values for the fixed-length symbologies,
-	# which prints a label that scans as something else - worse than an error.
 	fixed_length = {"EAN13": 13, "EAN8": 8, "UPCA": 12, "UPCE": 8}
 	if rl_type in fixed_length:
 		value_str = cstr(barcode)
@@ -820,7 +717,30 @@ def get_barcode_image(barcode, barcode_type=None, width=None, height=None, displ
 			title=_("Barcode not printable"),
 		)
 
-	return _save_public_image(drawing.asString("png"), "barcode")
+	# Do NOT use drawing.asString("png"): it needs reportlab's optional native
+	# renderPM backend (rlPyCairo / _renderPM), which cannot be installed on
+	# this image. barcode_render.py rasterises the same bar pattern with Pillow.
+	from barcode_shrdc.barcode_render import drawing_to_png
+
+	try:
+		png = drawing_to_png(drawing, cint(display_value) == 1)
+	except Exception as exc:
+		# Encoding succeeded but the symbology rejected part of the value
+		# (e.g. lowercase in CODE39, non-ASCII in CODE128). Report it as a
+		# printable-value problem instead of a raw 500.
+		frappe.log_error(
+			title="Barcode rasterise failed for %s" % barcode_type,
+			message="value=%r symbology=%r error=%s" % (barcode, barcode_type, exc),
+		)
+		frappe.throw(
+			_("Cannot render {0} barcode for value {1}: {2}. Use a value valid for "
+			  "that symbology or choose CODE128.").format(
+				barcode_type, cstr(barcode), cstr(exc)
+			),
+			title=_("Barcode not printable"),
+		)
+
+	return _save_public_image(png, "barcode")
 
 
 def get_qr_image(item, route=None, docname=None, serial_no=None):
@@ -871,11 +791,13 @@ def get_preview_html(doc, kind="sku"):
 	config = frappe.get_doc("Barcode Configuration")
 
 	def one_barcode(value, barcode_type):
-		url = get_barcode_image(
-			value, barcode_type, config.width, config.height, config.display_value
-		)
+		# Same helper (and therefore the same size) the print formats use.
+		from barcode_shrdc.label import barcode_img
+
 		return '<div class="label-item-barcode label-field"><div class="barcode-container">' \
-			'<img src="' + cstr(url) + '" style="max-width:100%;"/></div></div>'
+			+ barcode_img(
+				value, barcode_type, config.width, config.height, config.display_value
+			) + "</div></div>"
 
 	def code_line(item):
 		return '<div class="label-item-code label-field">' + \

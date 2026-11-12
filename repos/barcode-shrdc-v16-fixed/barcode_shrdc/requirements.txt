@@ -1,0 +1,12 @@
+frappe
+qrcode
+
+# Barcode/QR rendering. reportlab is used ONLY for symbol encoding (pure
+# Python) and provided by frappe; PNG rasterisation is done with Pillow in
+# barcode_shrdc/barcode_render.py.
+#
+# Do NOT add rlPyCairo. It is reportlab's optional native PNG backend and needs
+# libcairo2-dev + pkg-config at build time (no wheel for this image's Python).
+# A failed build used to break every barcode at runtime with
+# "cannot import desired renderPM backend rlPyCairo".
+reportlab>=4.0,<6.0

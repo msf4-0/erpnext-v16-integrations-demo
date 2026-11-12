@@ -1,0 +1,2 @@
+[post_model_sync]
+barcode_shrdc.patches.v16_0.update_barcode_print_formats

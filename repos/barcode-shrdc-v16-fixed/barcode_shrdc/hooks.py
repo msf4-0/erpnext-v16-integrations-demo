@@ -144,6 +144,8 @@ jinja = {
 	"methods": [
 		"barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.get_barcode_image",
 		"barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.get_qr_image",
+		# Single source of truth for the <img> tag + its printed size.
+		"barcode_shrdc.label.barcode_img",
 	]
 }
 
