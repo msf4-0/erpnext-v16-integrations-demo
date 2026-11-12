@@ -67,6 +67,26 @@ services:
             done
           fi
         fi
+        # --- re-register bind-mounted apps as importable packages ------------
+        # env/lib/.../site-packages/*.pth lives in the container image layer, so
+        # it is lost on every recreate. Without it `bench` cannot import an app
+        # that is bind-mounted from ./repos (ModuleNotFoundError -> site 500).
+        for appdir in apps/*/; do
+          app="$$(basename "$$appdir")"
+          [ -d "$$appdir/$$app" ] || continue
+          for sp in env/lib/python*/site-packages; do
+            echo "/home/frappe/frappe-bench/apps/$$app" > "$$sp/$$app.pth"
+          done
+        done
+        # --- re-create /assets/<app> aliases --------------------------------
+        # These symlinks live in the container layer and were lost on recreate,
+        # so every /assets/item_tracking/... URL 404'd (no Shift+I scanner JS).
+        mkdir -p assets
+        for appdir in apps/*/; do
+          app="$$(basename "$$appdir")"
+          [ -d "$$appdir/$$app/public" ] || continue
+          ln -sfn "../apps/$$app/$$app/public" "assets/$$app"
+        done
         setsid nohup bench schedule > /tmp/bench-schedule.log 2>&1 &
         setsid nohup bench worker --queue short,default,long >> logs/worker.log 2>&1 &
         exec bench serve --port 8000
@@ -74,6 +94,12 @@ services:
       - "${ERPNEXT_PORT:-8000}:8000"
     volumes:
       - bench_sites:/home/frappe/frappe-bench/sites
+      # item_tracking normally lives only in the container's writable layer, so
+      # every container recreate (image rebuild / compose up) reverted it to the
+      # baked image copy and the Shift+I camera scanner + custom pages vanished.
+      # Bind-mount the host repo so the app code is permanent across restarts.
+      - ./repos/item_tracking:/home/frappe/frappe-bench/apps/item_tracking
+      - ./repos/metabase_integration:/home/frappe/frappe-bench/apps/metabase_integration
     depends_on:
       - db
       - redis-cache

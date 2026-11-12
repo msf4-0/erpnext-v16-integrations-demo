@@ -42,3 +42,6 @@ _mb_app2.sh
 
 # ---- lowdefy runtime data (rebuilt on startup, not source) ------------------
 lowdefy/server/exceptions.db
+# container/compose backup files
+*.bak-*
+
