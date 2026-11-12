@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import unicode_literals
 
-import urllib.parse
-
 import frappe
 from frappe.model.document import Document
 from frappe.utils import cstr, get_url
@@ -27,22 +25,6 @@ class TrackedItem(Document):
             self.serial_no = _next_serial_no()
         self.barcode = cstr(self.tracking_id)
         self.qr_code = _tracked_item_qr_url(self.tracking_id)
-        self.item_barcode = _item_barcode(self.item_code)
-        self.item_qr_image = _item_qr_image(self.item_code)
-
-
-def _item_barcode(item_code):
-    """The product's own barcode (Item Barcode), falling back to the item code."""
-    barcode = frappe.db.get_value("Item Barcode", {"parent": item_code}, "barcode")
-    return barcode or item_code
-
-
-def _item_qr_image(item_code):
-    """PNG URL of the product-level QR (the same item_qr link the barcode app uses)."""
-    from item_tracking.item_tracking.doctype.tracked_item.raster import render_qr
-
-    uri = "{0}/item_qr?item_code={1}".format(get_url(), urllib.parse.quote(item_code))
-    return render_qr(uri)
 
 
 def _next_tracking_id(item_code):

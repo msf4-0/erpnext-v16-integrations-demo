@@ -10,8 +10,6 @@
   "item_name",
   "barcode",
   "qr_code",
-  "item_qr_image",
-  "item_barcode",
   "section_break_qr",
   "qr_barcode_preview",
   "current_warehouse",
@@ -74,22 +72,6 @@
    "label": "QR Code",
    "read_only": 1,
    "description": "URL the QR code encodes. Rendered on demand for labels/print."
-  },
-  {
-   "fieldname": "item_qr_image",
-   "fieldtype": "Data",
-   "label": "Item QR Image",
-   "read_only": 1,
-   "hidden": 1
-  },
-  {
-   "fieldname": "item_barcode",
-   "fieldtype": "Data",
-   "label": "Item Barcode",
-   "read_only": 1,
-   "in_list_view": 1,
-   "in_standard_filter": 1,
-   "description": "Barcode of the product (Item) this unit belongs to."
   },
   {
    "fieldname": "section_break_qr",
