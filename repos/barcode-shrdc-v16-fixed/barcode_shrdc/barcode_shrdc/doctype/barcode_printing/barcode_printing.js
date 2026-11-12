@@ -32,6 +32,23 @@ frappe.ui.form.on('Barcode Printing', {
 		}, __('Load Tracked Items'), __('Load'));
 	},
 	refresh: function(frm) {
+		frm.add_custom_button(__('Serial Numbers'), function() {
+			let row = null;
+			const grid = frm.fields_dict.items && frm.fields_dict.items.grid;
+			if (grid && grid.get_selected_children) {
+				const selected = grid.get_selected_children();
+				if (selected && selected.length) row = selected[0];
+			}
+			if (!row) {
+				row = (frm.doc.items || []).find(r => r.item_code);
+			}
+			if (!row) {
+				frappe.msgprint(__("Add an item row first."));
+				return;
+			}
+			frm.events.open_serial_dialog(frm, row.doctype, row.name);
+		});
+
 		frm.add_custom_button(__('Purchase Receipt'), function() {
 			erpnext.utils.map_current_doc({
 				method: "barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.pr_make_barcode",
@@ -294,21 +311,165 @@ frappe.ui.form.on('Barcode Printing', {
 			'stock_qty'		: d.transfer_qty
 		};
 		frappe.call({
-			method: "erpnext.stock.get_item_details.get_serial_no",
-			args: {"args": args},
+			// ERPNext v16's erpnext.stock.get_item_details.get_serial_no is a
+			// stub: it requires a single `_args` payload and returns [].
+			method: "barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.get_serial_no",
+			args: args,
 			callback: function(r) {
-				// v16 get_serial_no returns [] (an array); only accept a real
-				// string so `validate` never calls .split() on an array.
+				// Only accept a real string so `validate` never calls .split()
+				// on an array.
 				if (!r.exe && r.message && typeof r.message === "string") {
 					frappe.model.set_value(cdt, cdn, "serial_no", r.message);
 
 					if (callback) {
 						callback();
 					}
+				} else if (!r.exe && d.has_serial_no) {
+					frappe.show_alert({
+						message: __("No available serial numbers for {0} ({1}). Create them via a Purchase Receipt or Stock Entry first.",
+							[d.item_code, d.s_warehouse || __("any warehouse")]),
+						indicator: "orange"
+					}, 7);
 				}
 			}
 		});
 	},
+	// Ask the user whether to reuse existing serial numbers or mint new ones.
+	set_serial_no_choice: function(frm, cdt, cdn) {
+		const d = locals[cdt][cdn];
+		if (!d.item_code) return;
+
+		frappe.db.get_value("Item", d.item_code, ["has_serial_no", "has_batch_no"]).then((r) => {
+			const info = r.message || {};
+			d.has_serial_no = info.has_serial_no;
+			d.has_batch_no = info.has_batch_no;
+
+			if (info.has_batch_no && !info.has_serial_no) {
+				// Batch-only items keep using ERPNext's batch selector.
+				erpnext.stock.select_batch_and_serial_no(frm, d);
+				return;
+			}
+			if (!info.has_serial_no) return;
+			frm.events.open_serial_dialog(frm, cdt, cdn);
+		});
+	},
+
+	open_serial_dialog: function(frm, cdt, cdn) {
+		const d = locals[cdt][cdn];
+		if (!d.item_code) {
+			frappe.msgprint(__("Select an item first."));
+			return;
+		}
+
+		const warehouse = d.s_warehouse || d.t_warehouse || "";
+
+		frappe.call({
+			method: "barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.get_serial_summary",
+			args: { item_code: d.item_code, warehouse: warehouse },
+			callback: (r) => {
+				const summary = r.message || {};
+				if (!summary.item_code) return;
+
+				const existing = summary.existing || [];
+				const qty = flt(d.qty) || existing.length || 1;
+				const scope = warehouse || __("stock");
+
+				const dlg = new frappe.ui.Dialog({
+					title: __("Serial Numbers — {0}", [d.item_code]),
+					fields: [
+						{
+							fieldtype: "HTML",
+							fieldname: "summary",
+							options: `<p class="text-muted" style="margin-bottom:10px">${
+								existing.length
+									? __("{0} existing serial number(s) available in {1}.", [existing.length, scope])
+									: __("No serial numbers exist yet for this item.")
+							}</p>`,
+						},
+						{
+							fieldname: "qty",
+							fieldtype: "Int",
+							label: __("Quantity"),
+							reqd: 1,
+							default: qty,
+							description: __("How many serial numbers to use or create"),
+						},
+					],
+					primary_action_label: __("Create new serial numbers"),
+					primary_action(values) {
+						dlg.hide();
+						frm.events.create_item_serials(frm, cdt, cdn, values.qty);
+					},
+				});
+
+				dlg.set_secondary_action(__("Use existing ({0})", [existing.length]), () => {
+					const values = dlg.get_values();
+					dlg.hide();
+					frm.events.use_existing_serials(frm, cdt, cdn, values.qty);
+				});
+
+				dlg.show();
+			},
+		});
+	},
+
+	use_existing_serials: function(frm, cdt, cdn, qty) {
+		const d = locals[cdt][cdn];
+		frappe.call({
+			method: "barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.get_serial_no",
+			args: {
+				item_code: d.item_code,
+				warehouse: d.s_warehouse || d.t_warehouse || "",
+				stock_qty: qty,
+			},
+			callback: (r) => {
+				const text = (r.message || "").trim();
+				if (!text) {
+					frappe.msgprint(
+						__("No existing serial numbers were found for {0}. Use “Create new serial numbers” instead.", [d.item_code])
+					);
+					return;
+				}
+				frappe.model.set_value(cdt, cdn, {
+					serial_no: text,
+					qty: text.split("\n").length,
+				});
+			},
+		});
+	},
+
+	create_item_serials: function(frm, cdt, cdn, qty) {
+		const d = locals[cdt][cdn];
+		frappe.call({
+			method: "barcode_shrdc.barcode_shrdc.doctype.barcode_printing.barcode_printing.create_serials",
+			args: {
+				item_code: d.item_code,
+				qty: qty,
+				warehouse: d.s_warehouse || d.t_warehouse || "",
+			},
+			freeze: true,
+			freeze_message: __("Creating serial numbers…"),
+			callback: (r) => {
+				const res = r.message || {};
+				if (!res.serials || !res.serials.length) return;
+				frappe.show_alert(
+					{
+						message: __("{0} serial number(s) created ({1}).", [res.serials.length, res.stock_entry]),
+						indicator: "green",
+					},
+					7
+				);
+				frappe.model.set_value(cdt, cdn, {
+					serial_no: res.serials_text,
+					qty: res.serials.length,
+				});
+				if (res.tracked && res.tracked.length) {
+					frm.dirty();
+				}
+			},
+		});
+	},
+
 	set_basic_rate: function(frm, cdt, cdn) {
 		const item = locals[cdt][cdn];
 		item.transfer_qty = flt(item.qty) * flt(item.conversion_factor);
@@ -459,7 +620,7 @@ frappe.ui.form.on('Barcode Generator Items', {
 						frm.refresh_field("items");
 
 						if (!d.serial_no) {
-							erpnext.stock.select_batch_and_serial_no(frm, d);
+							frm.events.set_serial_no_choice(frm, cdt, cdn);
 						}
 					}
 				}

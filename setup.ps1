@@ -472,7 +472,7 @@ if ($siteCheck.Code -ne 0 -or -not $siteCheck.Output.Trim()) {
 } else {
     Write-Ok "site '$siteName' present"
     $apps = (Invoke-Bench 'cat /home/frappe/frappe-bench/sites/apps.txt' -Capture).Output
-    foreach ($app in @('frappe', 'erpnext', 'barcode_shrdc', 'shopify', 'eu_einvoice')) {
+    foreach ($app in @('frappe', 'erpnext', 'barcode_shrdc', 'shopify', 'eu_einvoice', 'item_tracking')) {
         if ($apps -match "(?m)^\s*$([regex]::Escape($app))\s*$") { Write-Ok "app $app" } else { Write-Warn "app $app not installed" }
     }
     # frappe's logger needs this; a recreated container loses it

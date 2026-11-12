@@ -1,0 +1,28 @@
+# Recipe — item_tracking (Individual Item Tracking, msf4-0).
+#
+# Per-physical-unit identity: Tracked Item (tracking_id + SN-… serial, QR/barcode),
+# per-unit status/warehouse history driven by Stock Entry / Delivery Note events,
+# and the in-Desk scan popup (public/js/item_tracking_scan.js).
+#
+# WHY THIS RECIPE EXISTS: Barcode Printing prints one label per Tracked Item
+# ("Load Tracked Items"). With the app missing, the doctype is absent, /assets/item_tracking/*
+# 404s and nothing can be printed — and on a fresh build it is silently skipped
+# because up.ps1 never installed it.
+
+app: item_tracking
+repo: ./repos/item_tracking
+source: repos/item_tracking
+
+versions:
+  "16":
+    branch: main
+    verified: true
+    extra_pip:
+      - qrcode
+    verify_doctype: Tracked Item
+    notes: |
+      v16 target. Source ships in this project under repos/item_tracking and is
+      staged to /tmp/repos/item_tracking by up.ps1. verify_doctype is 'Tracked
+      Item' (a normal submittable-false doctype -> HTTP 200 after install).
+      qrcode is already required by barcode_shrdc, listed again so the app
+      installs cleanly even when barcode_shrdc is skipped.

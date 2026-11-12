@@ -285,6 +285,214 @@ def se_make_barcode(source_name, target_doc=None):
 	return _fill_barcodes(doclist)
 
 @frappe.whitelist()
+def get_serial_no(item_code, warehouse=None, stock_qty=None):
+	"""Available (Active) serial numbers for an item, newline separated.
+
+	ERPNext v16 replaced ``erpnext.stock.get_item_details.get_serial_no`` with a
+	stub (``def get_serial_no(_args, serial_nos=None, sales_order=None): return
+	serial_nos or []``). Calling it the v13/v14 way now fails with
+	``TypeError: get_serial_no() missing 1 required positional argument:
+	'_args'`` and, even when called correctly, it never returns any serials.
+	"""
+	if not item_code:
+		return ""
+
+	filters = {"item_code": item_code, "status": "Active"}
+	if warehouse:
+		filters["warehouse"] = warehouse
+
+	kwargs = {
+		"filters": filters,
+		"pluck": "name",
+		"order_by": "creation asc",
+	}
+
+	try:
+		limit = int(float(stock_qty)) if stock_qty else 0
+	except (TypeError, ValueError):
+		limit = 0
+	if limit > 0:
+		kwargs["limit_page_length"] = limit
+
+	return "\n".join(frappe.get_all("Serial No", **kwargs))
+
+
+def _default_warehouse():
+	company = frappe.defaults.get_user_default("Company") or frappe.db.get_value("Company", {}, "name")
+	return frappe.db.get_value(
+		"Warehouse",
+		{"company": company, "is_group": 0, "disabled": 0},
+		"name",
+		order_by="creation asc",
+	)
+
+
+@frappe.whitelist()
+def get_serial_summary(item_code, warehouse=None):
+	"""What the serial chooser needs: is the item tracked and what serials exist."""
+	if not item_code:
+		return {}
+
+	item = frappe.db.get_value(
+		"Item",
+		item_code,
+		["item_name", "has_serial_no", "has_batch_no", "is_stock_item", "serial_no_series"],
+		as_dict=True,
+	)
+	if not item:
+		return {}
+
+	existing = [s for s in (get_serial_no(item_code, warehouse, None) or "").split("\n") if s]
+	return {
+		"item_code": item_code,
+		"item_name": item.item_name,
+		"has_serial_no": item.has_serial_no,
+		"has_batch_no": item.has_batch_no,
+		"is_stock_item": item.is_stock_item,
+		"serial_no_series": item.serial_no_series,
+		"existing": existing,
+		"existing_count": len(existing),
+	}
+
+
+def _ensure_serial_series(item):
+	"""Turn on serial tracking + a numbering series for an item that lacks one."""
+	if item.has_serial_no and item.serial_no_series:
+		return item.serial_no_series
+
+	item.has_serial_no = 1
+	if not item.serial_no_series:
+		item.serial_no_series = (item.name or item.item_code) + "-.####"
+	item.flags.ignore_permissions = True
+	item.save()
+	return item.serial_no_series
+
+
+def _register_tracked_items(item_code, serials, warehouse):
+	"""Mirror new serial numbers into the Item Tracking app (when installed)."""
+	if not frappe.db.exists("DocType", "Tracked Item"):
+		return []
+
+	created = []
+	for serial in serials:
+		if frappe.db.exists("Tracked Item", serial):
+			continue
+		doc = frappe.new_doc("Tracked Item")
+		doc.tracking_id = serial
+		doc.item_code = item_code
+		doc.current_warehouse = warehouse
+		doc.current_status = "In Stock"
+		doc.flags.ignore_permissions = True
+		doc.insert()
+		created.append(doc.name)
+	return created
+
+
+@frappe.whitelist()
+def create_serials(item_code, qty, warehouse=None):
+	"""Mint `qty` new serial numbers for an item, and register them as Tracked Items.
+
+	ERPNext v16 only lets a stock transaction create Serial No records, so a
+	zero-valuation Material Receipt is submitted for the requested quantity.
+	"""
+	qty = int(frappe.utils.flt(qty))
+	if qty < 1:
+		frappe.throw(frappe._("Quantity must be at least 1"))
+	if not item_code:
+		frappe.throw(frappe._("Item Code is required"))
+
+	item = frappe.get_doc("Item", item_code)
+	if not item.is_stock_item:
+		frappe.throw(
+			frappe._("Item {0} is not a stock item, so serial numbers cannot be created for it.").format(item_code)
+		)
+
+	frappe.db.set_value("Stock Settings", "Stock Settings", "enable_serial_and_batch_no_for_item", 1)
+	series = _ensure_serial_series(item)
+
+	warehouse = warehouse or _default_warehouse()
+	if not warehouse:
+		frappe.throw(frappe._("Please set a warehouse before creating serial numbers."))
+
+	se = frappe.new_doc("Stock Entry")
+	se.stock_entry_type = "Material Receipt"
+	se.purpose = "Material Receipt"
+	se.company = frappe.db.get_value("Warehouse", warehouse, "company")
+	se.remark = "Serial numbers created from Barcode Printing for {0}".format(item_code)
+	se.append(
+		"items",
+		{
+			"item_code": item_code,
+			"item_name": item.item_name,
+			"qty": qty,
+			"uom": item.stock_uom,
+			"stock_uom": item.stock_uom,
+			"conversion_factor": 1,
+			"t_warehouse": warehouse,
+			"basic_rate": item.valuation_rate or 0,
+			"allow_zero_valuation_rate": 1,
+		},
+	)
+	se.flags.ignore_permissions = True
+	se.insert()
+	se.submit()
+
+	serials = frappe.get_all(
+		"Serial No",
+		filters={"item_code": item_code, "warehouse": warehouse, "status": "Active"},
+		pluck="name",
+		order_by="creation desc",
+		limit_page_length=qty,
+	)
+	serials = sorted(serials)
+	tracked = _register_tracked_items(item_code, serials, warehouse)
+	frappe.db.commit()
+
+	return {
+		"serials": serials,
+		"serials_text": "\n".join(serials),
+		"tracked": tracked,
+		"stock_entry": se.name,
+		"series": series,
+	}
+
+
+@frappe.whitelist()
+def ensure_serials(item_code, qty, warehouse=None, exclude=None):
+	"""Return `qty` serials for an item, creating whatever is missing.
+
+	Used by the "Get Items Barcode" button so one click always yields unique
+	serial labels, whether or not the item already has serial numbers.
+	"""
+	qty = int(frappe.utils.flt(qty or 0)) or 1
+	exclude = frappe.parse_json(exclude) if isinstance(exclude, str) else (exclude or [])
+	excluded = {frappe.utils.cstr(x) for x in exclude if x}
+
+	warehouse = warehouse or _default_warehouse()
+
+	def _available():
+		values = (get_serial_no(item_code, warehouse, None) or "").split("\n")
+		return [s for s in values if s and s not in excluded]
+
+	available = _available()
+	created = 0
+	if len(available) < qty:
+		created = qty - len(available)
+		create_serials(item_code, created, warehouse)
+		available = _available()
+
+	serials = available[:qty]
+	_register_tracked_items(item_code, serials, warehouse)
+	frappe.db.commit()
+
+	return {
+		"serials": serials,
+		"serials_text": "\n".join(serials),
+		"created": created,
+	}
+
+
+@frappe.whitelist()
 def search_item_serial_or_batch_or_barcode_number(search_value,item):
 	# search barcode no
 	item = json.loads(item)

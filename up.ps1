@@ -358,6 +358,7 @@ $barcodeFixed = Join-Path $reposDir 'barcode-shrdc-v16-fixed'
 $barcodeMaster = Join-Path $reposDir 'barcode-shrdc-master'
 $shopifySrc = Join-Path $reposDir 'shopify-shrdc-v16-fixed'
 $einvoiceSrc = Join-Path $reposDir 'eu_einvoice'
+$trackingSrc = Join-Path $reposDir 'item_tracking'
 
 if (Test-Path $barcodeFixed) {
     Copy-Into $barcodeFixed '/tmp/repos/barcode-shrdc-v16-fixed'
@@ -381,6 +382,15 @@ if (Test-Path $einvoiceSrc) {
     Write-Info 'staged eu_einvoice (e-invoicing)'
 } else {
     Write-Warn 'no eu_einvoice source under repos/ - e-invoicing will be skipped'
+}
+# Individual item tracking. REQUIRED by Barcode Printing's "Load Tracked Items"
+# (one label per Tracked Item). Without it the doctype is absent, the app's
+# app_include_js 404s and no unit labels can be printed.
+if (Test-Path $trackingSrc) {
+    Copy-Into $trackingSrc '/tmp/repos/item_tracking'
+    Write-Info 'staged item_tracking (individual item tracking)'
+} else {
+    Write-Warn 'no item_tracking source under repos/ - unit labels will be unavailable'
 }
 
 Invoke-BenchRoot 'chown -R frappe:frappe /tmp/scripts /tmp/recipes /tmp/repos /tmp/export' | Out-Null
@@ -433,6 +443,16 @@ if (-not $SkipInstall) {
             Write-Warn 'eu_einvoice install reported errors - e-invoicing is optional, continuing'
         } else {
             Write-Info 'eu_einvoice (e-invoicing) installed'
+        }
+    }
+
+    # 7b-2. item tracking - required by Barcode Printing's per-unit labels.
+    if (Test-Path $trackingSrc) {
+        Write-Step '7b-2/11 installing item_tracking (individual item tracking)'
+        if ((Invoke-Bench 'bash /tmp/scripts/install-app.sh item_tracking /tmp/repos/item_tracking 16 /tmp/recipes/item_tracking.yaml') -ne 0) {
+            Write-Warn 'item_tracking install reported errors - Tracked Item labels will be unavailable'
+        } else {
+            Write-Info 'item_tracking (individual item tracking) installed'
         }
     }
 } else {
