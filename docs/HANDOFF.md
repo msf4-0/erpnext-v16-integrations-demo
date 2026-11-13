@@ -21,9 +21,12 @@ served. No DB migration was needed (changes reuse existing doctypes/fields).
 Backend Stock Entry lifecycle (submit/cancel/history/duplicate/warehouse-mismatch)
 was already correct and passed its own test — no change needed.
 
-## 2. MyInvois (Part 1) — app written + installed, fixture sync INCOMPLETE
+## 2. MyInvois (Part 1) — written; no build installer; fixtures never synced
 
-New app `repos/my_invois` (package `my_invois`) was written and installed:
+The `repos/my_invois` source (package `my_invois`) is written, but no supported
+build/startup entry point installs it. The installation evidence below is from
+a prior live-site snapshot; current runtime status is unverified. Its fixtures
+never synced, so this is not a working installed integration.
 
 - `hooks.py` (`fixtures = ["Custom Field", "Client Script"]`)
 - `fixtures/custom_field.json` — MyInvois status/classification/UUID/references
@@ -35,8 +38,9 @@ New app `repos/my_invois` (package `my_invois`) was written and installed:
   fakes submission), `get_myinvois_settings`, `_get_access_token`
 - `config/desktop.py`, `modules.txt`, `setup.py`, `requirements.txt`
 
-**Confirmed installed:** `bench --site frontend list-apps` and
+**Historical install evidence:** `bench --site frontend list-apps` and
 `site_config.json -> installed_apps` and `sites/apps.txt` all list `my_invois 0.0.1`.
+This does not show that the current build installs the app.
 
 ### Remaining issue: custom fields did NOT materialize
 
@@ -44,7 +48,7 @@ New app `repos/my_invois` (package `my_invois`) was written and installed:
 `Customer-myinvois_tin` returns 404 — the fixture sync did not create the Custom
 Field / Client Script rows even though `bench migrate` reported success.
 
-**Most likely causes to check (in order):**
+**Possible causes to check (in order, only after explicitly installing the app):**
 1. Fixtures may need `bench --site frontend export-fixtures` OR a re-run of
    `bench --site frontend migrate` **after** the app was added to `apps.txt` +
    `install-app` (the migrate ran in a step where module map may not yet have
@@ -55,7 +59,9 @@ Field / Client Script rows even though `bench migrate` reported success.
    `fixtures.txt` per module (check `item_tracking` — it also only used the
    `fixtures` hook, and its fields DID sync, so this is probably not it).
 
-**Commands to finish (inside the container, `docker exec -w /home/frappe/frappe-bench comp_demo-bench-1 bash -lc '...'`):**
+**Commands to finish the fixture investigation** (inside a running bench where
+the app has been explicitly installed; these commands do not wire it into the
+repository build):
 ```bash
 bench --site frontend migrate
 bench --site frontend export-fixtures   # if you edit fixtures

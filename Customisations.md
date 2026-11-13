@@ -5,7 +5,8 @@
 > row in the tables below. This file is how a human finds "what did we change,
 > where does it live, and how do I roll it back" without grepping the tree.
 >
-> Keep it factual and current. One row per customisation.
+> Keep it factual and current. One row per customisation. Current live-site
+> installation state is unverified; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## What counts as a customisation
 
@@ -22,16 +23,19 @@ Anything that is not stock ERPNext/Frappe v16:
 
 ## Custom apps in this workspace
 
-| App | Path | Source | Installed on site? | Notes |
-|---|---|---|---|---|
-| `custom_manufacturing` | `repos/custom_manufacturing` | local app (bench new-app) | No — sandbox was rebuilt fresh (clean base v16); reinstall on demand | Module folder `process_manufacturing` (differs from app name on purpose). Custom Metal Fab Process Master. |
-| `chat_widget` | `chat_widget` | local app | Not yet installed anywhere | **PROTECTED — exempt from every rollback (see policy below).** Standalone AI chatbot: `/chatbot` page, floating widget (website + Desk), Chatbot Settings. |
-| `item_tracking` | `repos/item_tracking` | local app | Yes (live site `frontend`) | Per-physical-unit tracking (`Tracked Item`, `item_tracking_history`, `tracked_items` child on Stock Entry/Delivery Note), inline scan popup. See `docs/ASSESSMENT-einvoicing-barcode.md`. |
-| `barcode_shrdc` | `repos/barcode-shrdc-v16-fixed` | local app | Yes | Barcode/QR printing + scan-to-Delivery-Note/Stock-Entry. |
-| `eu_einvoice` | `repos/eu_einvoice` | alyf-de fork | Yes | EU XRechnung/EN-16931 (NOT Malaysia MyInvois). |
-| `my_invois` | `repos/my_invois` | local app | Yes | Malaysia LHDN MyInvois **submit-only** layer: validate → UBL-JSON map → base64/SHA256 envelope → `POST /documentsubmissions` → record response → refresh status / cancel. Sales Invoice stays the calculation source of truth. |
-| `shopify` | `repos/shopify-shrdc-v16-fixed` | local app | Yes | Shopify ↔ ERPNext bridge. |
-| `metabase_integration` | `apps/metabase_integration` (cloned from `rover96/frappe-metabase`) | third-party app | Yes | Embeds Metabase dashboards into ERPNext via signed iframe (`Metabase Dashboard` + `Metabase Settings` doctypes). Installed on 2026-11-05 (was missing after the clean v16 rebuild). |
+| App | Path | Source | Install evidence / current status | Quarantined? | Notes |
+|---|---|---|---|---|---|
+| `item_tracking` | `repos/item_tracking` | local app | Historical install recorded; current state unverified | No | Per-physical-unit tracking (`Tracked Item`, `item_tracking_history`, `tracked_items` child on Stock Entry/Delivery Note), inline scan popup. See `docs/ASSESSMENT-einvoicing-barcode.md`. |
+| `barcode_shrdc` | `repos/barcode-shrdc-v16-fixed` | local app | Historical install recorded; current state unverified | No | Barcode/QR printing + scan-to-Delivery-Note/Stock-Entry. |
+| `eu_einvoice` | `repos/eu_einvoice` | alyf-de fork | Historical install recorded; current state unverified | No | EU XRechnung/EN-16931 (NOT Malaysia MyInvois). |
+| `my_invois` | `repos/my_invois` | local app | Historical install evidence only; current state unverified | **Yes** | Written, but no build installer and fixtures never synced. See [`docs/HANDOFF.md`](docs/HANDOFF.md) §2 and the `my_invois` row in §3.2 of [`erpnext-demo-stabilise-modularise.md`](erpnext-demo-stabilise-modularise.md). Incomplete MyInvois layer; not available as a working installed integration. |
+| `shopify` | `repos/shopify-shrdc-v16-fixed` | local app | Historical install recorded; current state unverified | No | Shopify ↔ ERPNext bridge. |
+| `metabase_integration` | `repos/metabase_integration` | Incomplete scaffold; upstream provenance unverified | Historical install noted on 2026-11-05; current state unverified | **Yes** | Stub (6 tracked files); controllers lost. Do not treat as a complete integration. |
+
+`custom_manufacturing` and `chat_widget` are absent from this repository and
+are omitted from the active app inventory. The `custom_manufacturing` entries
+below are historical records only; they do not establish that the app or its
+customisations are currently installed.
 
 ## Standing rollback policy (human-ordered)
 
@@ -43,6 +47,10 @@ sets `FORCE_CHATBOT_ROLLBACK=1`, and every rollback report ends with a
 confirmation in its reply after any rollback — no silent rollbacks.
 
 ## Customisations
+
+Rows 1–19 are historical `custom_manufacturing` records. Their source app is
+absent from this repository, and their recorded `Installed` status is not a
+claim about the current site.
 
 | # | Date | Kind (A–E) | Target DocType / Object | App + file path | Rollback tier | Status |
 |---|---|---|---|---|---|---|
@@ -67,7 +75,7 @@ confirmation in its reply after any rollback — no silent rollbacks.
 | 19 | 2026-10-02 | — | Demo data (SANDBOX ONLY) `demo_data.py` | `.../process_manufacturing/demo_data.py` | 2 | Sandbox only |
 | 20 | 2026-11-04 | E | Stock Entry "Scan Tracked Item" now sets `s_warehouse`/`t_warehouse` from the header (fixes missing-warehouse submit error) | `item_tracking/public/js/item_tracking_scan.js` | 2 | Installed |
 | 21 | 2026-11-04 | C | `Tracked Item` QR now encodes the raw `tracking_id` (not a `/tracked_item_lookup` URL) so scans resolve inline | `item_tracking/.../doctype/tracked_item/tracked_item.py` | 2 | Installed |
-| 22 | 2026-11-04 | A/C/E | MyInvois (Malaysia LHDN) submit-only layer: TIN/BRN/MSIC/SST/contact fields on Customer/Company/Supplier, Sales Invoice status/UUID/link fields, UBL-JSON `build_invoice_document` + `submit_to_myinvois`/`refresh_myinvois_status`/`cancel_myinvois_document`, Client Script buttons | `my_invois/my_invois/my_invois/api.py` + `fixtures/custom_field.json` + `fixtures/client_script.json` | 2 | Installed |
+| 22 | 2026-11-04 | A/C/E | MyInvois (Malaysia LHDN) submit-only layer: TIN/BRN/MSIC/SST/contact fields on Customer/Company/Supplier, Sales Invoice status/UUID/link fields, UBL-JSON `build_invoice_document` + `submit_to_myinvois`/`refresh_myinvois_status`/`cancel_myinvois_document`, Client Script buttons | `my_invois/my_invois/my_invois/api.py` + `fixtures/custom_field.json` + `fixtures/client_script.json` | 2 | Written; quarantined; installer missing; fixtures never synced (see `docs/HANDOFF.md` §2) |
 | 23 | 2026-11-05 | C | Stock Entry `on_submit` (Manufacture only): after auto-creating Tracked Items for finished goods, assemble a ready-made `Barcode Printing` doc (serial numbers pre-filled per finished good) and show a bottom-right `alert=True` notification linking to it | `item_tracking/item_tracking/item_tracking/events.py` (`_create_finished_good_barcode_printing`) | 1 | Installed |
 | 24 | 2026-11-05 | — | Website page `/metabase_dashboard` (iframe embed of the Metabase "ERPNext Monitoring" public dashboard) | `item_tracking/item_tracking/www/metabase_dashboard.py` + `.html` | 2 | Installed |
 | 25 | 2026-11-05 | C | Scan lookup (`lookup_tracked_item`) also resolves a scanned `Barcode Printing` doc name (`BP-…`) to its item so the Shift+I popup shows the item name; Manufacture submit toast link fixed from the v14 `/app/` path to the v16 `/desk/` route | `item_tracking/item_tracking/item_tracking/api.py` + `events.py` | 1 | Installed |
