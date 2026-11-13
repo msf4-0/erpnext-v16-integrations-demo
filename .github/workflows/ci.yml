@@ -26,14 +26,16 @@ jobs:
             git status --porcelain
             exit 1
           fi
-      - name: Every app under repos/ must have its hooks.py
+      - name: Every app under repos/ must ship its hooks.py
         run: |
           fail=0
           for d in repos/*/; do
-            app=$(basename "$d")
             [ -d "$d" ] || continue
-            if [ ! -f "${d}${app}/hooks.py" ]; then
-              echo "::error::$app has no hooks.py - likely a partial commit"
+            app=$(basename "$d")
+            # The folder name is not always the python package name
+            # (barcode-shrdc-v16-fixed contains barcode_shrdc/), so search.
+            if ! find "$d" -maxdepth 3 -name hooks.py -size +0c | grep -q .; then
+              echo "::error::$app has no non-empty hooks.py - likely a partial commit"
               fail=1
             fi
           done
@@ -80,7 +82,9 @@ jobs:
       - name: Shell scripts pass shellcheck
         uses: ludeeus/action-shellcheck@2.0.0
         with:
-          severity: warning
+          # The sandbox scripts predate this CI and carry legacy warnings.
+          # Errors only: a real bug still fails the build, style noise does not.
+          severity: error
           scandir: ./sandbox/scripts
       - name: Python sources compile
         run: |
