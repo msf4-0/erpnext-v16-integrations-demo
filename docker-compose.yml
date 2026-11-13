@@ -16,7 +16,7 @@
 # and pulling ngrok/ngrok:latest stalls on this machine, so up.ps1 starts the
 # host binary instead and reads the public URL back from its local API.
 #
-# Start with:  powershell -File F:\ERPNEXT\erpnext-build\up.ps1
+# Start with:  powershell -File .\up.ps1   (from this repository root)
 
 name: comp_demo
 

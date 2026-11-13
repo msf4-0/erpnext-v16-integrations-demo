@@ -23,7 +23,7 @@
     M4 creates and deletes again.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File F:\ERPNEXT\erpnext-build\verify-all.ps1
+    powershell -ExecutionPolicy Bypass -File .\verify-all.ps1
 #>
 [CmdletBinding()]
 param(

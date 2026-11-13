@@ -47,7 +47,8 @@ $DemoDir = $PSScriptRoot
 # next to this script). The old ERPNEXT-AI-FIX path is only a fallback.
 $SandboxDir = Join-Path $DemoDir 'sandbox'
 if (-not (Test-Path (Join-Path $SandboxDir 'scripts'))) {
-    $SandboxDir = 'F:\ERPNEXT\ERPNEXT-AI-FIX\sandbox'
+    $SandboxDir = Join-Path $PSScriptRoot 'sandbox'
+if (-not (Test-Path $SandboxDir)) { throw "sandbox is missing from this checkout ($SandboxDir) - re-clone the repository" }
 }
 $EnvPath = Join-Path $DemoDir '.env'
 $ComposeFile = Join-Path $DemoDir 'docker-compose.yml'

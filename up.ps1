@@ -206,7 +206,7 @@ if (-not (Test-Path $EnvPath)) {
 # Self-containment guard (must run after the helpers exist so it can warn).
 $vendored = Test-Path (Join-Path $SandboxDir 'scripts')
 if (-not $vendored) {
-    # There used to be a fallback to F:\ERPNEXT\ERPNEXT-AI-FIX here. That folder
+    # There used to be a fallback to another project folder here. That folder
     # exists on exactly one machine, so on every other clone the script silently
     # ran against a DIFFERENT project's scripts. Fail loudly instead.
     throw "sandbox\scripts is missing from this checkout ($SandboxDir). The repository is incomplete - re-clone it. There is no fallback to another folder."
@@ -254,7 +254,7 @@ $env:ERPNEXT_API_TOKEN = $erpToken
 if ($cfg['NGROK_PUBLIC_URL']) { Write-Info "pinning the tunnel to $($cfg['NGROK_PUBLIC_URL'])" }
 
 # Self-heal the Node-RED flow paths. The .env.example ships stale absolute paths
-# (F:\ERPNEXT\erpnext-build\...) that do not exist on a fresh clone; a bind-mount
+# (absolute author paths) that do not exist on a fresh clone; a bind-mount
 # to a missing source makes `docker compose create` fail, which is the "could not
 # build the image" error a fresh machine sees. Force both paths to resolve inside
 # THIS project, whatever its clone location. Process env wins over --env-file for
@@ -704,7 +704,7 @@ Write-Step '10/11  building the Node-RED flow'
 
 $flowSrc = $cfg['NODE_RED_SOURCE_FLOW']
 if (-not $flowSrc -or -not (Test-Path $flowSrc)) {
-    # vendored next to the flow builder (the old F:\shopify_erpnext_integration.json
+    # vendored next to the flow builder (the old external flow export file
     # is outside the project and would break a copy of comp_demo)
     $fallback = Join-Path $SandboxDir 'node-red\source-flow.json'
     if (Test-Path $fallback) { $flowSrc = $fallback }
