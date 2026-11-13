@@ -36,3 +36,7 @@ _mb_secret.txt
 docs
 **/*.docx
 **/*.png
+
+# app sources carry icons/images that are used at runtime - keep them
+!repos/**
+!repos/**/*.png
