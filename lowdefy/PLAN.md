@@ -1,5 +1,8 @@
 # Lowdefy Smart Inventory & Exception Management — Implementation Plan
 
+> Authoritative stack architecture, ports, versions, and database durability:
+> [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
+
 ## 0. Current status (honest)
 
 | Item | State |
@@ -84,7 +87,7 @@ RBAC: the frontend hides buttons by role; the **Exception Service re-validates**
 - **Batch expiry** exceptions only fire when `Batch.expiry_date` actually exists.
 - **Unusual movement** rules need operator-set thresholds (configurable in Settings), not hardcoded heuristics.
 - **Discrepancies** only when a `Stock Reconciliation` with counted values exists — the app never invents a physical count.
-- **`docker compose up -d` hangs on this host** — the project's own `up.ps1`/`setup.ps1` must be used, and the DB is tmpfs (wiped on Docker restart).
+- **`docker compose up -d` hangs on this host** — use the project's own `up.ps1`/`setup.ps1`; the DB is stored in `db_data` and persists across Docker restarts.
 
 ## 6. What still must be done (not yet built)
 

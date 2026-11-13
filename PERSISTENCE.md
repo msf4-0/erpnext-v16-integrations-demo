@@ -1,5 +1,8 @@
 # Why app features disappeared after a restart — and the permanent fix
 
+> Authoritative stack architecture, ports, versions, and database durability:
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 ## Root cause
 
 The `bench` container persisted **only** `/home/frappe/frappe-bench/sites` (the

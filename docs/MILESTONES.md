@@ -1,5 +1,8 @@
 # comp_demo Ã¢â‚¬â€ milestone status (the "complete demo" checklist)
 
+> Authoritative stack architecture, ports, versions, and database durability:
+> [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 ## Project layout Ã¢â‚¬â€ self-contained
 
 Everything needed to rebuild and verify the demo lives **inside `F:\ERPNEXT\erpnext-build`**
@@ -179,7 +182,7 @@ test suppliers, repairs an out-of-sequence WO Ã¢â‚¬â€ idempotent).
 | Stock reconciliation does not push stock to Shopify | `update_product_inventory.on_submit` is not wired in `hooks.py` (the header bug is fixed) | add a `Stock Ledger Entry` doc_event if push-on-stock is wanted |
 | Malaysia (LHDN) e-invoicing | the substituted app is EU EN 16931 / XRechnung (CII), not MyInvois; the original MY source is 404 | supply the MY app source |
 | Timers tab shows an empty object | `/api/work-orders/timers` now answers 200 but no Work Order has a running timer until someone clicks **Start** in the planner | start a timer in the UI (state is the planner's own `timers.json`) |
-| Anything after `docker compose down` / engine restart | the DB is **tmpfs** on purpose (>300 s/100 tables on a volume vs 0.20 s on tmpfs) | rerun `powershell -File F:\ERPNEXT\erpnext-build\up.ps1` (~25Ã¢â‚¬â€œ35 min) |
+| Database missing after `docker compose down` / engine restart | the `db_data` named volume was removed or the wrong Compose project/site is in use | check the active volume and site; `docker compose down -v` intentionally deletes the data |
 
 ### Operational gotchas
 

@@ -1,5 +1,8 @@
 # Shopify → ERPNext via Node-RED — setup
 
+> Authoritative stack architecture, ports, versions, and database durability:
+> [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
+
 Automates the parts of the integration that are mechanical, and tells you exactly
 which parts are not automatable.
 
@@ -175,9 +178,9 @@ filter that matched nothing).
 6. **Shopify webhook registration** (optional, inbound direction). This script
    configures ERPNext → Node-RED. Pointing Shopify's own webhooks at
    `https://<domain>/shopify-order` is a Shopify-admin action.
-7. **Accept that the ERPNext site DB is tmpfs.** In this build a container stop
-   wipes the site, which also wipes `Shopify Access` and the three webhooks —
-   re-running this script after `setup.cmd` restores them.
+7. The ERPNext site DB is stored in the `db_data` named volume and survives
+   container and Docker restarts. `docker compose down -v` deletes it, including
+   the `Shopify Access` records and webhooks.
 
 ## Caveats handled in code
 

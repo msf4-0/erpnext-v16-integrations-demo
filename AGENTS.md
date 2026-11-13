@@ -1,5 +1,8 @@
 # AGENTS.md Ã¢â‚¬â€ comp_demo (complete ERPNext demo workspace)
 
+> Authoritative stack architecture, ports, versions, and database durability:
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 Self-contained ERPNext v16 demo **and** the workspace that drives it. One docker
 project (`comp_demo`), one build command, everything included: barcode/QR item
 tracking, e-invoicing, drag-and-drop production planning, Shopify Ã¢â€ â€ ERPNext via
@@ -20,7 +23,7 @@ Full build Ã¢â€°Ë† 25Ã¢â‚¬â€œ35 min. Status/down/logs (also u
 ```powershell
 docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ps
 docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml down      # stop, keep volumes
-docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml down -v   # WIPE the site (tmpfs DB)
+docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml down -v   # WIPE the site and named volumes
 ```
 
 ## Endpoints
@@ -30,7 +33,8 @@ docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml do
 | ERPNext (Desk + REST) | http://localhost:8000 | `Administrator` / `admin`, site `frontend` |
 | Production planner | http://localhost:3001 | drag-and-drop scheduling; user `planner@ai-fix.local` |
 | Node-RED (Shopify bridge) | http://localhost:1880 | flow: `../ERPNEXT-AI-FIX/sandbox/node-red/flows.json` |
-| ngrok API | http://localhost:4041 | host ngrok binary (no container) |
+| Metabase | http://localhost:3005 | analytics dashboards |
+| ngrok API | http://localhost:4040 | host ngrok binary (no container) |
 
 ## Features in the build
 
@@ -54,7 +58,7 @@ Skills live in `.opencode/skills/` (interview, doctype-builder, production-workf
 ## Gotchas
 
 - **`docker compose up -d` HANGS on this host.** `up.ps1` starts containers with `docker compose create` + `docker start`.
-- **The DB lives in tmpfs** (`/var/lib/mysql`) because this host's container write path makes MariaDB DDL take hours on a volume. A container stop / Docker restart discards the site Ã¢â€ â€™ re-run `up.ps1`. The demo is **rebuildable, not persistent**.
+- **The DB lives in the `db_data` named volume** mounted at `/var/lib/mysql` and persists across container and Docker restarts. `docker compose down -v` deletes it; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 - Verification is **REST-based** (`/api/resource/...`), not UI-based. Never treat a returned UI action as proof of change.
 - Never run destructive flows (`down -v`, cancel/delete/submit financial docs) without explicit confirmation.
 - No `pwsh` on PATH; use `powershell.exe -NoProfile -ExecutionPolicy Bypass -File`.

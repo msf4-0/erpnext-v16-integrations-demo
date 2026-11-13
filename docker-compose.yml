@@ -7,7 +7,7 @@
 # ports.
 #
 #   bench      : ERPNext v16 bench, baked from bake/bench.Dockerfile
-#   db         : MariaDB 11.8 (tmpfs datadir - see the comment on the service)
+#   db         : MariaDB 11.8 (durable `db_data` named volume)
 #   redis-*    : cache + queue
 #   node-red   : Shopify <-> ERPNext bridge, runs ./flows.json
 #   scheduler  : production planner (Express API + React SPA, port 3001)

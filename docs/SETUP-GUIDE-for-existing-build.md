@@ -1,5 +1,8 @@
 # Adding the missing functions to an existing ERPNext v16 build
 
+> Authoritative stack architecture, ports, versions, and database durability:
+> [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 You got **`erpnext-build.zip`** (≈8 MB). It is not a plugin: it is a complete,
 self-contained demo of the same four things, plus the exact source of each piece so you can
 either run it whole or graft the pieces into your own site.
@@ -42,8 +45,8 @@ powershell -ExecutionPolicy Bypass -File .\up.ps1          # Windows
 Then: ERPNext <http://localhost:8000> (Administrator/admin) · planner <http://localhost:3001> ·
 Node-RED <http://localhost:1880>. Verify with `verify-all.ps1` (41 checks).
 
-> The site DB is **tmpfs on purpose** — stopping the containers wipes the site. That is why the
-> project is *rebuildable*: `up.ps1` recreates and re-seeds everything.
+> The site DB is stored in the `db_data` named volume and survives container and Docker restarts.
+> `docker compose down -v` removes that volume. See [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ---
 
@@ -251,7 +254,7 @@ Sales Invoice with einvoice_profile=XRECHNUNG      # .xml attached
 5. **`docker restart <bench>` kills `bench serve`.** Restart it inside the container:
    `cd /home/frappe/frappe-bench && setsid nohup bench serve --port 8000 >/tmp/bench-serve.log 2>&1 &`
 6. **Don't run `up.ps1` against your own site.** It creates its own compose project (`comp_demo`)
-   and its own tmpfs database; Path B is the integration path.
+   and uses the durability configured for that existing bench; Path B is the integration path.
 7. **Planner API user needs 3 role families** (Manufacturing, Sales, Stock) or the forecast/batch
    tabs answer 403 — `ai-fix-scheduler-token.py` grants them.
 

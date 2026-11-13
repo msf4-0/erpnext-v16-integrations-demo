@@ -1,5 +1,8 @@
 # Handoff — remaining work (next workspace)
 
+> Authoritative stack architecture, ports, versions, and database durability:
+> [`ARCHITECTURE.md`](ARCHITECTURE.md).
+
 > Session ended at a clean checkpoint. This file is the authoritative "what's
 > done, what's left, and the exact commands" for the next agent.
 
@@ -100,7 +103,7 @@ bench --site frontend set-config myinvois_client_secret "<secret>"
   sync edits with `docker cp` (or `docker cp` the whole app), then
   `bench build --app <app>` (JS) and `bench --site frontend clear-cache` (Python/hooks).
 - `docker compose up -d` HANGS on this host; use `create`+`start` (see `up.ps1`).
-- DB is on the `db_data` named volume (persists across `docker restart`), NOT tmpfs.
+- DB is on the `db_data` named volume and persists across `docker restart`.
 - Windows→bash quoting is painful (see `docs/WINDOWS-QUOTING.md`); prefer
   `docker exec -w <dir> ... cat <file>` and single-quoted PowerShell strings;
   avoid nested `--args` JSON inline.

@@ -1,5 +1,9 @@
 # Assessment — E-Invoicing + Barcode/QR Item Tracking
 
+> Authoritative configured stack architecture, ports, image pins, and database
+> durability: [`ARCHITECTURE.md`](ARCHITECTURE.md). Version values below are
+> observations from the dated live-environment assessment.
+
 > Investigation date: 2026-11-04. Project: `F:\ERPNEXT\erpnextcomp_demo` (Docker
 > project `comp_demo`, site `frontend`, ERPNext v16). This document records the
 > *current* state before any implementation, per the task's "assess before

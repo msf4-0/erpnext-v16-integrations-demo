@@ -1,15 +1,20 @@
 # Baking comp_demo into proper container images
 
+> Authoritative current architecture and database durability:
+> [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). The tmpfs references
+> below are historical and describe an earlier configuration.
+
 The current setup keeps three things OUT of a durable image:
 
 | What | Where today | Lost on… |
 | --- | --- | --- |
 | frappe + erpnext + apps + venv + render deps | bench container **writable layer** (installed at runtime by `up.ps1`) | `docker compose down` + recreate |
-| site DB (900 tables) | `db` container **tmpfs** (`/var/lib/mysql`) | any stop / Docker restart |
+| site DB (900 tables) | `db_data` named volume mounted at `/var/lib/mysql` | explicit volume deletion or storage loss |
 | staged scripts/repos | `/tmp/...` in the container | every run |
 
-Only `bench_sites` (the site files, NOT the DB) is a named volume. The goal is
-to move all of the above into images built ahead of time.
+The database and site files use separate named volumes (`db_data` and
+`bench_sites`). The remaining sections describe the image-baking history and
+options; the database strategy in use is Track 2b.
 
 ## Fresh clone — the default path
 
@@ -44,9 +49,11 @@ Then point `docker-compose.yml` `bench.image:` at `comp_demo-bench:v16`.
 
 ## Track 2 — bake the DATA/DB (harder; pick a strategy)
 
-The DB is tmpfs because this host's container-storage write path is pathological
-for MariaDB (in-container fsync ~600–900 ms; a named volume took >300 s for 100
-CREATE TABLEs). Baking does NOT remove that. Two options, each a trade-off:
+An earlier setup used tmpfs because this host's container-storage write path was
+measured to be pathological for MariaDB (in-container fsync ~600–900 ms; a
+named volume took >300 s for 100 CREATE TABLEs). The current setup uses the
+`db_data` named volume; initial population pays the write cost. The following
+options record the historical trade-offs:
 
 ### 2a — snapshot → tmpfs (fast boot, still ephemeral)
 Bake a **tarball of the already-provisioned datadir** into the image, extract to

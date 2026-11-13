@@ -1,5 +1,8 @@
 # What you need to run comp_erpdemo
 
+> Authoritative stack architecture, ports, versions, and database durability:
+> [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
 Everything lives in **one folder**: `F:\ERPNEXT\erpnext-build` Ã¢â‚¬â€ **36.4 MB, 1 514 files**.
 No file outside it is read at build or run time (two deliberate fallbacks in `up.ps1` /
 `scheduler-up.ps1` point at `F:\ERPNEXT\ERPNEXT-AI-FIX\sandbox` and are used **only** if
@@ -7,8 +10,9 @@ No file outside it is read at build or run time (two deliberate fallbacks in `up
 > **Naming:** the project folder is `comp_erpdemo`, but the **Docker project and the
 > containers keep the original `comp_demo` id** (`comp_demo-bench-1`,
 > `comp_demo-scheduler:latest`, `-p comp_demo`). They were not renamed on purpose: a new
-> compose project recreates the containers, and because the site DB is tmpfs that means a
-> full ~25-35 min rebuild. Rename them on your next rebuild â€” change `name:` /
+> compose project recreates the containers. The site DB is on the `db_data`
+> named volume and persists across restarts; `down -v` removes it. Rename them
+> on your next rebuild â€” change `name:` /
 > `COMPOSE_PROJECT_NAME`, `$Project` in `up.ps1` / `scheduler-up.ps1` / `verify-all.ps1`,
 > and the `image:` / container references.
 
@@ -25,22 +29,25 @@ powershell -ExecutionPolicy Bypass -File F:\ERPNEXT\erpnext-build\verify-all.ps1
 
 | File | Why |
 |---|---|
-| `docker-compose.yml` | the 6 services; planner build context is `./scheduler` |
+| `docker-compose.yml` | the 7 services; planner build context is `./scheduler` |
 | `.env` | ports, site name, DB root password, Shopify store + client credentials, planner port |
 | `sandbox\.env.ai-fix` | planner integration user's API key/secret (+ Shopify token for the planner script) |
 
 Plus the Docker images, which are not files in the folder:
 
-- pulled: `frappe/bench:latest`, `mariadb:11.8`, `redis:6.2-alpine`, `nodered/node-red:latest`
-- built here: `comp_demo-scheduler:latest` (from `./scheduler`, ~65 s, `COPY`-only)
+- pulled: `frappe/erpnext:v16.35.0`, `mariadb:11.8`, `redis:6.2-alpine`,
+  `nodered/node-red:latest`, `metabase/metabase:v0.58.38.2`
+- built here: `comp_demo-bench:v16` and `comp_demo-scheduler:latest`
+  (the planner image uses `./scheduler`)
 
 ```powershell
 docker-compose -p comp_demo --env-file .env -f docker-compose.yml create
 docker start comp_demo-db-1 comp_demo-redis-cache-1 comp_demo-redis-queue-1 comp_demo-bench-1 comp_demo-node-red-1 comp_demo-scheduler-1
 ```
 
-**The site database is tmpfs on purpose**, so "just start it" only works while the
-containers were never stopped. After a stop/restart the site is empty and you need Tier B.
+The site database is stored in the `db_data` named volume, so it remains
+available after container and Docker restarts. `docker compose down -v` removes
+the volume; the full reprovision procedure is in `up.ps1`.
 
 ---
 
@@ -88,7 +95,7 @@ Shopify client id/secret from it.
 | `scheduler\frontend\node_modules\` (~300 MB) | only required to **recompile the SPA** (`cd scheduler\frontend && npm ci && npm run build`); the built `frontend\build` is in the bundle and is what the image copies |
 | `__pycache__\`, `*.pyc` | regenerated |
 | `rebuild-*.log`, `up-run*.log`, `up-rerun*.log` | build logs from this session (kept out; `verify-all-final.log` is kept as evidence) |
-| site DB | **tmpfs by design** Ã¢â‚¬â€ lives in RAM inside `comp_demo-db-1`, wiped by any stop. That is why the demo is rebuildable rather than backed up |
+| site DB | `db_data` named volume mounted at `/var/lib/mysql`; survives stops and restarts, but is deleted by `docker compose down -v` |
 
 ---
 

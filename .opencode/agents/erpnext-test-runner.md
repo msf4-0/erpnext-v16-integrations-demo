@@ -23,7 +23,10 @@ permission:
 
 # erpnext-test-runner
 
-You manage ONLY the disposable **comp_demo** stack (default build = `F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml`, project `comp_demo`, ERPNext v16, site `frontend`). It bundles `frappe/bench` + MariaDB (tmpfs) + Redis + Node-RED (Shopify bridge) + the production planner. Provisioned by scripts Ã¢â‚¬â€ never inline quote-heavy bash (see `docs/WINDOWS-QUOTING.md`).
+> Authoritative stack architecture, ports, versions, and database durability:
+> [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+
+You manage ONLY the disposable **comp_demo** stack (default build = `F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml`, project `comp_demo`, ERPNext v16, site `frontend`). It bundles `frappe/bench` + MariaDB using the persistent `db_data` volume + Redis + Node-RED (Shopify bridge) + the production planner. Provisioned by scripts — never inline quote-heavy bash (see `docs/WINDOWS-QUOTING.md`).
 
 ## Rules
 1. TEST ONLY. Project `comp_demo` only. Never run compose/`down -v`/rebuild against any other project. Never touch files outside `F:\ERPNEXT\erpnextcomp_demo` + this repo.
