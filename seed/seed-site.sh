@@ -66,7 +66,6 @@ if [ ! -f sites/apps.txt ]; then
     echo "seed: writing sites/apps.txt"
     printf 'frappe\nerpnext\nbarcode_shrdc\nshopify\neu_einvoice\nitem_tracking\nmetabase_integration\n' > sites/apps.txt
 fi
-printf '%s\n' "${SITE}" > sites/currentsite.txt
 
 # --- case 2: create the site record, then restore over it -------------------
 # new-site is needed even though the dump contains everything: it creates the
@@ -83,6 +82,11 @@ bench new-site "${SITE}" \
     --mariadb-root-password "${DB_ROOT_PASSWORD}" \
     --admin-password "${ADMIN_PASSWORD}" \
     --force
+
+# Bind the default site. Without this the bench answers
+# `404 localhost does not exist` for every request, because Frappe resolves the
+echo "seed: setting default site -> ${SITE}"
+bench use "${SITE}"
 
 echo "seed: restoring ${DUMP}"
 bench --site "${SITE}" restore "${DUMP}" \
