@@ -143,17 +143,8 @@ jobs:
       - name: Pull the image built above
         run: docker pull ghcr.io/msf4-0/comp-demo-bench:${{ github.sha }}
       - name: Apps import and render deps are present
+        # One-line python: a heredoc terminator cannot start at column 0 inside a
+        # YAML block scalar, and indented terminators do not work in bash.
         run: |
-          docker run --rm ghcr.io/msf4-0/comp-demo-bench:${{ github.sha }} bash -lc '
-            set -e
-            cd /home/frappe/frappe-bench
-            ./env/bin/python - <<PY
-          import importlib, sys
-          for mod in ("frappe", "erpnext", "barcode_shrdc", "shopify", "eu_einvoice"):
-              importlib.import_module(mod)
-              print("import OK:", mod)
-          for mod in ("reportlab", "qrcode", "PIL", "drafthorse", "saxonche"):
-              importlib.import_module(mod)
-              print("dep OK:", mod)
-          PY
-          '
+          docker run --rm ghcr.io/msf4-0/comp-demo-bench:${{ github.sha }} \
+            /home/frappe/frappe-bench/env/bin/python -c "import importlib; mods=('frappe','erpnext','barcode_shrdc','shopify','eu_einvoice','reportlab','qrcode','PIL','drafthorse','saxonche'); [print('OK', m) for m in (importlib.import_module(x) and x for x in mods)]"
