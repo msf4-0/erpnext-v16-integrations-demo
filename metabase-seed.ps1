@@ -7,7 +7,7 @@
 #      network (host `db`, port 3306)
 #
 # Run from the host after `docker compose up -d metabase`:
-#   powershell -File F:\ERPNEXT\erpnextcomp_demo\metabase-seed.ps1
+#   powershell -File .\metabase-seed.ps1
 #
 # Values mirror the Metabase block in .env. Override any with -<Param> <value>.
 

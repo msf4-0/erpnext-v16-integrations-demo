@@ -12,7 +12,7 @@
 # the auth header to the http-request node (which setup-shopify-erpnext.ps1 keeps
 # up to date).
 param(
-    [string]$FlowPath = 'F:\ERPNEXT\erpnextcomp_demo\sandbox\node-red\flows.json',
+    [string]$FlowPath = (Join-Path (Split-Path $PSScriptRoot -Parent) 'sandbox\node-red\flows.json'),
     [string]$NodeId = '5744494e9098b054',
     [string]$Container = 'comp_demo-node-red-1'
 )

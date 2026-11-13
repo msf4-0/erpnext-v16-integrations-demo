@@ -41,15 +41,16 @@ jobs:
           done
           exit $fail
       - name: No machine-specific absolute paths in the onboarding path
-        # Scoped on purpose: bake/, shopify-setup/ and make-bundle.ps1 still
-        # carry author-specific paths and are tracked as cleanup, not as a
-        # blocker for a colleague's first run. These are the files that decide
-        # whether `git clone` + `docker compose up` works.
+        # Executable/config surface only. .github is excluded because the
+        # workflow names the patterns it searches for, and .opencode because
+        # its agent permission globs are machine-bound by design. Prose docs
+        # still describe this machine and are not onboarding blockers.
         run: |
           if grep -rnE "F:[\\/]|C:\\\\Users|erpnext-build" \
                --include='*.ps1' --include='*.yml' --include='*.sh' \
-               up.ps1 setup.ps1 scheduler-up.ps1 verify-all.ps1 \
-               docker-compose.yml .env.example seed sandbox/scripts ; then
+               --include='.env.example' \
+               --exclude-dir=.github --exclude-dir=.git --exclude-dir=.opencode \
+               --exclude-dir=__pycache__ . ; then
             echo "::error::machine-specific path in the onboarding path"
             exit 1
           fi

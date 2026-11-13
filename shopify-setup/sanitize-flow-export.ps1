@@ -1,4 +1,4 @@
-﻿# Sanitize the vendored Node-RED export so it can be committed.
+# Sanitize the vendored Node-RED export so it can be committed.
 #
 # sandbox/node-red/source-flow.json is the operator's downloaded export and it
 # carries live credentials in its node headers:
@@ -8,7 +8,7 @@
 # flows.json, so replacing them with obviously-fake constants is safe and keeps
 # the export usable for rebuilds while removing the leak from git history.
 param(
-    [string]$Path = 'F:\ERPNEXT\erpnextcomp_demo\sandbox\node-red\source-flow.json'
+    [string]$Path = (Join-Path (Split-Path $PSScriptRoot -Parent) 'sandbox\node-red\source-flow.json')
 )
 
 $raw = Get-Content -LiteralPath $Path -Raw

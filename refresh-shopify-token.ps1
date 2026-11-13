@@ -16,10 +16,10 @@
     (`/delivery-note`, inventory and fulfillment pushes), or just on a schedule:
 
         schtasks /create /tn "comp_demo shopify token" /sc daily /st 08:00 ^
-            /tr "powershell -ExecutionPolicy Bypass -File F:\ERPNEXT\erpnext-build\refresh-shopify-token.ps1"
+            /tr "powershell -ExecutionPolicy Bypass -File <repo>\refresh-shopify-token.ps1"
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File F:\ERPNEXT\erpnext-build\refresh-shopify-token.ps1
+    powershell -ExecutionPolicy Bypass -File .\refresh-shopify-token.ps1
 #>
 [CmdletBinding()]
 param(
@@ -106,7 +106,7 @@ if (-not $SkipErpNext) {
 if (-not $SkipNodeRed) {
     $flowSrc = $cfg['NODE_RED_SOURCE_FLOW']
     if (-not $flowSrc -or -not (Test-Path $flowSrc)) {
-        $fallback = 'F:\shopify_erpnext_integration.json'
+        $fallback = (Join-Path $PSScriptRoot 'sandbox\node-red\source-flow.json')
         if (Test-Path $fallback) { $flowSrc = $fallback }
     }
     $builder = Join-Path $SandboxDir 'node-red\build-flows.py'

@@ -82,3 +82,28 @@ is `setup.ps1`, not `up.ps1` (2–4 min, no rebuild).
 
 A homepage 200 proves none of the above — an app whose `app_include_js` 404s
 still returns a 200 HTML shell.
+
+## Optional: Malaysia LHDN / MyInvois (`repos/my_invois`)
+
+`eu_einvoice` implements the **EU** EN 16931 / XRechnung standard. `my_invois`
+is the Malaysian layer (TIN/BRN/SST custom fields, e-invoice status lifecycle,
+explicitly gated submission - never a side effect of saving).
+
+It is **mounted but not installed**: installing it next to `eu_einvoice` adds a
+second e-invoice doctype set and the two standards do not share a profile model.
+Pick one per site.
+
+To install it deliberately:
+
+```bash
+docker exec comp_demo-bench-1 bash -lc "cd /home/frappe/frappe-bench \
+  && ./env/bin/pip install -e apps/my_invois \
+  && bench --site frontend install-app my_invois \
+  && bench --site frontend migrate \
+  && bench --site frontend clear-cache"
+docker restart comp_demo-bench-1
+```
+
+Then set the LHDN credentials in **MyInvois Settings** and submit a Sales
+Invoice from the *MyInvois* tab. Without credentials, submission stays disabled
+by design.

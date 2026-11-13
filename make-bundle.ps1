@@ -3,7 +3,7 @@
     Produce the centralised, portable comp_demo bundle (clean copy + zip + checksum).
 
 .DESCRIPTION
-    Copies this project to F:\comp_demo-dist\comp_demo, excluding only generated
+    Copies this project to <parent>\comp_demo-dist\comp_demo, excluding only generated
     caches and this session's build logs, then:
 
       1. validates the copy's compose file resolves (build context inside the copy)
@@ -13,17 +13,17 @@
     Nothing outside comp_demo is read, so the copy is standalone.
 
 .PARAMETER Dest
-    Destination root. Default F:\comp_demo-dist
+    Destination root. Default <parent-of-repo>\comp_demo-dist
 
 .PARAMETER SkipVerify
     Copy + zip only (no 41-check run).
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File F:\ERPNEXT\erpnext-build\make-bundle.ps1
+    powershell -ExecutionPolicy Bypass -File .\make-bundle.ps1
 #>
 [CmdletBinding()]
 param(
-    [string]$Dest = 'F:\erpnext-build-dist',
+    [string]$Dest = (Join-Path (Split-Path $PSScriptRoot -Parent) 'comp_demo-dist'),
     [switch]$SkipVerify
 )
 

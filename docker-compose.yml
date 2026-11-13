@@ -133,6 +133,11 @@ services:
       # version the Get Items Barcode button expects. Mount the repo so the
       # serial-number flow exists and survives restarts.
       - ./repos/barcode-shrdc-v16-fixed:/home/frappe/frappe-bench/apps/barcode_shrdc
+      # OPTIONAL Malaysia LHDN / MyInvois layer. Mounted so the source is
+      # present, but NOT installed - installing it alongside the EU eu_einvoice
+      # app would add a second, conflicting e-invoice doctype set. Install it
+      # deliberately with the three commands in docs/ARCHITECTURE.md.
+      - ./repos/my_invois:/home/frappe/frappe-bench/apps/my_invois
     depends_on:
       # A fresh clone has an empty bench_sites volume, so bench would serve
       # "404 localhost does not exist". `seed` restores the demo DB first, then
@@ -177,7 +182,6 @@ services:
   # ---------------------------------------------------------------------------
   seed:
     image: ${BENCH_IMAGE:-comp_demo-bench:v16}
-    container_name: comp_demo-seed
     restart: "no"
     depends_on:
       db:
