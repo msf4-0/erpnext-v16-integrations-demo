@@ -20,11 +20,21 @@ The `seed` service in `docker-compose.yml` runs `seed-site.sh` once per boot:
 | State | What happens | Cost |
 |---|---|---|
 | Site already exists | Logs `nothing to do`, exits 0 | ~2 s |
-| No site, dump present | `bench new-site` + `bench restore` | ~5 min |
+| No site, dump present | `bench new-site` + `bench restore` (+ Metabase schema) | ~6 min |
 | No site, no dump | Exits 1 with instructions | instant |
 
 `bench` declares `depends_on: seed: condition: service_completed_successfully`,
 so it never starts against a half-restored volume.
+
+## Metabase metadata (`metabase-db.sql.gz`)
+
+Metabase keeps its own admin user, data source and dashboards in the `metabase`
+schema of the `db` service - **not** inside a `bench backup`. `metabase-db.sql.gz`
+(530 KB, 124 tables) carries them, so a clone boots with the
+"ERPNext Monitoring" dashboard already wired to the ERPNext database.
+
+The seeder restores it only when the schema has zero tables, so it never
+overwrites a Metabase someone has been using.
 
 ## Refresh the dump
 

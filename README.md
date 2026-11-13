@@ -71,7 +71,7 @@ Be precise about this before promising a colleague "everything works".
 | Planner schedule / work orders / job cards | ❌ **401** – `SCHEDULER_ERPNEXT_API_KEY/SECRET` are blank, and the seeded secret cannot be decrypted (the new site has a new `encryption_key`) | run `.\setup.ps1` once – it mints fresh planner credentials |
 | Shopify ↔ ERPNext bridge | ❌ skipped (no store/token) | fill `SHOPIFY_*` in `.env`, then `.\setup.ps1` |
 | ngrok tunnel + the 3 ERPNext webhooks | ❌ skipped (no tunnel) | install + `ngrok config add-authtoken`, then `.\setup.ps1` |
-| Metabase dashboards | ❌ empty – the site dump does not contain the `metabase` schema | add the ERPNext data source, or import your saved dashboard |
+| Metabase + "ERPNext Monitoring" dashboard | ✅ works – the seeder restores the `metabase` schema (137 tables) alongside the site, including the admin, the `ERPNext` data source and the 4-card dashboard | log in at :3005 with `METABASE_ADMIN_EMAIL` / `METABASE_ADMIN_PASSWORD` from `.env` |
 | E-invoicing (`eu_einvoice`) | ⚠️ installed, but EU EN 16931 only – a Malaysian SST invoice will not validate | add an EU VAT template, or install `my_invois` (see `docs/ARCHITECTURE.md`) |
 | `my_invois` (LHDN / MyInvois) | ❌ not installed by design | 3 commands in `docs/ARCHITECTURE.md` |
 
