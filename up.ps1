@@ -206,9 +206,10 @@ if (-not (Test-Path $EnvPath)) {
 # Self-containment guard (must run after the helpers exist so it can warn).
 $vendored = Test-Path (Join-Path $SandboxDir 'scripts')
 if (-not $vendored) {
-    $SandboxDir = 'F:\ERPNEXT\ERPNEXT-AI-FIX\sandbox'
-    $RootDir = 'F:\ERPNEXT\ERPNEXT-AI-FIX'
-    Write-Warn "comp_demo\sandbox is missing - falling back to $RootDir"
+    # There used to be a fallback to F:\ERPNEXT\ERPNEXT-AI-FIX here. That folder
+    # exists on exactly one machine, so on every other clone the script silently
+    # ran against a DIFFERENT project's scripts. Fail loudly instead.
+    throw "sandbox\scripts is missing from this checkout ($SandboxDir). The repository is incomplete - re-clone it. There is no fallback to another folder."
 }
 $reposDir = Join-Path $RootDir 'repos'
 if (-not (Test-Path $reposDir)) { throw "no repos/ under $RootDir - the app sources are missing" }
