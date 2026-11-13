@@ -57,6 +57,31 @@ docker compose up -d --wait
 
 If your clone still takes 25-35 minutes, it is building the image locally — the
 image is the slow part, not the code.
+### 3b. What actually works after that command
+
+Be precise about this before promising a colleague "everything works".
+
+| Capability | After `docker compose up` | To make it work |
+|---|---|---|
+| ERPNext + seeded demo data (70 items, 6 barcode docs, company SHRDC) | ✅ works | – |
+| Logins: `Administrator`/`admin`, `demo@compdemo.local`/`demo` | ✅ works | – |
+| `barcode_shrdc` (scan field, Barcode Printing, both desk JS) | ✅ works | – |
+| `item_tracking` (Shift+I scanner, tracked items) | ✅ works | – |
+| Planner UI + `/api/health` | ✅ page loads | – |
+| Planner schedule / work orders / job cards | ❌ **401** – `SCHEDULER_ERPNEXT_API_KEY/SECRET` are blank, and the seeded secret cannot be decrypted (the new site has a new `encryption_key`) | run `.\setup.ps1` once – it mints fresh planner credentials |
+| Shopify ↔ ERPNext bridge | ❌ skipped (no store/token) | fill `SHOPIFY_*` in `.env`, then `.\setup.ps1` |
+| ngrok tunnel + the 3 ERPNext webhooks | ❌ skipped (no tunnel) | install + `ngrok config add-authtoken`, then `.\setup.ps1` |
+| Metabase dashboards | ❌ empty – the site dump does not contain the `metabase` schema | add the ERPNext data source, or import your saved dashboard |
+| E-invoicing (`eu_einvoice`) | ⚠️ installed, but EU EN 16931 only – a Malaysian SST invoice will not validate | add an EU VAT template, or install `my_invois` (see `docs/ARCHITECTURE.md`) |
+| `my_invois` (LHDN / MyInvois) | ❌ not installed by design | 3 commands in `docs/ARCHITECTURE.md` |
+
+So: **core ERPNext, barcode, item tracking and the demo data are hands-off.**
+The four integrations that need external credentials (planner API, Shopify,
+ngrok, Metabase) need one more command each, and `.\setup.ps1` does the first
+three in one go.
+
+Nothing above is silent: `setup.ps1 -VerifyOnly` prints a per-feature health
+report, and `up.ps1` exits non-zero when an advertised feature is missing.
 
 ## 4. Configuration (.env)
 

@@ -120,3 +120,10 @@ by design.
 the only check that exercises `git clone` -> `docker compose` -> seeded site.
 It found three bugs that every other layer passed (db host, deprecated
 currentsite, missing logs dir).
+## What a clone does and does not get
+
+The per-capability table lives in `README.md` section 3b - keep it there, it is
+the one people read first. Summary: core ERPNext, barcode, item tracking and the
+seeded demo data work with no further steps; planner data endpoints, Shopify,
+ngrok webhooks and Metabase dashboards each need credentials, and `setup.ps1`
+covers the first three.
