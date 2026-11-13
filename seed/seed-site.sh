@@ -73,10 +73,15 @@ printf '%s\n' "${SITE}" > sites/currentsite.txt
 # DB user + schema and writes site_config.json with credentials that the dump
 # does not carry. The restore then replaces the empty schema's contents.
 echo "seed: creating site record (this is the slow part, ~4-5 min)"
+# --db-host/--db-port explicitly: the db service, never localhost. Do NOT use
+# --no-mariadb-socket here - it pins db_host to 127.0.0.1 and new-site dies with
+# "Can't connect to server on '127.0.0.1' (115)", because MariaDB is a service
+# in this stack, not a socket inside this container.
 bench new-site "${SITE}" \
+    --db-host db \
+    --db-port 3306 \
     --mariadb-root-password "${DB_ROOT_PASSWORD}" \
     --admin-password "${ADMIN_PASSWORD}" \
-    --no-mariadb-socket \
     --force
 
 echo "seed: restoring ${DUMP}"
