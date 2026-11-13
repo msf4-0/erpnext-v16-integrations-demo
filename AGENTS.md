@@ -8,22 +8,22 @@ project (`comp_demo`), one build command, everything included: barcode/QR item
 tracking, e-invoicing, drag-and-drop production planning, Shopify Ã¢â€ â€ ERPNext via
 Node-RED, plus the **erpnext-planner** and module-* agents used to build it.
 
-## Build & run (from `F:\ERPNEXT\erpnextcomp_demo`)
+## Build & run (from the repository root)
 
 ```powershell
 copy .env.example .env                        # if .env is missing (holds secrets Ã¢â‚¬â€ do not commit)
-powershell -File F:\ERPNEXT\erpnextcomp_demo\up.ps1  # full build: stack + provision v16 + install apps + seed + verify
-powershell -File F:\ERPNEXT\erpnextcomp_demo\up.ps1 -SkipProvision   # reuse an existing site (skip the long v16 provision)
-powershell -File F:\ERPNEXT\erpnextcomp_demo\up.ps1 -SkipInstall     # reuse installed apps
-powershell -File F:\ERPNEXT\erpnextcomp_demo\up.ps1 -SkipScheduler   # skip the planner image build (~6 min)
+powershell -File .\up.ps1  # full build: stack + provision v16 + install apps + seed + verify
+powershell -File .\up.ps1 -SkipProvision   # reuse an existing site (skip the long v16 provision)
+powershell -File .\up.ps1 -SkipInstall     # reuse installed apps
+powershell -File .\up.ps1 -SkipScheduler   # skip the planner image build (~6 min)
 ```
 
 Full build Ã¢â€°Ë† 25Ã¢â‚¬â€œ35 min. Status/down/logs (also usable directly):
 
 ```powershell
-docker compose -p comp_demo --env-file .env --env-file versions.env -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ps
-docker compose -p comp_demo --env-file .env --env-file versions.env -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml down      # stop, keep volumes
-docker compose -p comp_demo --env-file .env --env-file versions.env -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml down -v   # WIPE the site and named volumes
+docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml ps
+docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml down      # stop, keep volumes
+docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml down -v   # WIPE the site and named volumes
 ```
 
 ## Endpoints
@@ -32,7 +32,7 @@ docker compose -p comp_demo --env-file .env --env-file versions.env -f F:\ERPNEX
 | --- | --- | --- |
 | ERPNext (Desk + REST) | http://localhost:8000 | `Administrator` / development default `admin`, site `frontend` |
 | Production planner | http://localhost:3001 | drag-and-drop scheduling; user `planner@ai-fix.local` |
-| Node-RED (Shopify bridge) | http://localhost:1880 | flow: `../ERPNEXT-AI-FIX/sandbox/node-red/flows.json` |
+| Node-RED (Shopify bridge) | http://localhost:1880 | flow: `sandbox/node-red/flows.json` |
 | Metabase | http://localhost:3005 | analytics dashboards |
 | ngrok API | http://localhost:4040 | host ngrok binary (no container) |
 
@@ -53,7 +53,7 @@ docker compose -p comp_demo --env-file .env --env-file versions.env -f F:\ERPNEX
 | `module-installer` | primary | Provisions the comp_demo sandbox and installs named custom apps. |
 | `module-fixer` | primary | Fixes already-installed modules in the running comp_demo bench. |
 
-Skills live in `.opencode/skills/` (interview, doctype-builder, production-workflow, demo-data, test-sandbox, Ã¢â‚¬Â¦). Sub-agents imported from `F:\ERPNEXT\ERPNext-AI-Script`; planner + test-runner from `F:\ERPNEXT\SHRDCOpenCodeERP`. After editing any agent/skill/config, **restart opencode**.
+Skills live in `.opencode/skills/` (interview, doctype-builder, production-workflow, demo-data, test-sandbox, Ã¢â‚¬Â¦). Sub-agents imported from `the external ERPNext AI Script workspace`; planner + test-runner from `the external SHRDC OpenCode ERP workspace`. After editing any agent/skill/config, **restart opencode**.
 
 ## Gotchas
 

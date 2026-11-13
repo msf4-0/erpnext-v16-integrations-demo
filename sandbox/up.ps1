@@ -402,7 +402,7 @@ Write-Step '10/11  building the Node-RED flow'
 
 $flowSrc = $cfg['NODE_RED_SOURCE_FLOW']
 if (-not $flowSrc -or -not (Test-Path $flowSrc)) {
-    $fallback = 'F:\shopify_erpnext_integration.json'
+    $fallback = Join-Path $SandboxDir 'node-red\source-flow.json'
     if (Test-Path $fallback) { $flowSrc = $fallback }
 }
 if (-not $flowSrc -or -not (Test-Path $flowSrc)) {

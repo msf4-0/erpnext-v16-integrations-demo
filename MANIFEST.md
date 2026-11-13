@@ -3,10 +3,12 @@
 > Authoritative stack architecture, ports, versions, and database durability:
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-Everything lives in **one folder**: `F:\ERPNEXT\erpnext-build` Ã¢â‚¬â€ **36.4 MB, 1 514 files**.
-No file outside it is read at build or run time (two deliberate fallbacks in `up.ps1` /
-`scheduler-up.ps1` point at `F:\ERPNEXT\ERPNEXT-AI-FIX\sandbox` and are used **only** if
-`comp_erpdemo\sandbox` is missing).
+Everything needed to build and run the demo is in the repository root (**36.4 MB,
+1 514 files**). The supported scripts use the vendored `sandbox/`; they no longer
+depend on another workspace or machine-specific fallback paths.
+
+> Historical Windows host checkout: `F:\ERPNEXT\erpnext-build` (Windows host).
+> Current commands below are relative to the repository root.
 > **Naming:** the project folder is `comp_erpdemo`, but the **Docker project and the
 > containers keep the original `comp_demo` id** (`comp_demo-bench-1`,
 > `comp_demo-scheduler:latest`, `-p comp_demo`). They were not renamed on purpose: a new
@@ -19,8 +21,8 @@ No file outside it is read at build or run time (two deliberate fallbacks in `up
 One command:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File F:\ERPNEXT\erpnext-build\up.ps1     # full rebuild, ~25-35 min
-powershell -ExecutionPolicy Bypass -File F:\ERPNEXT\erpnext-build\verify-all.ps1   # 41 checks, ~5 min
+powershell -ExecutionPolicy Bypass -File .\up.ps1     # full rebuild, ~25-35 min
+powershell -ExecutionPolicy Bypass -File .\verify-all.ps1   # 41 checks, ~5 min
 ```
 
 ---
@@ -120,14 +122,14 @@ someone else.
 ## Portable copy
 
 A clean, verified copy is produced by `make-bundle.ps1` (in this folder) into
-`F:\erpnext-build-dist\`:
+`../comp_demo-dist/`:
 
 | Artefact | Contents |
 |---|---|
-| `F:\erpnext-build-dist\comp_erpdemo\` | the whole project minus the exclusions above |
-| `F:\erpnext-build-dist\comp_erpdemo-<date>.zip` | the same tree as one archive + `SHA256.txt` |
+| `../comp_demo-dist/comp_erpdemo/` | the whole project minus the exclusions above |
+| `../comp_demo-dist/comp_erpdemo-<date>.zip` | the same tree as one archive + `SHA256.txt` |
 
-**Share-safe variant** - `F:\comp_erpdemo-share\comp_erpdemo-share-<date>.zip` (7.9 MB) is the
+**Share-safe variant** - `../comp_erpdemo-share/comp_erpdemo-share-<date>.zip` (7.9 MB) is the
 same tree with **every credential replaced by `__FILL_ME__`**: `.env`, `sandbox\.env.ai-fix`,
 the built `sandbox\node-red\flows.json` (which bakes in the ERPNext + Shopify tokens) and
 `up.ps1` (which carried the ngrok authtoken). It ships a `SETUP-SECRETS.md` listing what the

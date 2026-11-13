@@ -97,7 +97,7 @@ bench --site frontend set-config myinvois_client_secret "<secret>"
 
 ## 5. Quick facts for the next agent
 
-- Project: `F:\ERPNEXT\erpnextcomp_demo`, Docker project `comp_demo`, site `frontend`.
+- Project: this repository, Docker project `comp_demo`, site `frontend`.
 - Apps live in the **container** at `/home/frappe/frappe-bench/apps/<app>`; host
   source under `repos/<app>`. The container `apps/` dir is NOT a bind mount —
   sync edits with `docker cp` (or `docker cp` the whole app), then

@@ -1,5 +1,6 @@
+# Windows host-only utility: moves this host's Docker Desktop VHDX.
 $ErrorActionPreference = 'Continue'
-$log = 'F:\ERPNEXT\erpnextcomp_demo\bake\move-docker.log'
+$log = Join-Path $PSScriptRoot 'move-docker.log'
 if (Test-Path $log) { Remove-Item $log -Force }
 function Log($m) { $line = (Get-Date -Format 'HH:mm:ss') + '  ' + $m; Write-Host $line; Add-Content -LiteralPath $log -Value $line }
 
@@ -19,6 +20,7 @@ wsl --shutdown 2>&1 | Out-Null
 Start-Sleep -Seconds 10
 
 # 3. compact the vhdx
+# Windows host-specific Docker data disk path.
 $vhdx = 'F:\SHRDCPROJ\poc-desktop-agent\docker-wsl\disk\docker_data.vhdx'
 if (Test-Path $vhdx) { Log ("vhdx before compact: " + [int]((Get-Item $vhdx).Length/1GB) + ' GB') } else { Log "ERROR: vhdx not found: $vhdx"; exit 1 }
 

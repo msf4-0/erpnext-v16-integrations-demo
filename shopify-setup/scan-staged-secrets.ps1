@@ -4,8 +4,10 @@
 # leftovers, then greps every staged file for them. Any hit is reported and the
 # script exits non-zero, so a leak cannot be committed silently.
 param(
-    [string]$RepoRoot = 'F:\ERPNEXT\erpnextcomp_demo'
+    [string]$RepoRoot
 )
+
+if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
 
 $envFiles = @(
     (Join-Path $RepoRoot '.env')

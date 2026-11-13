@@ -39,8 +39,10 @@ Day-to-day, the script is safe to re-run at any time; unchanged steps report
 `[SKIP]`. Schedule it if your tokens are short-lived:
 
 ```powershell
-schtasks /create /tn "shopify-erpnext setup" /sc daily /st 07:00 ^
-  /tr "pwsh -NoProfile -File F:\ERPNEXT\erpnextcomp_demo\shopify-setup\setup-shopify-erpnext.ps1"
+# Run from the repository root.
+$script = (Resolve-Path .\shopify-setup\setup-shopify-erpnext.ps1).Path
+schtasks /create /tn "shopify-erpnext setup" /sc daily /st 07:00 `
+  /tr "pwsh -NoProfile -File `"$script`""
 ```
 
 ## What each run does
@@ -160,7 +162,7 @@ filter that matched nothing).
 
 1. **Install Docker Desktop + ERPNext.** The script assumes an ERPNext v16 site is
    already reachable at `ERP_URL`. For this build that is the `comp_demo` stack
-   (`F:\ERPNEXT\erpnextcomp_demo`) — bring it up with `setup.cmd` there, or run
+   (this repository) — bring it up with `setup.cmd` at the repository root, or run
    the full `up.ps1`. The upstream reference is the `msf4-0/ERPNext-ECommerce-Shopify`
    repo; cloning and installing that is outside this script.
 2. **Create the Shopify Dev Dashboard app.** Shopify admin → Settings → Apps →

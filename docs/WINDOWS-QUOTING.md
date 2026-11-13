@@ -9,6 +9,10 @@ of them; follow them to avoid repeating the failures.
 
 ## Rules
 
+For examples that truly need an absolute Windows path, mark it as a Windows-host
+path (for example, `F:\ERPNEXT\erpnextcomp_demo\up.ps1` (Windows host)). In normal
+runbooks, prefer paths relative to the repository root.
+
 1. **Never put multi-line or quote-heavy bash inline.** Write a SCRIPT file
    and run it. That is exactly what `provision-base.sh`, `install-app.sh`, and
    `ensure-root-prep.sh` exist for. Inline `bash -lc "..."` is only safe for a

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Create the `Virtual Work Order` doctype the production planner expects.
 
-WHY: the planner (`F:\\ERPNEXT\\ERPNEXT-AI-FIX\\scheduler`) was migrated from its
+WHY: the planner (`scheduler/` in the former workspace) was migrated from its
 own JSON store to an ERPNext doctype, and its server code reads/writes
 `/Virtual Work Order` for three features:
 

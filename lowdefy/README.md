@@ -8,14 +8,14 @@ See [`PLAN.md`](PLAN.md) for architecture, API endpoints, stages and limitations
 
 ## Prerequisites
 
-- ERPNext stack up at `http://localhost:8000` (run `F:\ERPNEXT\erpnextcomp_demo\setup.ps1`).
+- ERPNext stack up at `http://localhost:8000` (from the repository root, run `.\setup.ps1`).
 - An ERPNext API token for `Administrator` (or a role with read + Stock Entry rights).
 - Node.js >= 22 (this host has v24) and Lowdefy installed (not yet — see note).
 
 ## Setup
 
 ```powershell
-cd F:\ERPNEXT\erpnextcomp_demo\lowdefy
+cd lowdefy
 Copy-Item .env.example .env     # then fill ERPNEXT_API_KEY / _SECRET
 ```
 

@@ -52,10 +52,8 @@ $ProgressPreference = 'SilentlyContinue'
 $script:RunStart = Get-Date
 
 $DemoDir = $PSScriptRoot
-# SELF-CONTAINED BY DEFAULT: everything this script stages (sandbox scripts,
-# recipes, the Node-RED flow, the app sources under repos/, and the planner) lives
-# inside comp_demo. The step-0 guard below falls back to ERPNEXT-AI-FIX only if the
-# vendored sandbox is missing, so an in-flight run keeps working.
+# SELF-CONTAINED: everything this script stages (sandbox scripts, recipes, the
+# Node-RED flow, app sources under repos/, and the planner) lives in this repo.
 $SandboxDir = Join-Path $DemoDir 'sandbox'
 $RootDir = $DemoDir
 $ComposeFile = Join-Path $DemoDir 'docker-compose.yml'
@@ -193,9 +191,7 @@ if (-not (Test-Path $EnvPath)) {
 # Self-containment guard (must run after the helpers exist so it can warn).
 $vendored = Test-Path (Join-Path $SandboxDir 'scripts')
 if (-not $vendored) {
-    $SandboxDir = 'F:\ERPNEXT\ERPNEXT-AI-FIX\sandbox'
-    $RootDir = 'F:\ERPNEXT\ERPNEXT-AI-FIX'
-    Write-Warn "comp_demo\sandbox is missing - falling back to $RootDir"
+    throw "workspace sandbox scripts not found: $SandboxDir"
 }
 $reposDir = Join-Path $RootDir 'repos'
 if (-not (Test-Path $reposDir)) { throw "no repos/ under $RootDir - the app sources are missing" }
@@ -252,8 +248,8 @@ $env:NGROK_URL_FLAG = if ($cfg['NGROK_PUBLIC_URL']) { '--url=' + $cfg['NGROK_PUB
 $env:ERPNEXT_API_TOKEN = $erpToken
 if ($cfg['NGROK_PUBLIC_URL']) { Write-Info "pinning the tunnel to $($cfg['NGROK_PUBLIC_URL'])" }
 
-# Self-heal the Node-RED flow paths. The .env.example ships stale absolute paths
-# (F:\ERPNEXT\erpnext-build\...) that do not exist on a fresh clone; a bind-mount
+# Self-heal the Node-RED flow paths. A fresh clone may have stale absolute paths;
+# a bind-mount
 # to a missing source makes `docker compose create` fail, which is the "could not
 # build the image" error a fresh machine sees. Force both paths to resolve inside
 # THIS project, whatever its clone location. Process env wins over --env-file for
@@ -704,8 +700,7 @@ Write-Step '10/11  building the Node-RED flow'
 
 $flowSrc = $cfg['NODE_RED_SOURCE_FLOW']
 if (-not $flowSrc -or -not (Test-Path $flowSrc)) {
-    # vendored next to the flow builder (the old F:\shopify_erpnext_integration.json
-    # is outside the project and would break a copy of comp_demo)
+    # vendored next to the flow builder; use the copy inside this workspace
     $fallback = Join-Path $SandboxDir 'node-red\source-flow.json'
     if (Test-Path $fallback) { $flowSrc = $fallback }
 }

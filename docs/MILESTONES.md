@@ -5,8 +5,7 @@
 
 ## Project layout Ã¢â‚¬â€ self-contained
 
-Everything needed to rebuild and verify the demo lives **inside `F:\ERPNEXT\erpnext-build`**
-(~36 MB / 1.5k files). Nothing is read from `ERPNEXT-AI-FIX` any more.
+The rebuild and verification files live in the repository root (~36 MB / 1.5k files).
 
 | Path | What it is |
 |---|---|
@@ -22,17 +21,14 @@ Everything needed to rebuild and verify the demo lives **inside `F:\ERPNEXT\erpn
 | `sandbox/.env.ai-fix` | planner API key/secret + Shopify token shared with the planner script |
 | `repos/barcode-shrdc-v16-fixed` | `barcode_shrdc` app source (durable fork with the v16 fixes) |
 | `repos/shopify-shrdc-v16-fixed` | `shopify` app source (incl. `shopify/auth.py` token minting) |
-| `repos/eu_einvoice` | `eu_einvoice` app source (was still only in ERPNEXT-AI-FIX) |
+| `repos/eu_einvoice` | vendored `eu_einvoice` app source |
 | `scheduler/` | the production planner: `server.js`, `frontend/` + prebuilt `frontend/build`, `runtime-deps/node_modules`, `ui-tests/` |
 | `docs/` | this file + `WINDOWS-QUOTING.md` |
 
 Host prerequisites (not project files): Docker Desktop, the `ngrok` binary + authtoken,
 Node/npm (only to rebuild the planner frontend), Python (only for the Node-RED flow builder).
-Two intentional fallbacks remain in the scripts Ã¢â‚¬â€ `up.ps1` step 0 and `scheduler-up.ps1`
-still try `F:\ERPNEXT\ERPNEXT-AI-FIX\sandbox` **if** the vendored `sandbox/` is absent.
-
-Last verified: **2026-10-26**, live stack on `F:\ERPNEXT\erpnext-build` (project `comp_demo`).
-Full test run: `powershell -File F:\ERPNEXT\erpnext-build\verify-all.ps1` Ã¢â€ â€™ **41 / 41 checks pass**
+Last verified on a **Windows host**: **2026-10-26**, live stack from this repository
+(project `comp_demo`). Full test run: `powershell -File .\verify-all.ps1` Ã¢â€ â€™ **41 / 41 checks pass**
 (log: `comp_demo\verify-all-final.log`). That includes a real-browser DOM check that the
 Job Cards are rendered as draggable cards; the drags themselves are proven by
 `scheduler/ui-tests/ui-drag-matrix.mjs` and `ui-drag-calendar.mjs`.
@@ -162,7 +158,7 @@ and `REACT_APP_ERPNEXT_URL=http://localhost:8000` (browser-facing links).
 
 ```powershell
 # everything (41 checks, ~5 min; creates and deletes a throwaway AI-VERIFY-* item)
-powershell -ExecutionPolicy Bypass -File F:\ERPNEXT\erpnext-build\verify-all.ps1
+powershell -ExecutionPolicy Bypass -File .\verify-all.ps1
 
 # frappe-level half only, inside the container
 docker exec comp_demo-bench-1 bash -lc 'cd /home/frappe/frappe-bench && \
@@ -188,7 +184,7 @@ test suppliers, repairs an out-of-sequence WO Ã¢â‚¬â€ idempotent).
 
 - **Shopify tokens expire in 24 h.** The ERPNext side re-mints by itself; the Node-RED
   flow bakes the token into its nodes, so run
-  `powershell -File F:\ERPNEXT\erpnext-build\refresh-shopify-token.ps1` daily (or schedule it).
+  `powershell -File .\refresh-shopify-token.ps1` daily (or schedule it).
 - **Server Scripts must stay enabled** (`server_script_enabled = 1` in
   `common_site_config.json`) or the planner falls back to a validated `PUT` and a Work
   Order drag will only move its first operation.

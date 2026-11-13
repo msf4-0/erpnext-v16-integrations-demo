@@ -3,7 +3,7 @@
     Produce the centralised, portable comp_demo bundle (clean copy + zip + checksum).
 
 .DESCRIPTION
-    Copies this project to F:\comp_demo-dist\comp_demo, excluding only generated
+    Copies this project to a sibling comp_demo-dist directory, excluding generated
     caches and this session's build logs, then:
 
       1. validates the copy's compose file resolves (build context inside the copy)
@@ -13,17 +13,17 @@
     Nothing outside comp_demo is read, so the copy is standalone.
 
 .PARAMETER Dest
-    Destination root. Default F:\comp_demo-dist
+    Destination root. Defaults to a comp_demo-dist directory beside the repository.
 
 .PARAMETER SkipVerify
     Copy + zip only (no 41-check run).
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File F:\ERPNEXT\erpnext-build\make-bundle.ps1
+    powershell -ExecutionPolicy Bypass -File .\make-bundle.ps1
 #>
 [CmdletBinding()]
 param(
-    [string]$Dest = 'F:\erpnext-build-dist',
+    [string]$Dest,
     [switch]$SkipVerify
 )
 
@@ -31,6 +31,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
 $Src = $PSScriptRoot
+if (-not $Dest) { $Dest = Join-Path (Split-Path -Parent $Src) 'comp_demo-dist' }
 $Leaf = Split-Path $Src -Leaf                      # comp_demo
 $Stamp = Get-Date -Format 'yyyy-MM-dd'
 $Work = Join-Path $Dest $Leaf

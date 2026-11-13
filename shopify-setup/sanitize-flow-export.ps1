@@ -8,8 +8,12 @@
 # flows.json, so replacing them with obviously-fake constants is safe and keeps
 # the export usable for rebuilds while removing the leak from git history.
 param(
-    [string]$Path = 'F:\ERPNEXT\erpnextcomp_demo\sandbox\node-red\source-flow.json'
+    [string]$Path
 )
+
+if (-not $Path) {
+    $Path = Join-Path (Split-Path -Parent $PSScriptRoot) 'sandbox\node-red\source-flow.json'
+}
 
 $raw = Get-Content -LiteralPath $Path -Raw
 $before = @($raw | ConvertFrom-Json)

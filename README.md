@@ -3,7 +3,7 @@
 > Authoritative stack architecture, ports, versions, and database durability:
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-> Built from the DeepSeek Harness session of 28 Oct 2026. Project folder: `F:\ERPNEXT\erpnextcomp_demo`.
+> Built from the DeepSeek Harness session of 28 Oct 2026. Run commands from the repository root.
 > The original Word document is committed alongside this file as [`SETUP-GUIDE.docx`](SETUP-GUIDE.docx).
 
 ## 1. What this stack is
@@ -15,6 +15,8 @@ A self-contained ERPNext v16 demo (Docker project `comp_demo`, site `frontend`) 
 - Drag-and-drop production planner (the `scheduler` service)
 - Shopify ↔ ERPNext bridge (`shopify` app + Node-RED flow + ngrok webhooks)
 
+See [`THIRD-PARTY.md`](THIRD-PARTY.md) for vendored-app licensing and redistribution status.
+
 ## 2. Prerequisites
 
 - Windows with Docker Desktop (engine 29.x was used), Python 3.14, and the host ngrok binary — already logged in to ngrok.
@@ -23,10 +25,9 @@ A self-contained ERPNext v16 demo (Docker project `comp_demo`, site `frontend`) 
 
 ## 3. Which command to type
 
-Run from the project folder:
+Run from the repository root:
 
 ```powershell
-cd F:\ERPNEXT\erpnextcomp_demo
 powershell -ExecutionPolicy Bypass -File .\setup.ps1
 ```
 
@@ -103,14 +104,14 @@ Node-RED never uses a Postman key. It calls Shopify with a 24-hour Admin API tok
 
 ### Where to put each key by hand
 
-Edit one file: `F:\ERPNEXT\erpnextcomp_demo\.env`. Use a plain-text editor, one `NAME=value` per line, no quotes and no spaces around `=`.
+Edit one file: `.env`. Use a plain-text editor, one `NAME=value` per line, no quotes and no spaces around `=`.
 
 The exact menu path to your Shopify app's client ID and secret depends on how the app was created. Look for "Client ID" and "Client secret" in the app's settings/credentials page (Shopify admin → Settings → Apps → Develop apps → your app).
 
 ### Manual steps
 
 1. Open `.env` and fill `SHOPIFY_STORE`, `SHOPIFY_API_VERSION`, `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET`. Save the file.
-2. From `F:\ERPNEXT\erpnextcomp_demo`, run `powershell -ExecutionPolicy Bypass -File .\setup.ps1`. It mints the token, rebuilds the flow and restarts Node-RED.
+2. From the repository root, run `powershell -ExecutionPolicy Bypass -File .\setup.ps1`. It mints the token, rebuilds the flow and restarts Node-RED.
 3. Check the output for `FIXED Shopify token minted: shpat_… valid 24h`, then run `setup.ps1 -VerifyOnly` for a read-only health report.
 
 If you only have a ready-made `shpat_…` token and no client credentials, paste it into `SHOPIFY_ACCESS_TOKEN` and run `setup.ps1 -SkipShopify -ForceFlow`. That skips minting and rebuilds the flow with the token you pasted. A token pasted this way cannot renew itself, so Shopify calls will return 401 once it expires.

@@ -8,7 +8,7 @@
 | Item | State |
 |---|---|
 | ERPNext v16 (site `frontend`) | **Down.** Docker Desktop daemon is not running, so `localhost:8000` is unreachable. |
-| Lowdefy | **Not installed.** No Lowdefy project existed anywhere under `F:\ERPNEXT`. |
+| Lowdefy | **Not installed.** No Lowdefy project exists in this repository. |
 | Real ERPNext data | Unavailable until the stack is brought up (`up.ps1` / `setup.ps1`, ~25–35 min rebuild on this host). |
 
 Because ERPNext is down and Lowdefy is not installed, **nothing below has been run against live data yet**. This document is the plan + a working scaffold; integration testing is blocked on the two items above.

@@ -43,11 +43,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $DemoDir = $PSScriptRoot
-# Vendored copy on purpose: comp_demo is self-contained (sandbox/ + scheduler/ live
-# next to this script). The old ERPNEXT-AI-FIX path is only a fallback.
+# comp_demo is self-contained; sandbox/ and scheduler/ live next to this script.
 $SandboxDir = Join-Path $DemoDir 'sandbox'
 if (-not (Test-Path (Join-Path $SandboxDir 'scripts'))) {
-    $SandboxDir = 'F:\ERPNEXT\ERPNEXT-AI-FIX\sandbox'
+    throw "workspace sandbox scripts not found: $SandboxDir"
 }
 $EnvPath = Join-Path $DemoDir '.env'
 $VersionsPath = Join-Path $DemoDir 'versions.env'

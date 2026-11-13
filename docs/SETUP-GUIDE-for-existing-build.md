@@ -28,11 +28,10 @@ Safest option: it comes up on its own ports and never touches your site.
 unzip erpnext-build.zip
 cd erpnext-build
 
-**Two lines in `.env` are absolute paths** - point them at wherever you unzipped this,
-otherwise the Node-RED container mounts nothing:
+The Node-RED paths in `.env` should be relative to the repository root:
 
-    FLOWS_PATH=F:/path/to/erpnext-build/sandbox/node-red/flows.json
-    NODE_RED_SOURCE_FLOW=F:\path\to\erpnext-build\sandbox\node-red\source-flow.json
+    FLOWS_PATH=./sandbox/node-red/flows.json
+    NODE_RED_SOURCE_FLOW=./sandbox/node-red/source-flow.json
 cp .env.example .env
 cp sandbox/.env.ai-fix.example sandbox/.env.ai-fix
 #    fill in .env:  DB_ROOT_PASSWORD, SHOPIFY_STORE, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET

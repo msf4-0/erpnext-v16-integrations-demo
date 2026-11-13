@@ -7,7 +7,8 @@
         "bash": {
           "docker compose -p comp_demo*": "allow",
           "docker ps*": "allow",
-          "powershell -File F:\\ERPNEXT\\erpnextcomp_demo\\up.ps1*": "allow"
+          "powershell -File *up.ps1*": "allow",
+          "bash *tools/up*": "allow"
         }
       }
     },
@@ -18,7 +19,8 @@
           "docker compose --project-name comp_demo*": "allow",
           "docker start*": "allow",
           "docker ps*": "allow",
-          "powershell -File F:\\ERPNEXT\\erpnextcomp_demo\\up.ps1*": "allow"
+          "powershell -File *up.ps1*": "allow",
+          "bash *tools/up*": "allow"
         }
       }
     },

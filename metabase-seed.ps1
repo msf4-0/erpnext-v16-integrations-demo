@@ -9,7 +9,7 @@
 # Run from the repo root after creating and starting the Metabase service:
 # `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml create metabase`
 # `docker start comp_demo-metabase-1`
-#   powershell -File F:\ERPNEXT\erpnextcomp_demo\metabase-seed.ps1
+#   powershell -File .\metabase-seed.ps1  (from the repository root)
 #
 # Values mirror the Metabase block in .env. Override any with -<Param> <value>.
 
