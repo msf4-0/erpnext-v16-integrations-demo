@@ -46,7 +46,8 @@ Then: ERPNext <http://localhost:8000> (Administrator/admin) · planner <http://l
 Node-RED <http://localhost:1880>. Verify with `verify-all.ps1` (41 checks).
 
 > The site DB is stored in the `db_data` named volume and survives container and Docker restarts.
-> `docker compose down -v` removes that volume. See [`ARCHITECTURE.md`](ARCHITECTURE.md).
+> From the repo root, `docker compose --env-file .env --env-file versions.env down -v` removes that volume.
+> See [`ARCHITECTURE.md`](ARCHITECTURE.md).
 
 ---
 
@@ -156,7 +157,7 @@ docker run -d --name node-red -p 1880:1880 \
   -e ERPNEXT_INTERNAL_URL=http://<host-ip>:8000 \
   -e SHOPIFY_STORE=yourstore.myshopify.com \
   -e SHOPIFY_API_VERSION=2026-04 \
-  nodered/node-red:latest
+  the Node-RED image pinned by `versions.env`
 ```
 
 Check <http://localhost:1880> (editor) and that the flow has ~47 nodes. Its endpoints are

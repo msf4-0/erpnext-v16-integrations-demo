@@ -52,8 +52,8 @@ if (Test-Path $Work) {
 }
 New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 
-# /XD  caches and VCS;  /XF generated logs from this session (keep verify-all-final.log)
-$robo = & robocopy $Src $Work /E /XD __pycache__ .git /XF 'rebuild-*.log' 'up-run*.log' 'up-rerun*.log' '*.pyc' /NFL /NDL /NJH /NJS /NP
+# /XD  caches and VCS; /XF secrets and generated logs from this session
+$robo = & robocopy $Src $Work /E /XD __pycache__ .git /XF '.env' 'rebuild-*.log' 'up-run*.log' 'up-rerun*.log' '*.pyc' /NFL /NDL /NJH /NJS /NP
 $code = $LASTEXITCODE
 if ($code -ge 8) { throw "robocopy failed with code $code" }
 
@@ -66,8 +66,12 @@ Info ("{0} files, {1} MB" -f $files.Count, $sizeMb)
 # ---------------------------------------------------------------------------
 Step 'validating the copy'
 $composeExe = (Get-Command docker-compose -ErrorAction SilentlyContinue).Source
-if (-not $composeExe) { $composeExe = 'docker' }
-$composeArgs = @('-p', 'comp_demo', '--env-file', (Join-Path $Work '.env'), '-f', (Join-Path $Work 'docker-compose.yml'), 'config')
+if ($composeExe) {
+    $composeArgs = @('-p', 'comp_demo', '--env-file', (Join-Path $Work '.env.example'), '--env-file', (Join-Path $Work 'versions.env'), '-f', (Join-Path $Work 'docker-compose.yml'), 'config')
+} else {
+    $composeExe = 'docker'
+    $composeArgs = @('compose', '-p', 'comp_demo', '--env-file', (Join-Path $Work '.env.example'), '--env-file', (Join-Path $Work 'versions.env'), '-f', (Join-Path $Work 'docker-compose.yml'), 'config')
+}
 $config = & $composeExe @composeArgs 2>&1
 if ($LASTEXITCODE -ne 0) { throw "compose config failed in the copy: $($config | Select-Object -Last 5)" }
 $contextLine = ($config | Select-String -Pattern '^\s*context:' | Select-Object -First 1).Line

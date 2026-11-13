@@ -197,6 +197,6 @@ test suppliers, repairs an out-of-sequence WO Ã¢â‚¬â€ idempotent).
   ```bash
   docker exec comp_demo-bench-1 bash -lc "cd /home/frappe/frappe-bench && setsid nohup bench serve --port 8000 >/tmp/bench-serve.log 2>&1 &"
   ```
-- After editing an app's `.py` files inside the container, `docker compose restart
+- After editing an app's `.py` files inside the container, `docker compose --env-file .env --env-file versions.env restart
   bench` is **not** enough Ã¢â‚¬â€ the site's Flask dev server reloads on change, but
   `bench --site frontend clear-cache` is needed after installing fixtures/doctypes.

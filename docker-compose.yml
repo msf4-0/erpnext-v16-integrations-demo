@@ -1,13 +1,13 @@
 # comp_demo - COMPLETE self-contained ERPNext demo stack.
 #
-# One project, one command: ERPNext v16 + barcode/QR (barcode_shrdc) +
+# One project, one command: ERPNext + barcode/QR (barcode_shrdc) +
 # Shopify <-> ERPNext bridge (Node-RED + ngrok) + the drag-and-drop production
 # planner (scheduler). Nothing is shared with the old `erpnext-sandbox`,
 # `frappe_docker-1` or `erpnext-ai-fix` projects: own name, own volumes, own
 # ports.
 #
-#   bench      : ERPNext v16 bench, baked from bake/bench.Dockerfile
-#   db         : MariaDB 11.8 (durable `db_data` named volume)
+#   bench      : ERPNext bench, baked from bake/bench.Dockerfile
+#   db         : MariaDB (tag pinned in versions.env; durable `db_data` volume)
 #   redis-*    : cache + queue
 #   node-red   : Shopify <-> ERPNext bridge, runs ./flows.json
 #   scheduler  : production planner (Express API + React SPA, port 3001)
@@ -22,13 +22,15 @@ name: comp_demo
 
 services:
   bench:
-    # Baked image: frappe + erpnext v16 + barcode_shrdc + shopify + eu_einvoice
+    # Baked image: frappe + erpnext + barcode_shrdc + shopify + eu_einvoice
     # + render deps are baked INTO the image at build time (bake/bench.Dockerfile),
     # so a fresh clone can reproduce the exact image without re-provisioning.
     image: comp_demo-bench:v16
     build:
       context: .
       dockerfile: bake/bench.Dockerfile
+      args:
+        ERPNEXT_BASE: ${ERPNEXT_BASE:?Load versions.env before starting Compose}
     # Auto-start the web server + scheduler + worker as the container's main
     # process, so the site comes back on its own after a laptop reboot or
     # Docker Desktop restart (no manual `bench serve` needed).
@@ -37,6 +39,26 @@ services:
       - -lc
       - |
         cd /home/frappe/frappe-bench
+        # --- reject demo credentials in production ---------------------------
+        DEFAULT_SECRET_KEYS=""
+        [ "$${DB_ROOT_PASSWORD:-}" != "admin" ] || DEFAULT_SECRET_KEYS="$$DEFAULT_SECRET_KEYS DB_ROOT_PASSWORD"
+        [ "$${DB_ROOT_PASSWORD:-}" != "__FILL_ME__" ] || DEFAULT_SECRET_KEYS="$$DEFAULT_SECRET_KEYS DB_ROOT_PASSWORD"
+        [ "$${ERPNEXT_ADMIN_PASSWORD:-}" != "admin" ] || DEFAULT_SECRET_KEYS="$$DEFAULT_SECRET_KEYS ERPNEXT_ADMIN_PASSWORD"
+        [ "$${ERPNEXT_ADMIN_PASSWORD:-}" != "__FILL_ME__" ] || DEFAULT_SECRET_KEYS="$$DEFAULT_SECRET_KEYS ERPNEXT_ADMIN_PASSWORD"
+        [ "$${METABASE_DB_PASS:-}" != "metabase_demo_2026" ] || DEFAULT_SECRET_KEYS="$$DEFAULT_SECRET_KEYS METABASE_DB_PASS"
+        [ "$${METABASE_DB_PASS:-}" != "__FILL_ME__" ] || DEFAULT_SECRET_KEYS="$$DEFAULT_SECRET_KEYS METABASE_DB_PASS"
+        [ "$${METABASE_ADMIN_PASSWORD:-}" != "DemoPass2026!" ] || DEFAULT_SECRET_KEYS="$$DEFAULT_SECRET_KEYS METABASE_ADMIN_PASSWORD"
+        [ "$${METABASE_ADMIN_PASSWORD:-}" != "__FILL_ME__" ] || DEFAULT_SECRET_KEYS="$$DEFAULT_SECRET_KEYS METABASE_ADMIN_PASSWORD"
+        if [ -n "$$DEFAULT_SECRET_KEYS" ]; then
+          echo "startup policy: demo-default credentials:$${DEFAULT_SECRET_KEYS}"
+        else
+          echo "startup policy: no demo-default credentials detected"
+        fi
+        ENV_MODE=$$(printf '%s' "$${ENVIRONMENT:-development}" | tr '[:upper:]' '[:lower:]')
+        if [ "$$ENV_MODE" = "production" ] && [ -n "$$DEFAULT_SECRET_KEYS" ]; then
+          echo "ERROR: production startup refused; replace:$${DEFAULT_SECRET_KEYS}" >&2
+          exit 1
+        fi
         # --- self-heal the site DB grant on EVERY container start -------------
         # `bench new-site` creates the site's db_user bound to the bench
         # container's IP at that moment (e.g. _3b8...@172.20.0.5). Any
@@ -48,8 +70,8 @@ services:
         # self-healing on every start without touching the data. Bounded
         # (60 x 2 s) and best-effort - it must never block `bench serve`.
         # NOTE: every shell `$` is written `$$` on purpose. Compose interpolates
-        # `$VAR` / `${VAR}` in this file, so a single `$` is consumed before the
-        # container ever sees it (`$CFG` would expand to empty). `$$` is Compose's
+        # `$$VAR` / `$${VAR}` in this file, so a single `$` is consumed before the
+        # container ever sees it (`$$CFG` would expand to empty). `$$` is Compose's
         # escape for a literal `$` and reaches bash intact.
         CFG="sites/$${SITE_NAME:-frontend}/site_config.json"
         if [ -f "$$CFG" ]; then
@@ -111,8 +133,12 @@ services:
       - redis-queue
     environment:
       - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       - SITE_NAME=${SITE_NAME:-frontend}
       - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin}
+      - ERPNEXT_ADMIN_PASSWORD=${ERPNEXT_ADMIN_PASSWORD:-admin}
+      - METABASE_DB_PASS=${METABASE_DB_PASS:-metabase_demo_2026}
+      - METABASE_ADMIN_PASSWORD=${METABASE_ADMIN_PASSWORD:-DemoPass2026!}
       - ERPNEXT_INTERNAL_URL=http://bench:8000
       # yarn network resilience: this host's route to registry.yarnpkg.com is
       # flaky, and `bench get-app erpnext` fails fast when `yarn install` times
@@ -125,7 +151,7 @@ services:
     restart: unless-stopped
 
   db:
-    image: mariadb:11.8
+    image: ${MARIADB:?Load versions.env before starting Compose}
     # DURABLE DATADIR (bake track 2b): the site DB now lives on the `db_data`
     # named volume instead of tmpfs, so a container stop / Docker restart no
     # longer discards it. The one-time cost is the initial populate/restore on
@@ -148,15 +174,15 @@ services:
     restart: unless-stopped
 
   redis-cache:
-    image: redis:6.2-alpine
+    image: ${REDIS:?Load versions.env before starting Compose}
     restart: unless-stopped
 
   redis-queue:
-    image: redis:6.2-alpine
+    image: ${REDIS:?Load versions.env before starting Compose}
     restart: unless-stopped
 
   node-red:
-    image: nodered/node-red:latest
+    image: ${NODE_RED:?Load versions.env before starting Compose}
     ports:
       - "${NODE_RED_PORT:-1880}:1880"
     volumes:
@@ -196,10 +222,9 @@ services:
     # BI / analytics dashboard. Metabase's own application metadata lives in the
     # `metabase` schema of the `db` MariaDB (durable via the db_data volume). The
     # ERPNext site DB is registered as a *data source* from the Metabase UI
-    # (http://localhost:3000) once, using the metabase_user credentials in .env.
-    # Pinned to the v0.58 LTS line (the newer v0.63+/v0.65 images ship a Lowdefy
-    # frontend whose classic /api/* REST endpoints are no longer available).
-    image: metabase/metabase:v0.58.38.2
+    # (http://localhost:3000) once, using METABASE_DB_USER / METABASE_DB_PASS.
+    # Version is pinned in the root versions.env file.
+    image: ${METABASE:?Load versions.env before starting Compose}
     ports:
       - "${METABASE_PORT:-3005}:3000"
     environment:

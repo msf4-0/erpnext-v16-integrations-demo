@@ -50,6 +50,7 @@ if (-not (Test-Path (Join-Path $SandboxDir 'scripts'))) {
     $SandboxDir = 'F:\ERPNEXT\ERPNEXT-AI-FIX\sandbox'
 }
 $EnvPath = Join-Path $DemoDir '.env'
+$VersionsPath = Join-Path $DemoDir 'versions.env'
 $ComposeFile = Join-Path $DemoDir 'docker-compose.yml'
 $ScriptsDir = Join-Path $SandboxDir 'scripts'
 $Project = 'comp_demo'
@@ -91,10 +92,10 @@ function Set-EnvValue([string]$Path, [string]$Key, [string]$Value) {
 # prefer it when present.
 $composeExe = (Get-Command docker-compose -ErrorAction SilentlyContinue).Source
 if ($composeExe) {
-    $composeBase = @('-p', $Project, '--env-file', $EnvPath, '-f', $ComposeFile)
+    $composeBase = @('-p', $Project, '--env-file', $EnvPath, '--env-file', $VersionsPath, '-f', $ComposeFile)
 } else {
     $composeExe = 'docker'
-    $composeBase = @('compose', '-p', $Project, '--env-file', $EnvPath, '-f', $ComposeFile)
+    $composeBase = @('compose', '-p', $Project, '--env-file', $EnvPath, '--env-file', $VersionsPath, '-f', $ComposeFile)
 }
 
 function Invoke-Compose {

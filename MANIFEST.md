@@ -31,23 +31,22 @@ powershell -ExecutionPolicy Bypass -File F:\ERPNEXT\erpnext-build\verify-all.ps1
 |---|---|
 | `docker-compose.yml` | the 7 services; planner build context is `./scheduler` |
 | `.env` | ports, site name, DB root password, Shopify store + client credentials, planner port |
+| `versions.env` | component image tags and ERPNext series |
 | `sandbox\.env.ai-fix` | planner integration user's API key/secret (+ Shopify token for the planner script) |
 
-Plus the Docker images, which are not files in the folder:
-
-- pulled: `frappe/erpnext:v16.35.0`, `mariadb:11.8`, `redis:6.2-alpine`,
-  `nodered/node-red:latest`, `metabase/metabase:v0.58.38.2`
-- built here: `comp_demo-bench:v16` and `comp_demo-scheduler:latest`
-  (the planner image uses `./scheduler`)
+Plus the Docker images, which are not files in the folder. Their external tags
+are pinned in `versions.env`; `comp_demo-bench:v16` and
+`comp_demo-scheduler:latest` are built locally.
 
 ```powershell
-docker-compose -p comp_demo --env-file .env -f docker-compose.yml create
-docker start comp_demo-db-1 comp_demo-redis-cache-1 comp_demo-redis-queue-1 comp_demo-bench-1 comp_demo-node-red-1 comp_demo-scheduler-1
+docker-compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml create
+docker start comp_demo-db-1 comp_demo-redis-cache-1 comp_demo-redis-queue-1 comp_demo-bench-1 comp_demo-node-red-1 comp_demo-scheduler-1 comp_demo-metabase-1
 ```
 
 The site database is stored in the `db_data` named volume, so it remains
-available after container and Docker restarts. `docker compose down -v` removes
-the volume; the full reprovision procedure is in `up.ps1`.
+available after container and Docker restarts. From the repository root,
+`docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml down -v`
+removes the volume; the full reprovision procedure is in `up.ps1`.
 
 ---
 

@@ -16,12 +16,26 @@ param(
   [string]$DbContainer = "comp_demo-db-1",
   [string]$BenchContainer = "comp_demo-bench-1",
   [string]$SiteName   = "frontend",
-  [string]$AdminEmail = "admin@demo.local",
-  [string]$AdminPassword = "DemoPass2026!",
+  [string]$DbUser = "",
+  [string]$DbPassword = "",
+  [string]$AdminEmail = "",
+  [string]$AdminPassword = "",
   [switch]$SkipSeed
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$envValues = @{}
+$envFile = Join-Path $root '.env'
+if (Test-Path $envFile) {
+  foreach ($line in Get-Content -LiteralPath $envFile) {
+    if ($line -match '^\s*#' -or $line -notmatch '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$') { continue }
+    $envValues[$Matches[1]] = $Matches[2]
+  }
+}
+if (-not $DbUser) { $DbUser = if ($envValues['METABASE_DB_USER']) { $envValues['METABASE_DB_USER'] } else { 'metabase_user' } }
+if (-not $DbPassword) { $DbPassword = if ($envValues['METABASE_DB_PASS']) { $envValues['METABASE_DB_PASS'] } else { 'metabase_demo_2026' } }
+if (-not $AdminEmail) { $AdminEmail = if ($envValues['METABASE_ADMIN_EMAIL']) { $envValues['METABASE_ADMIN_EMAIL'] } else { 'admin@demo.local' } }
+if (-not $AdminPassword) { $AdminPassword = if ($envValues['METABASE_ADMIN_PASSWORD']) { $envValues['METABASE_ADMIN_PASSWORD'] } else { 'DemoPass2026!' } }
 
 function Exec-Db([string]$SqlFile) {
   docker cp $SqlFile "${DbContainer}:/tmp/_ensure_metabase.sql" | Out-Null
@@ -35,12 +49,14 @@ if ($cfg -notmatch '"db_name"\s*:\s*"([^"]+)"') { throw "could not read db_name 
 $siteDb = $Matches[1]
 Write-Host "[1/4] site DB = $siteDb"
 
+$dbUserSql = $DbUser.Replace("'", "''")
+$dbPasswordSql = $DbPassword.Replace("'", "''")
 $sql = @"
 CREATE DATABASE IF NOT EXISTS metabase CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE USER IF NOT EXISTS 'metabase_user'@'%' IDENTIFIED BY 'metabase_demo_2026';
-ALTER USER 'metabase_user'@'%' IDENTIFIED BY 'metabase_demo_2026';
-GRANT ALL PRIVILEGES ON metabase.* TO 'metabase_user'@'%';
-GRANT SELECT, SHOW VIEW ON ``$siteDb``.* TO 'metabase_user'@'%';
+CREATE USER IF NOT EXISTS '$dbUserSql'@'%' IDENTIFIED BY '$dbPasswordSql';
+ALTER USER '$dbUserSql'@'%' IDENTIFIED BY '$dbPasswordSql';
+GRANT ALL PRIVILEGES ON metabase.* TO '$dbUserSql'@'%';
+GRANT SELECT, SHOW VIEW ON ``$siteDb``.* TO '$dbUserSql'@'%';
 FLUSH PRIVILEGES;
 "@
 $tmp = Join-Path $env:TEMP "_ensure_metabase.sql"
@@ -67,7 +83,7 @@ try {
 
 if (-not $sess -and -not $SkipSeed) {
   Write-Host "[3/4] seeding admin + data source ..."
-  & (Join-Path $root 'metabase-seed.ps1') -BaseUrl $BaseUrl -ErpnextDb $siteDb -AdminEmail $AdminEmail -AdminPassword $AdminPassword
+  & (Join-Path $root 'metabase-seed.ps1') -BaseUrl $BaseUrl -ErpnextDb $siteDb -DbUser $DbUser -DbPass $DbPassword -AdminEmail $AdminEmail -AdminPassword $AdminPassword
   $sess = Invoke-RestMethod -Uri "$BaseUrl/api/session" -Method Post -ContentType "application/json" `
     -Body (@{ username = $AdminEmail; password = $AdminPassword } | ConvertTo-Json)
 } else {

@@ -26,8 +26,8 @@ fresh `git clone` reproduces the exact `comp_demo-bench:v16` image straight from
 git clone https://github.com/msf4-0/erpnext-v16-integrations-demo.git
 cd erpnext-v16-integrations-demo
 copy .env.example .env        # fill in Shopify / DB secrets
-docker compose build bench    # builds comp_demo-bench:v16 from bake/bench.Dockerfile
-docker compose up -d          # starts bench, db, redis, node-red, scheduler
+docker compose --env-file .env --env-file versions.env build bench
+docker compose --env-file .env --env-file versions.env up -d
 ```
 
 > The image bakes the **code** (frappe + erpnext v16 + barcode_shrdc + shopify +
@@ -42,7 +42,7 @@ build time. `up.ps1` then skips provision + app-install (steps 5–7) and only
 creates/start the stack, dropping a full build from ~25–35 min to ~1–2 min.
 
 ```powershell
-docker build -f bake/bench.Dockerfile -t comp_demo-bench:v16 .
+docker compose --env-file .env --env-file versions.env build bench
 ```
 
 Then point `docker-compose.yml` `bench.image:` at `comp_demo-bench:v16`.
@@ -85,5 +85,5 @@ to a non-scanned NTFS path).
    single session) and can never be baked into the image.
 6. **Keep the `compose up` workaround** (`create` + `docker start`) — `up` hangs
    on this host regardless of the image change.
-7. **Pin tags** (`frappe/erpnext:v16.35.0`, not `:latest`) or the bake is not
-   reproducible.
+7. Keep component image tags pinned in `versions.env`; floating tags prevent a
+   reproducible build.

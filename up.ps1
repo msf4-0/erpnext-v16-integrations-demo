@@ -24,7 +24,7 @@
          sandbox/scheduler-up.ps1 - token, demo Work Orders, desk shortcut, verify
 
 .PARAMETER Fresh
-    `docker compose down -v` first. DESTRUCTIVE: wipes the site DB and volumes.
+    `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml down -v` first. DESTRUCTIVE: wipes the site DB and volumes.
 
 .PARAMETER SkipProvision
     Reuse an already-provisioned site (skip bench init / new-site).
@@ -60,6 +60,8 @@ $SandboxDir = Join-Path $DemoDir 'sandbox'
 $RootDir = $DemoDir
 $ComposeFile = Join-Path $DemoDir 'docker-compose.yml'
 $EnvPath = Join-Path $DemoDir '.env'
+$VersionsPath = Join-Path $DemoDir 'versions.env'
+$EnvValidator = Join-Path $DemoDir 'sandbox\scripts\validate-env.py'
 $Project = 'comp_demo'
 $NgrokYml = Join-Path $env:LOCALAPPDATA 'Packages\ngrok.ngrok_1g87z0zv29zzc\LocalCache\Local\ngrok\ngrok.yml'
 
@@ -143,10 +145,10 @@ function Invoke-Docker { param([string[]]$Arguments, [switch]$Capture) Invoke-Na
 # immediately, so that is what we do when it is available.
 $script:ComposeExe = (Get-Command docker-compose -ErrorAction SilentlyContinue).Source
 if ($script:ComposeExe) {
-    $script:composeBase = @('-p', $Project, '--env-file', $EnvPath, '-f', $ComposeFile)
+    $script:composeBase = @('-p', $Project, '--env-file', $EnvPath, '--env-file', $VersionsPath, '-f', $ComposeFile)
 } else {
     $script:ComposeExe = 'docker'
-    $script:composeBase = @('compose', '-p', $Project, '--env-file', $EnvPath, '-f', $ComposeFile)
+    $script:composeBase = @('compose', '-p', $Project, '--env-file', $EnvPath, '--env-file', $VersionsPath, '-f', $ComposeFile)
 }
 function Invoke-Compose { param([string[]]$Arguments) Invoke-Native -Exe $script:ComposeExe -Arguments ($script:composeBase + $Arguments) }
 function Invoke-ComposeCapture { param([string[]]$Arguments) Invoke-Native -Exe $script:ComposeExe -Arguments ($script:composeBase + $Arguments) -Capture }
@@ -200,11 +202,24 @@ if (-not (Test-Path $reposDir)) { throw "no repos/ under $RootDir - the app sour
 if ($vendored) { Write-Info "sources: $DemoDir (self-contained)" }
 
 $cfg = Read-EnvFile $EnvPath
+$versionPins = Read-EnvFile $VersionsPath
+if (-not (Test-Path $VersionsPath)) { throw "version pin file not found: $VersionsPath" }
+$hostPython = Get-Command python -ErrorAction SilentlyContinue
+if (-not $hostPython) { $hostPython = Get-Command python3 -ErrorAction SilentlyContinue }
+if (-not $hostPython) { throw 'python is required to validate the environment' }
+$policy = Invoke-Native -Exe $hostPython.Source -Arguments @($EnvValidator, '--env-file', $EnvPath) -Capture
+Write-Host $policy.Output
+if ($policy.Code -ne 0) { throw 'environment policy refused startup' }
 $erpnextPort = if ($cfg['ERPNEXT_PORT']) { $cfg['ERPNEXT_PORT'] } else { '8000' }
 $nodeRedPort = if ($cfg['NODE_RED_PORT']) { $cfg['NODE_RED_PORT'] } else { '1881' }
 $ngrokApiPort = if ($cfg['NGROK_API_PORT']) { $cfg['NGROK_API_PORT'] } else { '4041' }
 $siteName = if ($cfg['SITE_NAME']) { $cfg['SITE_NAME'] } else { 'frontend' }
-$erpVersion = if ($cfg['ERPNEXT_VERSION']) { $cfg['ERPNEXT_VERSION'] } else { '16' }
+$erpVersion = if ($versionPins['FRAPPE_SERIES']) { $versionPins['FRAPPE_SERIES'] } else { throw 'FRAPPE_SERIES is missing from versions.env' }
+$erpAdminPassword = if ($cfg['ERPNEXT_ADMIN_PASSWORD']) { $cfg['ERPNEXT_ADMIN_PASSWORD'] } else { 'admin' }
+$metabaseDbUser = if ($cfg['METABASE_DB_USER']) { $cfg['METABASE_DB_USER'] } else { 'metabase_user' }
+$metabaseDbPass = if ($cfg['METABASE_DB_PASS']) { $cfg['METABASE_DB_PASS'] } else { 'metabase_demo_2026' }
+$metabaseAdminEmail = if ($cfg['METABASE_ADMIN_EMAIL']) { $cfg['METABASE_ADMIN_EMAIL'] } else { 'admin@demo.local' }
+$metabaseAdminPassword = if ($cfg['METABASE_ADMIN_PASSWORD']) { $cfg['METABASE_ADMIN_PASSWORD'] } else { 'DemoPass2026!' }
 $shopifyStore = if ($cfg['SHOPIFY_STORE']) { $cfg['SHOPIFY_STORE'] } else { '4e1075.myshopify.com' }
 $shopifyVersion = if ($cfg['SHOPIFY_API_VERSION']) { $cfg['SHOPIFY_API_VERSION'] } else { '2026-04' }
 $shopifyToken = $cfg['SHOPIFY_ACCESS_TOKEN']
@@ -557,8 +572,11 @@ if ($depOk -match 'DEPSOK') {
 # dashboard only when it is absent. Non-fatal: BI must not block the stack.
 Write-Step '7f/11  Metabase schema + dashboard'
 try {
-    & (Join-Path $PSScriptRoot 'sandbox\scripts\ensure_metabase.ps1')
-    & (Join-Path $PSScriptRoot 'sandbox\scripts\ensure_metabase_app.ps1')
+    & (Join-Path $PSScriptRoot 'sandbox\scripts\ensure_metabase.ps1') `
+        -DbUser $metabaseDbUser -DbPassword $metabaseDbPass `
+        -AdminEmail $metabaseAdminEmail -AdminPassword $metabaseAdminPassword
+    & (Join-Path $PSScriptRoot 'sandbox\scripts\ensure_metabase_app.ps1') `
+        -AdminEmail $metabaseAdminEmail -AdminPassword $metabaseAdminPassword
 } catch {
     Write-Warn ("metabase setup did not complete: " + $_.Exception.Message)
     Write-Warn 'run .\sandbox\scripts\ensure_metabase.ps1 once the container is healthy'

@@ -21,16 +21,16 @@ powershell -File F:\ERPNEXT\erpnextcomp_demo\up.ps1 -SkipScheduler   # skip the 
 Full build Ã¢â€°Ë† 25Ã¢â‚¬â€œ35 min. Status/down/logs (also usable directly):
 
 ```powershell
-docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ps
-docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml down      # stop, keep volumes
-docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml down -v   # WIPE the site and named volumes
+docker compose -p comp_demo --env-file .env --env-file versions.env -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ps
+docker compose -p comp_demo --env-file .env --env-file versions.env -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml down      # stop, keep volumes
+docker compose -p comp_demo --env-file .env --env-file versions.env -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml down -v   # WIPE the site and named volumes
 ```
 
 ## Endpoints
 
 | Service | URL | Notes |
 | --- | --- | --- |
-| ERPNext (Desk + REST) | http://localhost:8000 | `Administrator` / `admin`, site `frontend` |
+| ERPNext (Desk + REST) | http://localhost:8000 | `Administrator` / development default `admin`, site `frontend` |
 | Production planner | http://localhost:3001 | drag-and-drop scheduling; user `planner@ai-fix.local` |
 | Node-RED (Shopify bridge) | http://localhost:1880 | flow: `../ERPNEXT-AI-FIX/sandbox/node-red/flows.json` |
 | Metabase | http://localhost:3005 | analytics dashboards |
@@ -58,7 +58,7 @@ Skills live in `.opencode/skills/` (interview, doctype-builder, production-workf
 ## Gotchas
 
 - **`docker compose up -d` HANGS on this host.** `up.ps1` starts containers with `docker compose create` + `docker start`.
-- **The DB lives in the `db_data` named volume** mounted at `/var/lib/mysql` and persists across container and Docker restarts. `docker compose down -v` deletes it; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+- **The DB lives in the `db_data` named volume** mounted at `/var/lib/mysql` and persists across container and Docker restarts. `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml down -v` deletes it; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 - Verification is **REST-based** (`/api/resource/...`), not UI-based. Never treat a returned UI action as proof of change.
 - Never run destructive flows (`down -v`, cancel/delete/submit financial docs) without explicit confirmation.
 - No `pwsh` on PATH; use `powershell.exe -NoProfile -ExecutionPolicy Bypass -File`.

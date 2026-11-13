@@ -79,6 +79,8 @@ $ProgressPreference = 'SilentlyContinue'
 $DemoDir    = $PSScriptRoot
 $SandboxDir = Join-Path $DemoDir 'sandbox'
 $EnvPath    = Join-Path $DemoDir '.env'
+$VersionsPath = Join-Path $DemoDir 'versions.env'
+$EnvValidator = Join-Path $DemoDir 'sandbox\scripts\validate-env.py'
 $ComposeFile = Join-Path $DemoDir 'docker-compose.yml'
 $FlowPath   = Join-Path $SandboxDir 'node-red\flows.json'
 $FlowSrc    = Join-Path $SandboxDir 'node-red\source-flow.json'
@@ -145,8 +147,8 @@ function Invoke-Docker {
 # `docker compose up` hangs on this host (Docker Desktop agent hooks), so the
 # project uses the standalone compose binary + create/start. Mirror up.ps1.
 $script:ComposeExe = (Get-Command docker-compose -ErrorAction SilentlyContinue).Source
-if ($script:ComposeExe) { $script:ComposeArgs = @('-p', $Project, '--env-file', $EnvPath, '-f', $ComposeFile) }
-else { $script:ComposeExe = 'docker'; $script:ComposeArgs = @('compose', '-p', $Project, '--env-file', $EnvPath, '-f', $ComposeFile) }
+if ($script:ComposeExe) { $script:ComposeArgs = @('-p', $Project, '--env-file', $EnvPath, '--env-file', $VersionsPath, '-f', $ComposeFile) }
+else { $script:ComposeExe = 'docker'; $script:ComposeArgs = @('compose', '-p', $Project, '--env-file', $EnvPath, '--env-file', $VersionsPath, '-f', $ComposeFile) }
 
 function Invoke-Compose {
     param([string[]]$Arguments, [switch]$Capture)
@@ -313,7 +315,7 @@ if (-not $VerifyOnly -and -not (Test-Path $EnvPath)) {
 # ---------------------------------------------------------------------------
 Write-Step '1/10  preflight'
 
-foreach ($f in @($ComposeFile, $EnvPath, $Builder, $FlowSrc, $FlowCheck, $WhScript)) {
+foreach ($f in @($ComposeFile, $EnvPath, $VersionsPath, $EnvValidator, $Builder, $FlowSrc, $FlowCheck, $WhScript)) {
     if (-not (Test-Path $f)) { Write-Fail "missing required file: $f" }
 }
 if ($script:Issues.Count -gt 0) { throw "preflight failed (see above)" }
@@ -328,6 +330,10 @@ if (-not $py) { throw 'python is required to build the Node-RED flow' }
 Write-Ok "python $((& $py.Source --version 2>&1) -replace 'Python ','')"
 
 $cfg = Read-EnvFile $EnvPath
+if (-not (Test-Path $VersionsPath)) { throw "version pin file not found: $VersionsPath" }
+$policy = Invoke-Native -Exe $py.Source -Arguments @($EnvValidator, '--env-file', $EnvPath) -Capture
+Write-Host $policy.Output
+if ($policy.Code -ne 0) { throw 'environment policy refused startup' }
 Write-Ok "project $DemoDir"
 
 # ---------------------------------------------------------------------------

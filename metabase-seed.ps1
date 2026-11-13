@@ -6,7 +6,9 @@
 #   3. register the ERPNext site DB as a Metabase data source over the compose
 #      network (host `db`, port 3306)
 #
-# Run from the host after `docker compose up -d metabase`:
+# Run from the repo root after creating and starting the Metabase service:
+# `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml create metabase`
+# `docker start comp_demo-metabase-1`
 #   powershell -File F:\ERPNEXT\erpnextcomp_demo\metabase-seed.ps1
 #
 # Values mirror the Metabase block in .env. Override any with -<Param> <value>.

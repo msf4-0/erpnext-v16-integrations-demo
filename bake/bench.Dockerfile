@@ -13,10 +13,11 @@
 # Build:  docker build -f bake/bench.Dockerfile -t comp_demo-bench:v16 .
 #         (from F:\ERPNEXT\erpnextcomp_demo)
 
-# The official ERPNext v16 image already ships frappe + bench + erpnext, so we
-# skip the slow, network-flaky `bench get-app erpnext` step entirely. Pin the
-# tag for reproducibility (never :latest).
-FROM frappe/erpnext:v16.35.0
+# The official ERPNext image already ships frappe + bench + erpnext, so we skip
+# the slow, network-flaky `bench get-app erpnext` step entirely. The caller
+# supplies the base image from the root `versions.env` file.
+ARG ERPNEXT_BASE
+FROM ${ERPNEXT_BASE}
 
 USER root
 

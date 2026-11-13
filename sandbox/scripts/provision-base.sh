@@ -19,6 +19,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 VERSION="${1:?Usage: provision-base.sh <erpnext_version>}"
 BRANCH="version-$VERSION"
 DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD:-admin}"
+ERPNEXT_ADMIN_PASSWORD="${ERPNEXT_ADMIN_PASSWORD:-admin}"
 
 echo "== Provisioning ERPNext v$VERSION base =="
 
@@ -196,11 +197,11 @@ if [ -f "$SITE_DIR/site_config.json" ] \
   echo "-- site $SITE_NAME already exists with erpnext installed - reusing it --"
   echo "   (rebuild from scratch with: up.ps1 -Fresh, or setup.ps1 -Full -Wipe)"
 else
-  if ! bench new-site "$SITE_NAME" --admin-password admin \
+  if ! bench new-site "$SITE_NAME" --admin-password "$ERPNEXT_ADMIN_PASSWORD" \
         "$ROOT_PW_FLAG" "$DB_ROOT_PASSWORD" "$ROOT_USER_FLAG" root --install-app erpnext; then
     echo "-- new-site failed (likely partial DB setup from a prior attempt),"
     echo "   retrying with --force --"
-    bench new-site "$SITE_NAME" --force --admin-password admin \
+    bench new-site "$SITE_NAME" --force --admin-password "$ERPNEXT_ADMIN_PASSWORD" \
         "$ROOT_PW_FLAG" "$DB_ROOT_PASSWORD" "$ROOT_USER_FLAG" root --install-app erpnext
   fi
 fi

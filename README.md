@@ -45,7 +45,7 @@ All secrets live in `.env` (git-ignored). The repo ships `.env.example` with `__
 
 1. **Preflight** — Docker engine, Python, compose file, project files.
 2. **.env paths and secrets** — absolute paths self-heal to the current folder.
-3. **Containers** — created and started with `docker compose create` + `docker start`.
+3. **Containers** — created and started with `docker compose create` + `docker start`, loading `.env` and `versions.env`.
 4. **Bench** — site present, log folder present, background scheduler and worker started (step 5b).
 5. **ERPNext token** — validated, rotated if rejected.
 6. **Shopify token** — 24 h Admin API token minted from client credentials.
@@ -72,7 +72,7 @@ Expected end state: `SETUP COMPLETE - all checks pass`, ERPNext / Planner / Node
 
 ## 7. Known gotchas
 
-- The database lives in the `db_data` named volume and survives container and Docker restarts. `docker compose down -v` deletes it; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+- The database lives in the `db_data` named volume and survives container and Docker restarts. `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml down -v` deletes it; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 - `docker compose up -d` hangs on this host. The scripts use `create` + `start` instead — do not replace this.
 - Shopify tokens expire after 24 h; `setup.ps1` mints a new one each run.
 - The ngrok URL changes on each tunnel start unless `NGROK_PUBLIC_URL` is pinned. `setup.ps1` re-wires the webhooks for you.
@@ -225,8 +225,11 @@ before any shared use.
 | Variable | Purpose | Status |
 |---|---|---|
 | `COMPOSE_PROJECT_NAME` | Docker project name (`comp_demo`) | Set |
-| `SITE_NAME`, `ERPNEXT_PORT`, `ERPNEXT_VERSION` | Site `frontend`, port 8000, v16 | Set |
-| `DB_ROOT_PASSWORD` | MariaDB root | Set |
+| `ENVIRONMENT` | `development` or `production`; production rejects demo-default passwords | `development` by default |
+| `SITE_NAME`, `ERPNEXT_PORT` | Site `frontend`, port 8000 | Set |
+| ERPNext image and release series | [`versions.env`](versions.env) | Authoritative pins |
+| `DB_ROOT_PASSWORD`, `ERPNEXT_ADMIN_PASSWORD` | MariaDB root and initial ERPNext Administrator password | Development-only defaults; replace for production |
+| `METABASE_PORT`, `METABASE_DB_USER`, `METABASE_DB_PASS`, `METABASE_ADMIN_EMAIL`, `METABASE_ADMIN_PASSWORD` | Metabase access and database/admin credentials | Defaults are development-only |
 | `ERPNEXT_API_TOKEN` | Administrator key:secret for REST | Set; auto-rotated on 401 |
 | `SHOPIFY_STORE`, `SHOPIFY_API_VERSION` | store host, API version | Set |
 | `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` | Mint the Shopify Admin token | Set |
@@ -236,6 +239,11 @@ before any shared use.
 | `NODE_RED_SOURCE_FLOW`, `FLOWS_PATH` | Absolute paths to the Node-RED flow files | Self-healed on folder rename |
 | `NGROK_AUTHTOKEN` | ngrok authtoken | Placeholder `__FILL_ME__`; the host ngrok binary uses its own saved config |
 | `NGROK_PUBLIC_URL` | Pin a fixed public domain | Blank → random `*.ngrok-free.dev`, webhooks re-pointed automatically |
+
+Image tags and the ERPNext series are maintained in [`versions.env`](versions.env).
+The startup policy prints any demo-default password keys; with
+`ENVIRONMENT=production`, the build and converge scripts stop before starting
+containers until those passwords are changed.
 
 ## Where each key goes
 
