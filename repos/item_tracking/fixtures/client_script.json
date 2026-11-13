@@ -1,0 +1,11 @@
+[
+ {
+  "docstatus": 0,
+  "doctype": "Client Script",
+  "dt": "Stock Entry",
+  "enabled": 1,
+  "name": "Stock Entry-Tracked Item Scan",
+  "view": "Form",
+  "script": "frappe.ui.form.on('Stock Entry', {\n\trefresh(frm) {\n\t\tif (frm.doc.docstatus === 0) {\n\t\t\tfrm.add_custom_button(__('Scan Tracked Item'), function () {\n\t\t\t\titem_tracking.scan_into_stock_entry(frm);\n\t\t\t}, __('Tracking'));\n\t\t}\n\t}\n});"
+ }
+]

@@ -1,0 +1,54 @@
+{
+ "creation": "2026-01-01 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "tracked_item",
+  "item_code",
+  "item_name",
+  "scanned_warehouse"
+ ],
+ "fields": [
+  {
+   "fieldname": "tracked_item",
+   "fieldtype": "Link",
+   "label": "Tracked Item",
+   "options": "Tracked Item",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Link",
+   "label": "Item Code",
+   "options": "Item",
+   "fetch_from": "tracked_item.item_code",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Item Name",
+   "fetch_from": "tracked_item.item_name",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "scanned_warehouse",
+   "fieldtype": "Link",
+   "label": "Scanned Warehouse",
+   "options": "Warehouse",
+   "read_only": 1,
+   "description": "The item's current warehouse at scan time, for source validation."
+  }
+ ],
+ "istable": 1,
+ "modified": "2026-01-01 00:00:00.000000",
+ "module": "Item Tracking",
+ "name": "Stock Entry Tracked Item",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "ASC"
+}

@@ -1,3 +1,9 @@
+> **HISTORICAL GUIDE — not the onboarding path for this repository.**
+> This document describes the old `erpnext-build.zip` bundle (different folder
+> name, different `.env`). For a `git clone` of this repo, follow
+> [`README.md`](../README.md) section 3 and run `.\up.ps1` from the repo root.
+> The `sandbox/up.ps1` it references belonged to the retired `erpnext-ai-fix`
+> project and no longer exists.
 # Adding the missing functions to an existing ERPNext v16 build
 
 You got **`erpnext-build.zip`** (≈8 MB). It is not a plugin: it is a complete,
@@ -25,18 +31,23 @@ Safest option: it comes up on its own ports and never touches your site.
 unzip erpnext-build.zip
 cd erpnext-build
 
-**Two lines in `.env` are absolute paths** - point them at wherever you unzipped this,
+**The two flow-path lines in `.env` may stay blank** (they self-resolve inside the repo). If you did set them,
 otherwise the Node-RED container mounts nothing:
 
-    FLOWS_PATH=F:/path/to/erpnext-build/sandbox/node-red/flows.json
-    NODE_RED_SOURCE_FLOW=F:\path\to\erpnext-build\sandbox\node-red\source-flow.json
+    FLOWS_PATH=
+    NODE_RED_SOURCE_FLOW=
+    # Both may stay blank: they resolve to the vendored
+    # sandbox/node-red/*.json inside this repo. Never hard-code a machine path.
+
 cp .env.example .env
-cp sandbox/.env.ai-fix.example sandbox/.env.ai-fix
-#    fill in .env:  DB_ROOT_PASSWORD, SHOPIFY_STORE, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET
-#    (NGROK_AUTHTOKEN optional - it falls back to your ngrok config)
+#    The defaults boot as-is. Optional extras: SHOPIFY_STORE, SHOPIFY_CLIENT_ID,
+#    SHOPIFY_CLIENT_SECRET, NGROK_AUTHTOKEN. Leave them blank to skip those
+#    integrations - a blank value is reported as SKIPPED, not as a failure.
 
 powershell -ExecutionPolicy Bypass -File .\up.ps1          # Windows
-# bash ./sandbox/up.ps1                                     # Linux/macOS equivalent
+# Linux/macOS: pwsh -File ./up.ps1 (PowerShell 7+). There is no bash
+# equivalent - sandbox/up.ps1 belonged to the retired erpnext-ai-fix project
+# and has been deleted.
 ```
 
 Then: ERPNext <http://localhost:8000> (Administrator/admin) · planner <http://localhost:3001> ·

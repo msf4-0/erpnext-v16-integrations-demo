@@ -69,7 +69,7 @@ Expected end state: `SETUP COMPLETE - all checks pass`, ERPNext / Planner / Node
 
 ## 7. Known gotchas
 
-- The database lives in **tmpfs** (RAM) because DDL on a volume was extremely slow. Any Docker or container restart wipes the site database. The demo is *rebuildable, not persistent*; recovery is `up.ps1`.
+- The site database lives on the `db_data` Docker volume, so a container stop, a `docker compose down`, or a Docker Desktop restart **keeps your data**. It is no longer tmpfs. Only `docker compose down -v` (or `-Fresh` / `-Wipe`) destroys the site, the Metabase metadata and the Node-RED flow store. Earlier revisions of this guide said the DB was tmpfs and that every restart wiped it — that is out of date.
 - `docker compose up -d` hangs on this host. The scripts use `create` + `start` instead — do not replace this.
 - Shopify tokens expire after 24 h; `setup.ps1` mints a new one each run.
 - The ngrok URL changes on each tunnel start unless `NGROK_PUBLIC_URL` is pinned. `setup.ps1` re-wires the webhooks for you.
@@ -116,7 +116,7 @@ Never paste these values into the flow JSON or share them in chat. Re-run `setup
 
 ## 10. Testing each feature
 
-Run `setup.ps1 -VerifyOnly` first. If it is clean, test each feature below. The seeded demo records came from the `up.ps1` build. Steps marked "not inspected" rely on standard ERPNext behaviour. Use new documents for tests, not the seeded ones; the database is tmpfs, so test data disappears after a Docker restart.
+Run `setup.ps1 -VerifyOnly` first. If it is clean, test each feature below. The seeded demo records came from the `up.ps1` build. Steps marked "not inspected" rely on standard ERPNext behaviour. Use new documents for tests, not the seeded ones; test data persists across container restarts and is only lost on `docker compose down -v` (`-Wipe`).
 
 ### Barcode scanning
 
@@ -254,7 +254,7 @@ before any shared use.
 | No Scan Barcode field | Barcode Client Scripts not loaded/disabled | Hard refresh (Ctrl+F5), then `/app/client-script` — confirm the four barcode scripts are enabled |
 | A valid barcode is not found | Barcode not in that item's Barcodes table | Open the Item and add the barcode |
 | Barcode Printing image is broken | Image-rendering deps on the server | `setup.ps1 -VerifyOnly`, then `docker logs comp_demo-bench-1` |
-| Everything is empty after a restart | tmpfs DB wiped | Run `up.ps1` |
+| Everything is empty after `docker compose down -v` / `-Wipe` | volumes deleted on purpose | Run `up.ps1` |
 | `AttributeError: is_ajax` in the browser | Masking error — a real exception fired inside `frappe.init()` before `frappe.local` was populated | Read the **first** traceback in `docker logs comp_demo-bench-1`, not the `is_ajax` one. Most common real cause: `ModuleNotFoundError: No module named '<app>'` |
 | `ModuleNotFoundError` for an app that `bench list-apps` shows as installed | The running server's `sys.path` predates the app | `bench install-app` only writes a `.pth` that Python reads at startup — **restart the bench** (`docker restart comp_demo-bench-1`) after installing any app |
 
@@ -269,7 +269,7 @@ before any shared use.
 | E Invoice Import is not found | App not installed | `docker exec comp_demo-bench-1 bash -lc "cd /home/frappe/frappe-bench && bench --site frontend list-apps"` → look for `eu_einvoice` |
 | Import cannot read the file | Not a valid XRechnung / ZUGFeRD file | Try a different sample or validate the file first |
 | REST call returns 401 | API token in `.env` is stale | Run `setup.ps1` to rotate it |
-| Doctype/records are gone | tmpfs DB wiped | Run `up.ps1` |
+| Doctype/records are gone | volumes deleted (`down -v`) | Run `up.ps1` |
 
 ## Repository layout & other scripts
 

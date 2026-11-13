@@ -1,0 +1,15 @@
+[
+ {
+  "doctype": "Custom Field",
+  "dt": "Stock Entry",
+  "fieldname": "tracked_items",
+  "fieldtype": "Table",
+  "label": "Tracked Items",
+  "options": "Stock Entry Tracked Item",
+  "name": "Stock Entry-tracked_items",
+  "insert_after": "scan_barcode",
+  "allow_on_submit": 1,
+  "print_hide": 1,
+  "description": "Individual tracked items scanned into this Stock Entry."
+ }
+]

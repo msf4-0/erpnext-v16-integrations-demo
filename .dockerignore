@@ -1,0 +1,38 @@
+# Keep the build context small and the image reproducible.
+# Without this file the daemon receives the 1.4 GB bench tarball, the whole
+# .git history and every node_modules tree on each `docker compose build`.
+
+# baked image artefact (large binary, rebuilt from bake/bench.Dockerfile)
+comp_demo-bench-v16.tar
+*.tar
+*.tar.gz
+
+# vcs + editor
+.git
+.gitignore
+.gitattributes
+.vscode
+.idea
+
+# dependencies rebuilt inside the image / by bench build
+**/node_modules
+scheduler/frontend/node_modules
+scheduler/ui-tests/node_modules
+
+# runtime + logs
+**/*.log
+.cache
+data
+_session_extract
+lowdefy/server/exceptions.db
+
+# secrets never enter the build context
+.env
+**/.env
+*.pem
+_mb_secret.txt
+
+# docs / screenshots not needed for the image
+docs
+**/*.docx
+**/*.png

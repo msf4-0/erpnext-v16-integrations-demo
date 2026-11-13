@@ -15,7 +15,7 @@ to move all of the above into images built ahead of time.
 
 `docker-compose.yml` now carries a `build:` block on the `bench` service, so a
 fresh `git clone` reproduces the exact `comp_demo-bench:v16` image straight from
-`bake/bench.Dockerfile` — no `up.ps1` needed:
+`bake/bench.Dockerfile` — but NOT a working site (see the note below):
 
 ```powershell
 git clone https://github.com/msf4-0/erpnext-v16-integrations-demo.git

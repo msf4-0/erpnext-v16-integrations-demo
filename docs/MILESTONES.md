@@ -179,13 +179,13 @@ test suppliers, repairs an out-of-sequence WO Ã¢â‚¬â€ idempotent).
 | Stock reconciliation does not push stock to Shopify | `update_product_inventory.on_submit` is not wired in `hooks.py` (the header bug is fixed) | add a `Stock Ledger Entry` doc_event if push-on-stock is wanted |
 | Malaysia (LHDN) e-invoicing | the substituted app is EU EN 16931 / XRechnung (CII), not MyInvois; the original MY source is 404 | supply the MY app source |
 | Timers tab shows an empty object | `/api/work-orders/timers` now answers 200 but no Work Order has a running timer until someone clicks **Start** in the planner | start a timer in the UI (state is the planner's own `timers.json`) |
-| Anything after `docker compose down` / engine restart | the DB is **tmpfs** on purpose (>300 s/100 tables on a volume vs 0.20 s on tmpfs) | rerun `powershell -File F:\ERPNEXT\erpnext-build\up.ps1` (~25Ã¢â‚¬â€œ35 min) |
+| Anything after `docker compose down` / engine restart | the DB lives on the `db_data` volume, which is durable across restarts and `docker compose down` (only `-v`/`-Wipe` deletes it) | rerun `powershell -File .\up.ps1` (~25Ã¢â‚¬â€œ35 min) |
 
 ### Operational gotchas
 
 - **Shopify tokens expire in 24 h.** The ERPNext side re-mints by itself; the Node-RED
   flow bakes the token into its nodes, so run
-  `powershell -File F:\ERPNEXT\erpnext-build\refresh-shopify-token.ps1` daily (or schedule it).
+  `powershell -File .\refresh-shopify-token.ps1` daily (or schedule it).
 - **Server Scripts must stay enabled** (`server_script_enabled = 1` in
   `common_site_config.json`) or the planner falls back to a validated `PUT` and a Work
   Order drag will only move its first operation.

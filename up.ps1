@@ -36,8 +36,12 @@
     Skip the production planner bring-up (sandbox/scheduler-up.ps1).
 
 .EXAMPLE
-    pwsh -File .\sandbox\up.ps1
-    pwsh -File .\sandbox\up.ps1 -Fresh
+    # Run from the repository root. There is exactly ONE bring-up script and it
+    # is this file. The old sandbox\up.ps1 belonged to the retired
+    # `erpnext-ai-fix` project, provisioned a DIFFERENT compose project, and has
+    # been deleted - if you still have a copy, do not run it.
+    powershell -ExecutionPolicy Bypass -File .\up.ps1
+    powershell -ExecutionPolicy Bypass -File .\up.ps1 -Fresh
 #>
 [CmdletBinding()]
 param(
