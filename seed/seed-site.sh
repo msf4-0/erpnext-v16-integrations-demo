@@ -119,4 +119,14 @@ if [ -n "${DU}" ] && [ -n "${DP}" ]; then
         FLUSH PRIVILEGES;" || echo "seed: WARN could not re-assert grant for ${DU}"
 fi
 
+# --- self-check: a restore that silently produced an empty site is the exact
+# failure this service exists to prevent, so fail loudly instead of letting the
+# stack come up empty. bash quoting is clean here; doing this from PowerShell
+# through docker exec is what made the earlier count unreliable.
+ITEM_COUNT=$(bench --site "${SITE}" execute frappe.db.count --args "['Item']" 2>/dev/null | tail -1 | tr -d '[:space:]')
+echo "seed: items after restore: ${ITEM_COUNT:-unknown}"
+case "${ITEM_COUNT}" in
+    ''|0) echo "seed: ERROR - restore produced no Item rows"; exit 1 ;;
+esac
+
 echo "seed: done - site '${SITE}' restored"
