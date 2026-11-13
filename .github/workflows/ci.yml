@@ -145,8 +145,19 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     needs: build-bench-image
+    # The GHCR package is private by default, so a fresh runner must authenticate
+    # before it can pull what the previous job just pushed.
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Pull the image built above
         run: docker pull ghcr.io/msf4-0/comp-demo-bench:${{ github.sha }}
       - name: Apps import and render deps are present
