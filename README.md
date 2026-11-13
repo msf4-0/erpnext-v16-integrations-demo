@@ -306,6 +306,8 @@ verify-all.ps1            41-check end-to-end suite (container + HTTP + browser 
 refresh-shopify-token.ps1 re-mints the 24 h Shopify token and rebuilds the Node-RED flow
 make-bundle.ps1           clean portable copy + zip + sha256, self-verified
 sandbox/                  provisioning scripts, installers, seeders, probes, recipes, node-red flow builder
+seed/                     demo DB dump (1.3 MB) + the seed service that restores it on a fresh volume
+tests/                    verify-clean-clone.ps1 - disposable clone -> seed -> assert -> teardown
 repos/                    app sources: barcode-shrdc-v16-fixed, shopify-shrdc-v16-fixed, eu_einvoice
 scheduler/                the planner: server.js, prebuilt frontend/build, runtime-deps, ui-tests
 .opencode/                opencode agents + skills (erpnext-planner, module-*, erpnext-test-runner)

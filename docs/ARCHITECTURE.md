@@ -10,6 +10,7 @@ Compose project: `comp_demo` · site: `frontend` · host ports: 8000 (ERPNext),
 
 | Service | Image | Role | Depends on |
 |---|---|---|---|
+| `seed` | same image as `bench` | one-shot: restores `seed/frontend-database.sql.gz` into an empty volume, then exits 0. No-op (~2 s) when a site already exists | db (healthy); `bench` waits for it to complete |
 | `bench` | `comp_demo-bench:v16` (built from `bake/bench.Dockerfile`) | ERPNext v16 + frappe + barcode_shrdc + shopify + eu_einvoice + render deps | db, redis-cache, redis-queue (healthy) |
 | `db` | `mariadb:11.8` | site DB **and** Metabase metadata | – |
 | `redis-cache` | `redis:6.2-alpine` | frappe cache | – |
@@ -107,3 +108,15 @@ docker restart comp_demo-bench-1
 Then set the LHDN credentials in **MyInvois Settings** and submit a Sales
 Invoice from the *MyInvois* tab. Without credentials, submission stays disabled
 by design.
+## How this is verified
+
+| Layer | Command | Cost |
+|---|---|---|
+| Static (every push) | GitHub Actions `ci`: compose config, clean tree, no machine paths, PowerShell parse, shellcheck, python compile, image build, app-import smoke | ~4 min |
+| Onboarding path (manual) | `tests/verify-clean-clone.ps1` - clones from GitHub into a disposable project (`comp_demo_verify`, shifted ports, own volumes), seeds, asserts, tears down | ~9 min |
+| Full feature suite | `verify-all.ps1` against the live stack | ~5 min |
+
+`tests/verify-clean-clone.ps1` is the one that matters before a release: it is
+the only check that exercises `git clone` -> `docker compose` -> seeded site.
+It found three bugs that every other layer passed (db host, deprecated
+currentsite, missing logs dir).
