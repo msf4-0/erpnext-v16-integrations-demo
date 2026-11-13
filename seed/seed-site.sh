@@ -48,6 +48,11 @@ fi
 # --- recreate the bench scaffolding a fresh bench_sites volume lacks -------
 # `bench init` normally writes these; on a clone the volume is empty, and
 # without them new-site talks to localhost:3306 instead of the db service.
+# A fresh bench_sites volume has no logs/ directory. bench only creates it during
+# `bench init`, so on a restored volume every python entrypoint dies with
+#   FileNotFoundError: '/home/frappe/logs/database.log'
+mkdir -p logs
+mkdir -p sites/assets
 mkdir -p sites
 if [ ! -f sites/common_site_config.json ]; then
     echo "seed: writing sites/common_site_config.json"
