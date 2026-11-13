@@ -81,6 +81,17 @@ function Write-Info([string]$Message) { Write-Host "  $Message" }
 function Write-Warn([string]$Message) { Write-Host "  WARN: $Message" -ForegroundColor Yellow }
 function Write-Fail([string]$Message) { Write-Host "  FAIL: $Message" -ForegroundColor Red }
 
+# Required-step bookkeeping. A WARN means "an optional integration is
+# unavailable"; a FAIL means "a feature this repo advertises will not work".
+# The script must never print a green banner over a failure - printing one over
+# a half-installed stack is exactly how a broken setup got reported as a
+# successful one.
+$script:Failures = New-Object System.Collections.Generic.List[string]
+function Add-Failure([string]$Name, [string]$Detail) {
+    $script:Failures.Add("${Name}: $Detail")
+    Write-Fail "$Name - $Detail"
+}
+
 function Read-EnvFile([string]$Path) {
     $table = @{}
     if (-not (Test-Path $Path)) { return $table }
@@ -438,7 +449,9 @@ Write-Info 'barcode render dependencies prepared (cairo + reportlab + rlPyCairo)
 if (-not $SkipInstall) {
     Write-Step '7/11  installing barcode_shrdc + shopify (long step)'
     if ((Invoke-Bench 'bash /tmp/scripts/ai-fix-install.sh') -ne 0) {
-        Write-Warn 'the app install reported errors - review the output above'
+        Add-Failure 'apps' 'ai-fix-install.sh failed - barcode_shrdc / shopify are NOT installed'
+    } else {
+        Write-Info 'barcode_shrdc + shopify installed'
     }
     # 7b. e-invoicing - best-effort, never blocks the build.
     if (Test-Path $einvoiceSrc) {
@@ -454,7 +467,7 @@ if (-not $SkipInstall) {
     if (Test-Path $trackingSrc) {
         Write-Step '7b-2/11 installing item_tracking (individual item tracking)'
         if ((Invoke-Bench 'bash /tmp/scripts/install-app.sh item_tracking /tmp/repos/item_tracking 16 /tmp/recipes/item_tracking.yaml') -ne 0) {
-            Write-Warn 'item_tracking install reported errors - Tracked Item labels will be unavailable'
+            Add-Failure 'item_tracking' 'install failed - Shift+I scanner and per-unit labels will not work'
         } else {
             Write-Info 'item_tracking (individual item tracking) installed'
         }
@@ -622,7 +635,7 @@ if ($shopifyToken) {
 if (-not $SkipInstall) {
     Write-Step '8b/11  demo master data (suppliers, stock entry types, barcode scan, demo docs)'
     if ((Invoke-Bench 'cd /home/frappe/frappe-bench && SITE_NAME=frontend ./env/bin/python /tmp/scripts/seed-demo-masters.py') -ne 0) {
-        Write-Warn 'demo master data seeding reported errors - review the output above'
+        Add-Failure 'seed-masters' 'demo master data seeding failed - demo documents will be incomplete'
     } else {
         Write-Info 'demo master data seeded (supplier groups, stock entry types, barcode scanning, demo docs)'
     }
@@ -671,7 +684,7 @@ if (-not $SkipScheduler) {
 if (-not $SkipInstall) {
     Write-Step '9b/11  planner schema (Virtual Work Order doctype + demo batch group)'
     if ((Invoke-Bench 'cd /home/frappe/frappe-bench && SITE_NAME=frontend ./env/bin/python /tmp/scripts/seed-vwo-doctype.py') -ne 0) {
-        Write-Warn 'Virtual Work Order seeding reported errors - planner batch groups may be unavailable'
+        Add-Failure 'virtual-work-order' 'Virtual Work Order seeding failed - planner Batch/Timers tabs will be empty'
     } else {
         Write-Info 'Virtual Work Order doctype + demo batch group ready'
         # `Virtual Work Order` is created here, after step 8c granted the demo
@@ -789,6 +802,7 @@ if (Wait-Url "$erpUrl/api/method/ping" 150) {
     Write-Info "ERPNext  : UP  ($erpUrl)"
 } else {
     Write-Fail "ERPNext  : NOT responding ($erpUrl)"
+    $script:Failures.Add("erpnext: not responding at $erpUrl")
 }
 
 $nodeRedOk = $false
@@ -834,3 +848,21 @@ Write-Host '  Barcode scanner: ERPNext -> Barcode Printing'
 Write-Host '  Shopify bridge : webhooks -> tunnel -> Node-RED -> Shopify Admin API'
 Write-Host '  Production plan: Manufacturing workspace -> "Production Planner"'
 Write-Host ''
+
+# ---------------------------------------------------------------------------
+# exit contract
+# ---------------------------------------------------------------------------
+# 0 = every required step produced the feature it advertises.
+# 1 = the containers may be running, but at least one advertised feature is not
+#     installed. setup.ps1, CI and colleagues can rely on this.
+if ($script:Failures.Count -gt 0) {
+    Write-Host ('=' * 72) -ForegroundColor Red
+    Write-Host ("  SETUP INCOMPLETE - $($script:Failures.Count) required step(s) failed") -ForegroundColor Red
+    foreach ($f in $script:Failures) { Write-Host "   - $f" -ForegroundColor Red }
+    Write-Host '  The containers are up, but the features above will not work.' -ForegroundColor Red
+    Write-Host '  Re-run the failing part:  .\up.ps1 -SkipProvision -SkipInstall' -ForegroundColor Red
+    Write-Host ('=' * 72) -ForegroundColor Red
+    exit 1
+}
+Write-Host '  All required steps verified - setup complete.' -ForegroundColor Green
+exit 0

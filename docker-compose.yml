@@ -47,10 +47,11 @@ services:
         # Re-asserting a host-agnostic ('%') grant here makes the stack
         # self-healing on every start without touching the data. Bounded
         # (60 x 2 s) and best-effort - it must never block `bench serve`.
-        # NOTE: every shell `$` is written `$$` on purpose. Compose interpolates
-        # `$VAR` / `${VAR}` in this file, so a single `$` is consumed before the
-        # container ever sees it (`$CFG` would expand to empty). `$$` is Compose's
-        # escape for a literal `$` and reaches bash intact.
+        # NOTE: every shell dollar sign is doubled on purpose. Compose
+        # interpolates variable references anywhere in this file, so a single
+        # dollar sign is consumed before the container ever sees it and would
+        # expand to empty. Doubling it is Compose's escape for a literal dollar
+        # sign and reaches bash intact.
         CFG="sites/$${SITE_NAME:-frontend}/site_config.json"
         if [ -f "$$CFG" ]; then
           DU=$$(sed -n 's/.*"db_user"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$$CFG")
@@ -106,9 +107,12 @@ services:
       # serial-number flow exists and survives restarts.
       - ./repos/barcode-shrdc-v16-fixed:/home/frappe/frappe-bench/apps/barcode_shrdc
     depends_on:
-      - db
-      - redis-cache
-      - redis-queue
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
     environment:
       - PYTHONUNBUFFERED=1
       - SITE_NAME=${SITE_NAME:-frontend}
@@ -122,6 +126,16 @@ services:
       - YARN_NETWORK_CONCURRENCY=1
       - YARN_FETCH_RETRIES=5
       - YARN_FETCH_RETRY_MAXTIMEOUT=120000
+    healthcheck:
+      # TCP, not /api/method/ping: on an empty bench_sites volume there is no
+      # site yet, so an HTTP check would report unhealthy forever and block
+      # `up --wait` on a fresh clone. This answers "is bench listening", which
+      # is what dependent services actually need.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8000'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 240s
     restart: unless-stopped
 
   db:
@@ -145,14 +159,30 @@ services:
       MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-admin}
     volumes:
       - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -p\"$$MARIADB_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     restart: unless-stopped
 
   redis-cache:
     image: redis:6.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
   redis-queue:
     image: redis:6.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
   node-red:
@@ -168,7 +198,14 @@ services:
       - SHOPIFY_STORE=${SHOPIFY_STORE:-4e1075.myshopify.com}
       - SHOPIFY_API_VERSION=${SHOPIFY_API_VERSION:-2026-04}
     depends_on:
-      - bench
+      bench:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:1880/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   scheduler:
@@ -189,7 +226,8 @@ services:
       - PORT=3000
       - NODE_ENV=production
     depends_on:
-      - bench
+      bench:
+        condition: service_started
     restart: unless-stopped
 
   metabase:
@@ -215,7 +253,14 @@ services:
     mem_limit: 3g
     cpus: 2.0
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/3000'"]
+      interval: 20s
+      timeout: 5s
+      retries: 15
+      start_period: 120s
     restart: unless-stopped
 
 volumes:
