@@ -130,12 +130,20 @@ $apps = & docker exec (& $c 'bench') bash -lc 'cd /home/frappe/frappe-bench && b
 foreach ($a in @('barcode_shrdc', 'shopify', 'eu_einvoice', 'item_tracking')) {
     if ($apps -match $a) { Pass "app installed: $a" } else { Fail "app missing: $a" }
 }
-# Plain SQL: inline python -c through docker exec + PowerShell 5.1 quoting is a
-# trap (escaped quotes do not survive), and a count is all we need.
-$itemRaw = & docker exec (& $c 'bench') bash -lc 'cd /home/frappe/frappe-bench && bench --site frontend mariadb -N -B -e "select count(*) from tabItem"' 2>&1
+# Count through python fed on stdin: inline `python -c` and nested SQL quoting
+# do not survive PowerShell 5.1 -> docker exec -> bash. A fresh volume also has
+# no logs/ dir, so create it first (bench only makes it during `bench init`).
+& docker exec (& $c 'bench') bash -lc 'cd /home/frappe/frappe-bench && mkdir -p logs frontend/logs sites/frontend/logs' | Out-Null
+$pyCheck = @"
+import frappe
+frappe.init(site='frontend', sites_path='sites')
+frappe.connect()
+print('COUNT', frappe.db.count('Item'))
+"@
+$itemRaw = $pyCheck | & docker exec -i (& $c 'bench') bash -lc 'cd /home/frappe/frappe-bench && ./env/bin/python -' 2>&1
 $itemCount = 0
-$num = ($itemRaw | Where-Object { "$_" -match '^\s*\d+\s*$' } | Select-Object -First 1)
-if ($num) { $itemCount = [int]("$num".Trim()) }
+$line = ($itemRaw | Where-Object { "$_" -match '^COUNT\s+\d+' } | Select-Object -First 1)
+if ($line) { $itemCount = [int](("$line" -split '\s+')[1]) }
 Write-Host "  items in the seeded site: $itemCount"
 if ($itemCount -ge 50) { Pass "demo items present ($itemCount)" } else { Fail "demo items look missing ($itemCount)" }
 $planner = $false

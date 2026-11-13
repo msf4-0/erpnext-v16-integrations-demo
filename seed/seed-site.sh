@@ -52,6 +52,7 @@ fi
 # `bench init`, so on a restored volume every python entrypoint dies with
 #   FileNotFoundError: '/home/frappe/logs/database.log'
 mkdir -p logs
+mkdir -p frontend/logs
 mkdir -p sites/assets
 mkdir -p sites
 if [ ! -f sites/common_site_config.json ]; then
