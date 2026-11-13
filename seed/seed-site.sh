@@ -129,4 +129,21 @@ case "${ITEM_COUNT}" in
     ''|0) echo "seed: ERROR - restore produced no Item rows"; exit 1 ;;
 esac
 
+# --- Metabase metadata (dashboards + the ERPNext data source) --------------
+# Metabase keeps its own metadata in the `metabase` schema, which a `bench
+# backup` of the SITE does not contain. Without this, every clone gets a blank
+# Metabase: no admin, no ERPNext data source, no "ERPNext Monitoring" dashboard.
+MB_DUMP="/seed/metabase-db.sql.gz"
+if [ -f "${MB_DUMP}" ]; then
+    MB_TABLES=$(MYSQL_PWD="${DB_ROOT_PASSWORD}" mariadb -h db -uroot -N -B \
+        -e "select count(*) from information_schema.tables where table_schema='metabase'" 2>/dev/null || echo 0)
+    if [ "${MB_TABLES:-0}" = "0" ]; then
+        echo "seed: restoring Metabase metadata (dashboards + ERPNext data source)"
+        gunzip -c "${MB_DUMP}" | MYSQL_PWD="${DB_ROOT_PASSWORD}" mariadb -h db -uroot \
+            || echo "seed: WARN Metabase restore failed - BI will start empty"
+    else
+        echo "seed: Metabase already initialised (${MB_TABLES} tables) - skipping"
+    fi
+fi
+
 echo "seed: done - site '${SITE}' restored"
