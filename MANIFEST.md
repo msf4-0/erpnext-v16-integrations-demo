@@ -14,7 +14,7 @@ depend on another workspace or machine-specific fallback paths.
 > `comp_demo-scheduler:latest`, `-p comp_demo`). They were not renamed on purpose: a new
 > compose project recreates the containers. The site DB is on the `db_data`
 > named volume and persists across restarts; `down -v` removes it. Rename them
-> on your next rebuild â€” change `name:` /
+> on your next rebuild — change `name:` /
 > `COMPOSE_PROJECT_NAME`, `$Project` in `up.ps1` / `scheduler-up.ps1` / `verify-all.ps1`,
 > and the `image:` / container references.
 
@@ -27,7 +27,7 @@ powershell -ExecutionPolicy Bypass -File .\verify-all.ps1   # 41 checks, ~5 min
 
 ---
 
-## Tier A Ã¢â‚¬â€ to just *start* the stack that already exists (3 files)
+## Tier A — to just *start* the stack that already exists (3 files)
 
 | File | Why |
 |---|---|
@@ -52,29 +52,29 @@ removes the volume; the full reprovision procedure is in `up.ps1`.
 
 ---
 
-## Tier B Ã¢â‚¬â€ to *rebuild* from zero (the real minimum)
+## Tier B — to *rebuild* from zero (the real minimum)
 
 Staged into the containers by `up.ps1`; nothing here is optional.
 
 | Path | Files | Size | Role |
 |---|---|---|---|
-| `up.ps1` | 1 | 31 KB | 11-step bring-up (compose Ã¢â€ â€™ bench init Ã¢â€ â€™ new-site Ã¢â€ â€™ apps Ã¢â€ â€™ seed Ã¢â€ â€™ Shopify Ã¢â€ â€™ planner Ã¢â€ â€™ flow Ã¢â€ â€™ tunnel Ã¢â€ â€™ verify) |
+| `up.ps1` | 1 | 31 KB | 11-step bring-up (compose → bench init → new-site → apps → seed → Shopify → planner → flow → tunnel → verify) |
 | `scheduler-up.ps1` | 1 | 15 KB | planner-only bring-up (token, demo WOs, desk shortcut, health) |
 | `sandbox\scripts\` | 198 | 0.6 MB | `provision-base.sh`, `install-app.sh`, `ai-fix-install.sh`, `ai-fix-postsetup.sh`, the seeders (`seed-demo-masters.py`, `seed-vwo-doctype.py`, `seed_planner_demo.py`), token helpers, probes |
-| `sandbox\recipes\` | 9 | <0.1 MB | per-app install recipes (`barcode_shrdc`, `shopify`, `eu_einvoice`, Ã¢â‚¬Â¦) |
+| `sandbox\recipes\` | 9 | <0.1 MB | per-app install recipes (`barcode_shrdc`, `shopify`, `eu_einvoice`, …) |
 | `sandbox\node-red\` | 3 | 0.1 MB | `build-flows.py`, built `flows.json`, vendored `source-flow.json` |
 | `repos\barcode-shrdc-v16-fixed\` | 52 | 0.5 MB | `barcode_shrdc` app (scan/fix fork) |
 | `repos\shopify-shrdc-v16-fixed\` | 53 | 0.8 MB | `shopify` app incl. `shopify/auth.py` (24 h token minting) |
 | `repos\eu_einvoice\` | 120 | 8.0 MB | e-invoicing app |
-| `scheduler\` | 1 008 | 23.8 MB | the planner: `server.js`, `Dockerfile`, `package.json`, `runtime-deps\node_modules` (847 files, 4.6 MB Ã¢â‚¬â€ pre-installed, never `npm ci` in the image), `frontend\` source + **prebuilt `frontend\build`** (7 files, 4.7 MB) |
+| `scheduler\` | 1 008 | 23.8 MB | the planner: `server.js`, `Dockerfile`, `package.json`, `runtime-deps\node_modules` (847 files, 4.6 MB — pre-installed, never `npm ci` in the image), `frontend\` source + **prebuilt `frontend\build`** (7 files, 4.7 MB) |
 | `sandbox\.env.ai-fix` | 1 | 3 KB | planner creds |
 
-`up.ps1` also needs the vendored `.env` (Tier A) Ã¢â‚¬â€ it reads ports, site name and the
+`up.ps1` also needs the vendored `.env` (Tier A) — it reads ports, site name and the
 Shopify client id/secret from it.
 
 ---
 
-## Tier C Ã¢â‚¬â€ to verify / operate (not needed to run the demo)
+## Tier C — to verify / operate (not needed to run the demo)
 
 | Path | Files | Role |
 |---|---|---|
@@ -89,7 +89,7 @@ Shopify client id/secret from it.
 
 ---
 
-## Not needed (generated / caches Ã¢â‚¬â€ excluded from the portable bundle)
+## Not needed (generated / caches — excluded from the portable bundle)
 
 | Excluded | Why |
 |---|---|
@@ -104,8 +104,8 @@ Shopify client id/secret from it.
 
 - **Docker Desktop** (Linux engine) and `docker-compose.exe`
 - **ngrok** binary + authtoken (read from the host's `ngrok.yml` if `.env` has none)
-- **Node/npm** Ã¢â‚¬â€ only to rebuild the planner frontend
-- **Python** Ã¢â‚¬â€ only for the Node-RED flow builder (`build-flows.py`)
+- **Node/npm** — only to rebuild the planner frontend
+- **Python** — only for the Node-RED flow builder (`build-flows.py`)
 - Ports free: 8000 (ERPNext), 3001 (planner), 1880 (Node-RED), 4040 (ngrok API)
 
 ---

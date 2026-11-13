@@ -1,24 +1,24 @@
-# AGENTS.md Ã¢â‚¬â€ comp_demo (complete ERPNext demo workspace)
+# AGENTS.md — comp_demo (complete ERPNext demo workspace)
 
 > Authoritative stack architecture, ports, versions, and database durability:
 > [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 Self-contained ERPNext v16 demo **and** the workspace that drives it. One docker
 project (`comp_demo`), one build command, everything included: barcode/QR item
-tracking, e-invoicing, drag-and-drop production planning, Shopify Ã¢â€ â€ ERPNext via
+tracking, e-invoicing, drag-and-drop production planning, Shopify ↔ ERPNext via
 Node-RED, plus the **erpnext-planner** and module-* agents used to build it.
 
 ## Build & run (from the repository root)
 
 ```powershell
-copy .env.example .env                        # if .env is missing (holds secrets Ã¢â‚¬â€ do not commit)
+copy .env.example .env                        # if .env is missing (holds secrets — do not commit)
 powershell -File .\up.ps1  # full build: stack + provision v16 + install apps + seed + verify
 powershell -File .\up.ps1 -SkipProvision   # reuse an existing site (skip the long v16 provision)
 powershell -File .\up.ps1 -SkipInstall     # reuse installed apps
 powershell -File .\up.ps1 -SkipScheduler   # skip the planner image build (~6 min)
 ```
 
-Full build Ã¢â€°Ë† 25Ã¢â‚¬â€œ35 min. Status/down/logs (also usable directly):
+Full build ≈ 25–35 min. Status/down/logs (also usable directly):
 
 ```powershell
 docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml ps
@@ -38,10 +38,10 @@ docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-co
 
 ## Features in the build
 
-- **Barcode / QR item tracking** Ã¢â‚¬â€ `barcode_shrdc` (v16-fixed, source in `repos/barcode-shrdc-v16-fixed`), `Barcode Printing` doctype; server-side rasterisation deps pre-installed.
-- **E-invoicing** Ã¢â‚¬â€ `eu_einvoice` (alyf-de, version-16 branch).
-- **Drag-and-drop production planning** Ã¢â‚¬â€ the `scheduler` service + `seed_planner_demo.py` demo data (Work Orders Ã¢â€ â€ Job Cards).
-- **Shopify Ã¢â€ â€ ERPNext** Ã¢â‚¬â€ `shopify` app + Node-RED flow + ngrok webhooks; store `SHOPIFY_STORE` in `.env`.
+- **Barcode / QR item tracking** — `barcode_shrdc` (v16-fixed, source in `repos/barcode-shrdc-v16-fixed`), `Barcode Printing` doctype; server-side rasterisation deps pre-installed.
+- **E-invoicing** — `eu_einvoice` (alyf-de, version-16 branch).
+- **Drag-and-drop production planning** — the `scheduler` service + `seed_planner_demo.py` demo data (Work Orders ↔ Job Cards).
+- **Shopify ↔ ERPNext** — `shopify` app + Node-RED flow + ngrok webhooks; store `SHOPIFY_STORE` in `.env`.
 
 ## Agents (this workspace)
 
@@ -53,7 +53,7 @@ docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-co
 | `module-installer` | primary | Provisions the comp_demo sandbox and installs named custom apps. |
 | `module-fixer` | primary | Fixes already-installed modules in the running comp_demo bench. |
 
-Skills live in `.opencode/skills/` (interview, doctype-builder, production-workflow, demo-data, test-sandbox, Ã¢â‚¬Â¦). Sub-agents imported from `the external ERPNext AI Script workspace`; planner + test-runner from `the external SHRDC OpenCode ERP workspace`. After editing any agent/skill/config, **restart opencode**.
+Skills live in `.opencode/skills/` (interview, doctype-builder, production-workflow, demo-data, test-sandbox, …). Sub-agents imported from `the external ERPNext AI Script workspace`; planner + test-runner from `the external SHRDC OpenCode ERP workspace`. After editing any agent/skill/config, **restart opencode**.
 
 ## Gotchas
 
