@@ -252,7 +252,7 @@ before any shared use.
 | If this happens | Likely cause | What to check |
 |---|---|---|
 | No Scan Barcode field | Barcode Client Scripts not loaded/disabled | Hard refresh (Ctrl+F5), then `/app/client-script` — confirm the four barcode scripts are enabled |
-| Desk reloads itself forever / "the site keeps restarting" | An **active** `app_include_js` 404s. Frappe reloads the desk when one of those assets fails, so the page loops instead of showing an error | `docker logs comp_demo-bench-1 \| grep asset-check`; then `curl -o NUL -w "%{http_code}`n" http://localhost:8000/assets/barcode_shrdc/js/scanner_barcode_patch.js` → must be `200`. Fix with `docker exec comp_demo-bench-1 bash -lc "cd /home/frappe/frappe-bench && bench build --app barcode_shrdc"`, then restart the container |
+| Desk reloads itself forever / "the site keeps restarting" | An **active** `app_include_js` 404s. Frappe reloads the desk when one of those assets fails, so the page loops instead of showing an error | `docker logs comp_demo-bench-1 \| grep asset-check`; then `curl -o NUL -w "%{http_code}`n" http://localhost:8000/assets/barcode_shrdc/js/scanner_barcode_patch.js` → must be `200`. Fix with `docker exec comp_demo-bench-1 bash -lc "cd /home/frappe/frappe-bench && export PATH=$(ls -d /home/frappe/.nvm/versions/node/*/bin | tail -1):$PATH && bench build --app barcode_shrdc"`, then restart the container |
 | A valid barcode is not found | Barcode not in that item's Barcodes table | Open the Item and add the barcode |
 | Barcode Printing image is broken | Image-rendering deps on the server | `setup.ps1 -VerifyOnly`, then `docker logs comp_demo-bench-1` |
 | Everything is empty after `docker compose down -v` / `-Wipe` | volumes deleted on purpose | Run `up.ps1` |

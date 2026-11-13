@@ -37,6 +37,14 @@ services:
       - -lc
       - |
         cd /home/frappe/frappe-bench
+        # --- node on PATH -----------------------------------------------------
+        # The frappe image ships node only under ~/.nvm/...; nothing adds it to
+        # PATH. Without this, every `bench build` (and therefore every asset
+        # rebuild) dies with "bin/sh: 1: node: not found". up.ps1 shims PATH for
+        # its own calls, but anything run by hand - or by a colleague following
+        # the troubleshooting guide - hits the failure.
+        NODE_BIN="$$(ls -d /home/frappe/.nvm/versions/node/*/bin 2>/dev/null | tail -1)"
+        [ -n "$$NODE_BIN" ] && export PATH="$$NODE_BIN:$$PATH"
         # --- self-heal the site DB grant on EVERY container start -------------
         # `bench new-site` creates the site's db_user bound to the bench
         # container's IP at that moment (e.g. _3b8...@172.20.0.5). Any
