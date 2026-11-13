@@ -88,6 +88,22 @@ services:
           [ -d "$$appdir/$$app/public" ] || continue
           ln -sfn "../apps/$$app/$$app/public" "assets/$$app"
         done
+        # --- report any ACTIVE app_include_js that does not resolve ----------
+        # Frappe loads these on every desk page. A 404 makes the desk reload
+        # itself in a loop ("the front-end site keeps restarting"), which looks
+        # like a browser bug and is nearly impossible to guess from the console.
+        # Log it loudly, but never fail: a missing optional asset must not take
+        # the whole site down. Commented-out hooks lines are ignored.
+        for appdir in apps/*/; do
+          app="$$(basename "$$appdir")"
+          hooks="$$appdir/$$app/hooks.py"
+          [ -f "$$hooks" ] || continue
+          grep -v '^[[:space:]]*#' "$$hooks" \
+            | grep -oE '"/assets/[^"]+\.(js|css)"' | tr -d '"' \
+            | while read -r u; do
+                [ -e "sites$$u" ] || echo "asset-check: MISSING $$u  (referenced by $$app/hooks.py - the desk will reload-loop)"
+              done
+        done
         setsid nohup bench schedule > /tmp/bench-schedule.log 2>&1 &
         setsid nohup bench worker --queue short,default,long >> logs/worker.log 2>&1 &
         exec bench serve --port 8000

@@ -850,6 +850,32 @@ Write-Host '  Production plan: Manufacturing workspace -> "Production Planner"'
 Write-Host ''
 
 # ---------------------------------------------------------------------------
+# feature assertions
+# ---------------------------------------------------------------------------
+# A 200 on /login proves only that the web server is up. An app whose
+# app_include_js 404s still serves a 200 HTML shell, and a missing doctype still
+# looks like "the page is just empty". These check the actual features the
+# repo advertises, and each failure is fatal.
+function Test-Feature([string]$Name, [string]$Url, [hashtable]$Headers = @{}) {
+    $code = 'ERR'
+    try {
+        $r = Invoke-WebRequest -Uri $Url -Headers $Headers -UseBasicParsing -TimeoutSec 25
+        $code = [int]$r.StatusCode
+    } catch {
+        if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
+    }
+    if ($code -eq 200) { Write-Info ("feature  : {0,-26} OK" -f $Name) }
+    else { Add-Failure $Name ("expected 200, got $code - $Url") }
+}
+
+$authHeaders = @{ Authorization = "token $erpToken" }
+Test-Feature 'barcode app'   "$erpUrl/api/resource/Barcode%20Printing"   $authHeaders
+Test-Feature 'barcode page'  "$erpUrl/item_qr?item_code=PLN-BRACKET"
+Test-Feature 'item tracking' "$erpUrl/assets/item_tracking/js/item_tracking_scan.js"
+Test-Feature 'e-invoicing'   "$erpUrl/api/resource/E%20Invoice%20Import"  $authHeaders
+Test-Feature 'barcode scan js' "$erpUrl/assets/barcode_shrdc/js/scanner_barcode_patch.js"
+Test-Feature 'barcode link js' "$erpUrl/assets/barcode_shrdc/js/barcode_create_links.js"
+# ---------------------------------------------------------------------------
 # exit contract
 # ---------------------------------------------------------------------------
 # 0 = every required step produced the feature it advertises.
