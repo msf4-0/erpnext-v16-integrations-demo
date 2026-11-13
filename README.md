@@ -33,6 +33,30 @@ Notes:
 - In PowerShell, plain `.\setup.ps1` also works if your execution policy allows scripts. A bare `setup.ps1` without `.\` does not run.
 - The `-ExecutionPolicy Bypass` form works in `cmd.exe` as well and avoids "running scripts is disabled" errors.
 - `setup.ps1` exits 0 when all checks pass and 1 if anything is still broken.
+### 3a. Fresh clone — one command
+
+```powershell
+git clone https://github.com/msf4-0/erpnext-v16-integrations-demo.git
+cd erpnext-v16-integrations-demo
+copy .env.example .env
+docker compose up -d --wait
+```
+
+What happens: `seed` restores the bundled demo database (~5 min, `seed/`),
+then `bench` starts and its startup block re-creates the import paths and asset
+links. You end up at <http://localhost:8000> with data already in it — no
+`up.ps1`, no Shopify/ngrok secrets.
+
+To skip the local image build entirely, pull the published image instead of
+building `bake/bench.Dockerfile`:
+
+```powershell
+$env:BENCH_IMAGE = 'ghcr.io/msf4-0/comp-demo-bench:v16'
+docker compose up -d --wait
+```
+
+If your clone still takes 25-35 minutes, it is building the image locally — the
+image is the slow part, not the code.
 
 ## 4. Configuration (.env)
 

@@ -25,7 +25,10 @@ services:
     # Baked image: frappe + erpnext v16 + barcode_shrdc + shopify + eu_einvoice
     # + render deps are baked INTO the image at build time (bake/bench.Dockerfile),
     # so a fresh clone can reproduce the exact image without re-provisioning.
-    image: comp_demo-bench:v16
+    # Pull the prebuilt image when BENCH_IMAGE points at the registry:
+    #   BENCH_IMAGE=ghcr.io/msf4-0/comp-demo-bench:v16
+    # Default keeps the local build tag so `docker compose build bench` still works.
+    image: ${BENCH_IMAGE:-comp_demo-bench:v16}
     build:
       context: .
       dockerfile: bake/bench.Dockerfile
@@ -131,6 +134,11 @@ services:
       # serial-number flow exists and survives restarts.
       - ./repos/barcode-shrdc-v16-fixed:/home/frappe/frappe-bench/apps/barcode_shrdc
     depends_on:
+      # A fresh clone has an empty bench_sites volume, so bench would serve
+      # "404 localhost does not exist". `seed` restores the demo DB first, then
+      # exits; bench only starts once that succeeded.
+      seed:
+        condition: service_completed_successfully
       db:
         condition: service_healthy
       redis-cache:
@@ -161,6 +169,27 @@ services:
       retries: 20
       start_period: 240s
     restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # One-shot seeder: makes `docker compose up` alone yield a WORKING demo site
+  # instead of an empty one. Idempotent: exits immediately when a site exists,
+  # so it costs about two seconds on every later boot.
+  # ---------------------------------------------------------------------------
+  seed:
+    image: ${BENCH_IMAGE:-comp_demo-bench:v16}
+    container_name: comp_demo-seed
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - bench_sites:/home/frappe/frappe-bench/sites
+      - ./seed:/seed:ro
+    environment:
+      - SITE_NAME=${SITE_NAME:-frontend}
+      - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+    command: ["bash", "/seed/seed-site.sh"]
 
   db:
     image: mariadb:11.8
