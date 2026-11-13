@@ -1,3 +1,16 @@
+# ===========================================================================
+# SUPERSEDED - do not run this on the current stack.
+#
+# Metabase dashboards now ship inside seed/metabase-db.sql.gz and are restored
+# by the `seed` service, so a clone already has "ERPNext Monitoring".
+#
+# Two known defects in this script, found 2026-11-13 against Metabase v0.58:
+#   * POST /api/dashboard/{id}/cards no longer exists ("API endpoint does not
+#     exist") - the card-attach step cannot work on this version;
+#   * it is NOT idempotent: running it against a stack that already has the
+#     dashboard creates a SECOND "ERPNext Monitoring" (it did exactly that).
+# Kept for reference only.
+# ===========================================================================
 # Build the 4 ERPNext monitoring questions + one dashboard in Metabase (idempotent).
 param(
   [string]$BaseUrl = "http://localhost:3005",
