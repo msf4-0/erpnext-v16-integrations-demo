@@ -41,7 +41,7 @@ jobs:
           PAT: ${{ secrets.GHCR_ADMIN_PAT }}
         run: |
           if [ -z "${PAT:-}" ]; then
-            echo "::error::GHCR_ADMIN_PAT is not set. Either add an org-owner classic PAT with write:packages, or flip visibility in the UI: https://github.com/msf4-0?tab=packages"
+            echo "::error::GHCR_ADMIN_PAT is not set. Either add an org-owner classic PAT with write:packages, or have an org owner enable public packages at https://github.com/organizations/msf4-0/settings/packages and flip visibility in the UI."
             exit 1
           fi
 
