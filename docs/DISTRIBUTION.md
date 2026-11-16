@@ -43,7 +43,7 @@ release gate; 7–8 are quality gates.
 
 | # | Criterion | How it is proven |
 |---|---|---|
-| 1 | The bench image is **anonymously pullable** (no GitHub account, no PAT) | `docker logout ghcr.io; docker manifest inspect ghcr.io/msf4-0/comp-demo-bench:v16` returns a manifest |
+| 1 | The bench image is retrievable **anonymously** (no GitHub account, no PAT) - either the GHCR pull or the public release bundle | `docker logout ghcr.io; docker manifest inspect …` returns a manifest, **or** the release asset downloads |
 | 2 | `start.ps1` **tries the pull first** on a machine without the image, and only builds as a fallback | run on a clean machine/Docker; log shows `bench image pulled in N min` |
 | 3 | A failed pull prints the exact remediation link instead of silently building | stop GHCR access; run `start.ps1`; expect the three `WARN` lines |
 | 4 | Cold start ≤ **15 min** on a 20 Mbit/s link (pull + 5–6 min seed + wiring) | time `start.ps1` from a clean Docker state |
@@ -129,16 +129,37 @@ answers `403`. Do not put such a PAT in the repo; use the UI once.
   `build:` fallback kept for offline work.
 - `docs/DISTRIBUTION.md` (this file) — the contract above.
 
-## 5. If the package must stay private
+## 5. If the package stays private: the release bundle (works today)
 
-Then "everyone" means "people with a GitHub account that has `read:packages` on
-the package". In that case:
+The org currently disables public packages, so the GHCR pull needs a token. The
+**public fallback does not**: `release-bundle.yml` exports the same image as a
+GitHub Release asset with a stable name, and the scripts try it automatically.
 
-```powershell
-# each colleague, once
-echo <PAT with read:packages> | docker login ghcr.io -u <github-user> --password-stdin
-powershell -ExecutionPolicy Bypass -File .\start.ps1
+| Item | Value |
+|---|---|
+| Asset | `releases/latest/download/comp-demo-bench-v16-amd64.tar.gz` |
+| Size | ~1 GB (gzip of the 3 GB image) |
+| Checksum | same URL + `.sha256` |
+| Auth | none - public repo release asset |
+
+Manual path:
+
+```bash
+curl -fL -O https://github.com/msf4-0/erpnext-v16-integrations-demo/releases/latest/download/comp-demo-bench-v16-amd64.tar.gz
+curl -fL -O https://github.com/msf4-0/erpnext-v16-integrations-demo/releases/latest/download/comp-demo-bench-v16-amd64.tar.gz.sha256
+sha256sum -c comp-demo-bench-v16-amd64.tar.gz.sha256
+docker load -i comp-demo-bench-v16-amd64.tar.gz
 ```
 
-Document that PAT flow instead of the anonymous one, and add the login step to
-the onboarding README. Anonymous public visibility is strictly simpler.
+`pull-bench.ps1` / `start.sh` do exactly this when the GHCR pull fails, verify
+the checksum, `docker load`, and retag as `comp_demo-bench:v16`. Override the
+location with `BENCH_BUNDLE_URL` (env or `.env`) for a fork or an internal
+mirror.
+
+Limits: a release asset is not a registry - no per-layer caching, no digest
+reference, no multi-arch manifest. It exists so a colleague with no GitHub
+account can still run the demo; GHCR stays the primary path.
+
+If you would rather hand out tokens than use the bundle: each colleague runs
+`echo <PAT with read:packages> | docker login ghcr.io -u <user> --password-stdin`
+once, then `start.ps1` pulls normally.
