@@ -56,6 +56,15 @@ Not part of the gate: Shopify, ngrok and the planner API tokens need per-machine
 credentials. They are intentionally optional in `start.ps1 -SkipTunnel` and are
 documented in README section 9.
 
+### Machine prerequisites (put these in the invite)
+
+- Docker Desktop with **≥ 8 GB RAM** and **≥ 20 GB free disk** (bench image 3 GB,
+  MariaDB volume, Metabase 3 GB limit).
+- Windows 10/11 + PowerShell 5.1, or Linux/macOS with Docker Compose v2.
+- **linux/amd64** host or emulation: the published image is amd64 only, so Apple
+  Silicon needs `--platform linux/amd64` (already passed by the pull scripts).
+- A network that can reach `ghcr.io` (corporate TLS interception breaks pulls).
+
 ---
 
 ## 3. Go-live checklist (maintainer, ~2 minutes)
