@@ -26,6 +26,21 @@ git status --short
 | `build-bench-image` | the bench image builds; on `main` it is pushed to GHCR |
 | `smoke` | the pushed image imports `frappe, erpnext, barcode_shrdc, shopify, eu_einvoice, reportlab, qrcode, PIL, drafthorse, saxonche` |
 
+## Suites that run outside `ci.yml`
+
+```bash
+# Nightly cold-start (Actions -> e2e -> Run workflow, or schedule at 03:17 UTC):
+#   pull -> seed -> ping -> login -> seeded DocType -> planner health
+
+# App tests, against a running site:
+docker exec comp_demo-bench-1 bash -lc \
+  "cd /home/frappe/frappe-bench && bench --site frontend set-config allow_tests true \
+   && bench --site frontend run-tests --app my_invois"
+```
+
+The MyInvois suite proves the demo contract: with no credentials, submitting
+never contacts LHDN and never reports success.
+
 ## Rules that are not negotiable
 
 1. **Never commit only part of an app.** A `hooks.py` without its package, or a

@@ -419,6 +419,21 @@ docs/                     guides + MILESTONES.md (status, fixes, known gaps)
 
 Status of every milestone, the fixes applied, and the honest not-ready list: [`docs/MILESTONES.md`](docs/MILESTONES.md).
 
+## 12. Demos that need no external account
+
+These work on a fresh clone with nothing filled in:
+
+| Demo | Command | What you should see |
+|---|---|---|
+| Webhooks without ngrok | `docker compose up -d webhook-sink`, then submit a Delivery Note | payload in `curl localhost:8088/received` |
+| Shopify order import | `./tools/shopify-replay/replay.sh` (or `replay.ps1`) | a Sales Order tagged `shopify_order_id 9001001` |
+| MyInvois gating | open a submitted Sales Invoice -> **MyInvois -> Validate** | validation errors, no LHDN call, status unchanged/`Rejected` |
+| Barcode + item tracking | Shift+I / Item form buttons | scan popup, tracked units, QR/barcode images |
+
+The first two are demo tools, not a substitute for live credentials: the sink does
+not verify Shopify HMACs, and replay exercises the mapping but not token minting
+or rate limits.
+
 ## License
 
 GPL-3.0-or-later - see [LICENSE](LICENSE). The apps import Frappe/ERPNext
