@@ -59,6 +59,7 @@ MB_PORT="$(env_get METABASE_PORT)";       MB_PORT="${MB_PORT:-3305}"
 SITE="$(env_get SITE_NAME)";              SITE="${SITE:-frontend}"
 LOCAL_TAG="comp_demo-bench:v16"
 GHCR_IMAGE="ghcr.io/msf4-0/comp-demo-bench:v16"
+BUNDLE_URL="${BENCH_BUNDLE_URL:-https://github.com/msf4-0/erpnext-v16-integrations-demo/releases/latest/download/comp-demo-bench-v16-amd64.tar.gz}"
 
 http_code() {
   if command -v curl >/dev/null 2>&1; then
@@ -82,10 +83,27 @@ if [ "$NO_PULL" -eq 0 ] && { [ "$have_image" -eq 0 ] || [ "${FORCE_PULL:-0}" = "
     ok "bench image pulled in $(( ($(date +%s) - start_ts) / 60 )) min"
     have_image=1
   else
-    warn "prebuilt image not pullable (package still private, or offline)"
-    warn "  one-time fix: https://github.com/msf4-0?tab=packages -> comp-demo-bench"
-    warn "                -> Package settings -> Change visibility -> Public"
-    warn "  falling back to a local build - 25-40 minutes, once"
+    warn "GHCR pull failed (package private or no access) - trying the release bundle"
+    bundle="${TMPDIR:-/tmp}/comp-demo-bench-v16-amd64.tar.gz"
+    if curl -fL --retry 3 -o "$bundle" "$BUNDLE_URL"; then
+      if curl -fsL -o "$bundle.sha256" "$BUNDLE_URL.sha256"; then
+        expected=$(cut -d' ' -f1 "$bundle.sha256")
+        actual=$(sha256sum "$bundle" | cut -d' ' -f1)
+        [ "$expected" = "$actual" ] || fail "bundle checksum mismatch"
+        ok "bundle checksum verified"
+      else
+        warn "no .sha256 published - skipping checksum"
+      fi
+      docker load -i "$bundle" || fail "docker load failed"
+      docker image inspect "$LOCAL_TAG" >/dev/null 2>&1 || fail "bundle did not provide $LOCAL_TAG"
+      ok "bench image loaded from the release bundle"
+      have_image=1
+      rm -f "$bundle" "$bundle.sha256"
+    else
+      warn "release bundle unavailable"
+      warn "  permanent fix (org owner): https://github.com/organizations/msf4-0/settings/packages"
+      warn "  falling back to a local build - 25-40 minutes, once"
+    fi
   fi
 elif [ "$have_image" -eq 1 ]; then
   ok "bench image present locally ($LOCAL_TAG)"

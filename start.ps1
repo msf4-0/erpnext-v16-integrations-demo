@@ -105,38 +105,27 @@ $BenchName = "$Project-bench-1"
 # ---------------------------------------------------------------------------
 $existing = (& docker ps -a --format '{{.Names}}') 2>&1
 
-# The 3 GB bench image is the only slow first-run step (25-40 min to build).
-# CI publishes it to GHCR; pulling it takes a normal connection ~3-8 min. Try
-# that BEFORE `compose create`, because compose silently builds instead when
-# the tag is not local - which is exactly the "setup never finishes" report.
-# Only treat BENCH_IMAGE as a registry ref when it has a namespace; a bare
-# local tag like `comp_demo-bench:v16` is the compose default, not a pull target.
-$GhcrImage = if ($cfg['BENCH_IMAGE'] -and $cfg['BENCH_IMAGE'] -match '/') { $cfg['BENCH_IMAGE'] } else { 'ghcr.io/msf4-0/comp-demo-bench:v16' }
+# The bench image is the only slow first-run step (25-40 min to build).
+# pull-bench.ps1 tries GHCR, then the public GitHub Release bundle (~1 GB, no
+# account needed), and only gives up when both fail - then compose builds.
 $LocalTag  = 'comp_demo-bench:v16'
 $haveImage = $false
 & docker image inspect $LocalTag *> $null
 if ($LASTEXITCODE -eq 0) { $haveImage = $true }
 
+$pullScript = Join-Path $Root 'pull-bench.ps1'
 if (-not $NoPull -and (-not $haveImage -or $Pull)) {
-    Say "pulling prebuilt bench image $GhcrImage (3 GB, one time)"
-    $sw = [Diagnostics.Stopwatch]::StartNew()
-    $out = cmd /c "docker pull --platform linux/amd64 $GhcrImage 2>&1"
-    $rc = $LASTEXITCODE
-    $out | Select-Object -Last 2 | ForEach-Object { Write-Host "        $_" }
-    if ($rc -eq 0) {
-        & docker tag $GhcrImage $LocalTag | Out-Null
-        Ok ("bench image pulled in {0:n1} min" -f $sw.Elapsed.TotalMinutes)
-        $haveImage = $true
-    } else {
-        Warn 'prebuilt image not pullable (package still private, or you are offline)'
-        Warn '  one-time fix: https://github.com/msf4-0?tab=packages -> comp-demo-bench'
-        Warn '                -> Package settings -> Change visibility -> Public'
-        Warn '  falling back to a local build - 25-40 minutes, once'
-    }
+    $pullArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $pullScript)
+    if ($Pull) { $pullArgs += '-Force' }
+    & powershell.exe @pullArgs
+    $pullRc = $LASTEXITCODE
+    & docker image inspect $LocalTag *> $null
+    if ($LASTEXITCODE -eq 0) { $haveImage = $true; Ok 'bench image ready' }
+    elseif ($pullRc -eq 2) { Warn 'no prebuilt image available - a local build will be used' }
 } elseif ($haveImage) {
     Ok "bench image present locally ($LocalTag)"
 } else {
-    Say 'skipping GHCR (-NoPull) - a local build will be used'
+    Say 'skipping the image fetch (-NoPull) - a local build will be used'
 }
 
 # If the containers are gone but host backups exist, this run will restore the

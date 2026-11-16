@@ -1,0 +1,87 @@
+name: release-bundle
+
+# Publishes the bench image as a plain GitHub Release asset, so the demo can be
+# installed even while the GHCR package is private (org policy blocks public
+# packages). A colleague downloads one ~1 GB file and `docker load`s it - no
+# registry account, no PAT, no org owner.
+#
+# Asset names are stable so `releases/latest/download/<name>` always resolves:
+#   comp-demo-bench-v16-amd64.tar.gz
+#   comp-demo-bench-v16-amd64.tar.gz.sha256
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (created at the current commit if missing)"
+        required: true
+        default: "v16.3"
+
+permissions:
+  contents: write
+  packages: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build the image locally
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: bake/bench.Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: comp_demo-bench:v16
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Export, compress and checksum
+        run: |
+          set -euo pipefail
+          name=comp-demo-bench-v16-amd64.tar.gz
+          docker save comp_demo-bench:v16 | gzip -1 > "$name"
+          ls -lh "$name"
+          sha256sum "$name" > "$name.sha256"
+          cat "$name.sha256"
+
+      - name: Publish the release asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          name=comp-demo-bench-v16-amd64.tar.gz
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --title "comp_demo bench image $TAG" \
+              --notes "Prebuilt bench image (linux/amd64) for machines where GHCR pulls need a token. Download both files, then \`docker load -i $name\`." \
+              --target "$GITHUB_SHA"
+          fi
+          gh release upload "$TAG" "$name" "$name.sha256" --clobber
+          echo "asset: https://github.com/${{ github.repository }}/releases/latest/download/$name"
+
+      - name: Verify the asset is anonymously downloadable
+        run: |
+          set -euo pipefail
+          url="https://github.com/${{ github.repository }}/releases/latest/download/comp-demo-bench-v16-amd64.tar.gz"
+          code=$(curl -sIL -o /dev/null -w '%{http_code}' "$url" || true)
+          echo "HEAD $url -> $code"
+          # 302 to the asset CDN is the expected anonymous path.
+          case "$code" in
+            200|302) echo "::notice::release bundle is publicly downloadable" ;;
+            *) echo "::warning::release bundle HEAD returned $code - check release visibility" ;;
+          esac
