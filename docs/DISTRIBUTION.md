@@ -138,9 +138,9 @@ GitHub Release asset with a stable name, and the scripts try it automatically.
 | Item | Value |
 |---|---|
 | Asset | `releases/latest/download/comp-demo-bench-v16-amd64.tar.gz` |
-| Size | ~1 GB (gzip of the 3 GB image) |
+| Size | **932 MB** (977,010,886 bytes) - verified 2026-11-16 |
 | Checksum | same URL + `.sha256` |
-| Auth | none - public repo release asset |
+| Auth | none - public repo release asset (anonymous HTTP 200 confirmed) |
 
 Manual path:
 
