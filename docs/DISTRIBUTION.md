@@ -107,6 +107,9 @@ answers `403`. Do not put such a PAT in the repo; use the UI once.
   image build + push on `main`, and an import smoke test of the pushed image.
 - `start.ps1` — pulls the GHCR image by default, tags it as the local
   `comp_demo-bench:v16`, and only builds when the pull fails (`-NoPull` to skip).
+- `pull-bench.ps1` — the same pull step for the other entry point; `up.ps1`
+  (used by `setup.ps1 -Full`) calls it before `docker compose create`, so the
+  documented `setup.ps1` route also avoids the build.
 - `docker-compose.yml` — `image: ${BENCH_IMAGE:-comp_demo-bench:v16}` with the
   `build:` fallback kept for offline work.
 - `docs/DISTRIBUTION.md` (this file) — the contract above.

@@ -418,7 +418,7 @@ if ($Full) {
     }
     $upArgs = @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $DemoDir 'up.ps1'))
     if ($Wipe) { $upArgs += '-Fresh' }
-    Write-Info 'this takes 25-35 minutes and streams up.ps1 output'
+    Write-Info 'this pulls the prebuilt image (~8 min) or builds it (25-40 min) and streams up.ps1 output'
     $rc = Invoke-Native -Exe 'powershell.exe' -Arguments $upArgs
     if ($rc -ne 0) { Write-Fail "up.ps1 exited $rc" } else { Write-Ok 'up.ps1 completed' }
 }

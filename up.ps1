@@ -324,6 +324,13 @@ if ($Fresh) {
     # and make the next `up` fail with a name conflict. Volumes are preserved.
     Invoke-Compose @('down', '--remove-orphans') | Out-Null
 }
+# Pull the published image before compose create. Without this, compose builds
+# the 3 GB bench image whenever its tag is missing - the 25-40 minute stall.
+$pullScript = Join-Path $RootDir 'pull-bench.ps1'
+if (Test-Path $pullScript) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $pullScript
+    if ($LASTEXITCODE -eq 2) { Write-Warn 'continuing with a local build' }
+}
 if ((Invoke-Compose @('create')) -ne 0) { throw 'docker compose create failed' }
 
 # WHY NOT `docker compose up -d`: on this host `up` HANGS with the containers
