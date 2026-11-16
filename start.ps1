@@ -120,8 +120,10 @@ if ($LASTEXITCODE -eq 0) { $haveImage = $true }
 if (-not $NoPull -and (-not $haveImage -or $Pull)) {
     Say "pulling prebuilt bench image $GhcrImage (3 GB, one time)"
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    & docker pull --platform linux/amd64 $GhcrImage 2>&1 | Select-Object -Last 2
-    if ($LASTEXITCODE -eq 0) {
+    $out = cmd /c "docker pull --platform linux/amd64 $GhcrImage 2>&1"
+    $rc = $LASTEXITCODE
+    $out | Select-Object -Last 2 | ForEach-Object { Write-Host "        $_" }
+    if ($rc -eq 0) {
         & docker tag $GhcrImage $LocalTag | Out-Null
         Ok ("bench image pulled in {0:n1} min" -f $sw.Elapsed.TotalMinutes)
         $haveImage = $true
