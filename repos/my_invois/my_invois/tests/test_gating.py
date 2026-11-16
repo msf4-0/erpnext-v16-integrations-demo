@@ -40,12 +40,15 @@ class TestMyInvoisGating(FrappeTestCase):
     def test_unconfigured_submit_never_calls_lhdn(self):
         # Simulate a fresh clone: no client credentials in site_config.
         with patch.dict(frappe.conf, {"myinvois_client_id": None, "myinvois_client_secret": None}):
-            if not validate_for_myinvois(self.docname)["ready"]:
-                self.skipTest("seeded invoice does not satisfy MyInvois validation")
-
-            with patch("my_invois.my_invois.api._get_access_token") as token:
-                token.side_effect = AssertionError("LHDN must not be contacted without credentials")
-                result = submit_to_myinvois(self.docname)
+            # Do not depend on the seeded invoice being MyInvois-ready: force the
+            # validation gate open so the credentials gate is what gets tested.
+            with patch(
+                "my_invois.my_invois.api.validate_for_myinvois",
+                return_value={"ready": True, "errors": []},
+            ):
+                with patch("my_invois.my_invois.api._get_access_token") as token:
+                    token.side_effect = AssertionError("LHDN must not be contacted without credentials")
+                    result = submit_to_myinvois(self.docname)
 
             token.assert_not_called()
             self.assertEqual(result["status"], "Pending Validation")
