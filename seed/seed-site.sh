@@ -112,6 +112,12 @@ bench --site "${SITE}" clear-website-cache || true
 # Guarded: a failure here must not abort the seed (core demo stays usable).
 if ! grep -qx 'my_invois' sites/apps.txt 2>/dev/null; then
     echo "seed: registering my_invois in sites/apps.txt"
+    # apps.txt is often written without a trailing newline, and `echo x >> file`
+    # would then glue the name onto the last line. e2e caught exactly that:
+    # ModuleNotFoundError: No module named 'erpnextmy_invois'.
+    if [ -s sites/apps.txt ] && [ -n "$(tail -c 1 sites/apps.txt)" ]; then
+        echo >> sites/apps.txt
+    fi
     echo 'my_invois' >> sites/apps.txt
 fi
 if ! bench --site "${SITE}" list-apps 2>/dev/null | awk '{print $1}' | grep -qx 'my_invois'; then
