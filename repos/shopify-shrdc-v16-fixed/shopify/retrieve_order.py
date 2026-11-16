@@ -69,7 +69,7 @@ def retrieve_shopify_orders(api_key, api_password, shopify_store_url):
     frappe.logger().info("Shopify order sync completed")
 
 
-def create_sales_order(shopify_order):
+def create_sales_order(shopify_order, warehouse=None):
     shopify_order_id = shopify_order.get("id")
     if not shopify_order_id:
         return
@@ -109,6 +109,12 @@ def create_sales_order(shopify_order):
     new_sales_order.customer = customer_name
     new_sales_order.delivery_date = add_days(nowdate(), 1)
     new_sales_order.shopify_order_id = shopify_order_id
+    # Sales Orders for stock items need a source warehouse. The live sync never
+    # set one, so any newly created item aborted the insert with
+    # WarehouseRequired. Callers may pass one (the replay tool does); live calls
+    # keep the old behaviour when it is omitted.
+    if warehouse:
+        new_sales_order.set_warehouse = warehouse
 
     for line_item in shopify_order.get("line_items") or []:
         create_sales_order_item(new_sales_order, line_item)

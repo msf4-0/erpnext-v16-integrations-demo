@@ -1,0 +1,31 @@
+{
+  "id": 9001002,
+  "name": "#1002",
+  "email": "multi.line@example.com",
+  "financial_status": "pending",
+  "created_at": "2026-11-16T08:05:00+08:00",
+  "customer": {
+    "id": 7001002,
+    "email": "multi.line@example.com",
+    "first_name": "Multi",
+    "last_name": "Line"
+  },
+  "line_items": [
+    {
+      "id": 5002001,
+      "product_id": 8002001,
+      "sku": "DEMO-SKU-2001",
+      "title": "Replay Demo Widget A",
+      "quantity": 1,
+      "price": "19.00"
+    },
+    {
+      "id": 5002002,
+      "product_id": 8002002,
+      "sku": "DEMO-SKU-2002",
+      "title": "Replay Demo Widget B",
+      "quantity": 3,
+      "price": "7.50"
+    }
+  ]
+}

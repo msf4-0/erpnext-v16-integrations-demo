@@ -325,7 +325,31 @@ services:
       start_period: 120s
     restart: unless-stopped
 
+  webhook-sink:
+    # Tunnel-free webhook receiver: ERPNext can post Delivery Note / Stock Entry
+    # / Stock Reconciliation webhooks here instead of through ngrok. See
+    # tools/webhook-sink/README.md.
+    image: python:3.12-alpine
+    command: ["python", "/app/server.py"]
+    ports:
+      - "${WEBHOOK_SINK_PORT:-8088}:8088"
+    volumes:
+      - ./tools/webhook-sink:/app:ro
+      - webhook_sink_data:/data
+    environment:
+      SINK_PORT: 8088
+      SINK_DATA: /data/received.jsonl
+      FORWARD_URL: ${FORWARD_URL:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8088/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
 volumes:
   bench_sites:
   db_data:
   node_red_data:
+  webhook_sink_data:
