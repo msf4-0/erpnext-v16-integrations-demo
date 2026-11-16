@@ -337,8 +337,8 @@ Write-Ok "docker engine $($dockerVer.Output.Trim())"
 
 $py = (Get-Command python -ErrorAction SilentlyContinue)
 if (-not $py) { $py = (Get-Command python3 -ErrorAction SilentlyContinue) }
-if (-not $py) { throw 'python is required to build the Node-RED flow' }
-Write-Ok "python $((& $py.Source --version 2>&1) -replace 'Python ','')"
+if (-not $py) { Write-Skip 'python not found - the Node-RED flow will not be rebuilt (the mounted flow keeps running)' }
+if ($py) { Write-Ok "python $((& $py.Source --version 2>&1) -replace 'Python ','')" }
 
 $cfg = Read-EnvFile $EnvPath
 Write-Ok "project $DemoDir"
@@ -407,6 +407,15 @@ if (-not $cfg['SHOPIFY_CLIENT_ID'] -or -not $cfg['SHOPIFY_CLIENT_SECRET']) {
 if ($Full) {
     Write-Step '3/10  full rebuild (delegating to up.ps1)'
     if ($VerifyOnly) { throw '-Full and -VerifyOnly are mutually exclusive' }
+    # A full rebuild may recreate the site (and -Wipe drops the volumes). Take a
+    # host-side backup first, every time, so 'compose down then setup' can never
+    # silently cost another afternoon of BOMs and items.
+    $backupScript = Join-Path $DemoDir 'backup.ps1'
+    if (Test-Path $backupScript) {
+        Write-Info 'backing up the site before the rebuild'
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $backupScript
+        if ($LASTEXITCODE -ne 0) { Write-Warn 'backup failed - continuing, but a wipe will lose data' }
+    }
     $upArgs = @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $DemoDir 'up.ps1'))
     if ($Wipe) { $upArgs += '-Fresh' }
     Write-Info 'this takes 25-35 minutes and streams up.ps1 output'
@@ -862,7 +871,9 @@ if ($VerifyOnly) {
     } catch { Write-Fail 'Node-RED /flows not readable' }
 } else {
     # build first, so a rebuild never leaves the container with an empty flow
-    if ($rebuildFlow) {
+    if ($rebuildFlow -and -not $py) {
+        Write-Skip 'flow rebuild skipped - python is not installed; the mounted flow keeps running'
+    } elseif ($rebuildFlow) {
         if (-not $shopifyToken) { Write-Warn 'no Shopify token - the flow will bake an empty value' }
         & $py.Source $Builder --src $FlowSrc --out $FlowPath `
             --erpnext-url 'http://bench:8000' --erpnext-token $erpToken `

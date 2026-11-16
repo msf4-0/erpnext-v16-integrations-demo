@@ -198,8 +198,20 @@ if [ -f "$SITE_DIR/site_config.json" ] \
 else
   if ! bench new-site "$SITE_NAME" --admin-password admin \
         "$ROOT_PW_FLAG" "$DB_ROOT_PASSWORD" "$ROOT_USER_FLAG" root --install-app erpnext; then
-    echo "-- new-site failed (likely partial DB setup from a prior attempt),"
-    echo "   retrying with --force --"
+    echo "-- new-site failed (likely partial DB setup from a prior attempt) --"
+    # `new-site --force` DROPS the existing site database. Doing that silently
+    # is how operators lost BOMs and other records that were newer than
+    # seed/frontend-database.sql.gz: the site got recreated, the stale dump was
+    # restored, and everything created since the dump disappeared.
+    if [ "${ALLOW_SITE_RECREATE:-0}" != "1" ]; then
+      echo ""
+      echo "REFUSING to recreate site '$SITE_NAME': that would DROP its database."
+      echo "  1. back up first:      powershell -File .\\backup.ps1"
+      echo "  2. then re-run with:   ALLOW_SITE_RECREATE=1 (setup.ps1 -Full -Wipe does this for you)"
+      echo "  3. inspect the failure above; a partial DB often needs a manual drop, not a --force."
+      exit 2
+    fi
+    echo "-- ALLOW_SITE_RECREATE=1 - recreating '$SITE_NAME' with --force (the DB is dropped) --"
     bench new-site "$SITE_NAME" --force --admin-password admin \
         "$ROOT_PW_FLAG" "$DB_ROOT_PASSWORD" "$ROOT_USER_FLAG" root --install-app erpnext
   fi

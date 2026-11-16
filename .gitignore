@@ -45,3 +45,6 @@ lowdefy/server/exceptions.db
 # container/compose backup files
 *.bak-*
 
+
+# ---- host-side database backups (site_config.json holds the db password) ---
+backups/

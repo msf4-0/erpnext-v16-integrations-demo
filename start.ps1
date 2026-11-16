@@ -108,6 +108,19 @@ if ($Pull) {
     if ($LASTEXITCODE -ne 0) { Warn "pull failed (is the package public?) - falling back to a local build" }
 }
 
+# If the containers are gone but host backups exist, this run will restore the
+# seed snapshot - i.e. everything newer than the dump disappears. Say so first.
+$backupDir = Join-Path $Root 'backups'
+$volumes = (& docker volume ls --format '{{.Name}}') 2>&1
+if (-not ($volumes -match [regex]::Escape("${Project}_db_data")) -and (Test-Path $backupDir) -and
+    ((Get-ChildItem $backupDir -Directory | Measure-Object).Count -gt 0)) {
+    Warn 'the db_data volume is gone but host backups exist:'
+    Warn 'this run will restore seed/frontend-database.sql.gz, which is older than those backups.'
+    Warn "to keep your data, restore instead:  powershell -File .\restore.ps1 -Backup <name>"
+    $answer = Read-Host 'continue and seed a fresh site? [y/N]'
+    if ($answer -notmatch '^(y|yes)$') { Fail 'aborted before touching volumes'; exit 1 }
+}
+
 if (-not ($existing -match [regex]::Escape($BenchName))) {
     $benchImage = $cfg['BENCH_IMAGE']; if (-not $benchImage) { $benchImage = 'comp_demo-bench:v16' }
     & docker image inspect $benchImage *> $null

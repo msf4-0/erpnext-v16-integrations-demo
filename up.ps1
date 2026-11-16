@@ -304,6 +304,13 @@ if (-not (Test-Path $flowsPath)) {
 Write-Step '3/11  starting the stack'
 if ($Fresh) {
     Write-Warn 'DESTRUCTIVE: removing existing volumes (the site DB will be lost)'
+    $backupScript = Join-Path $RootDir 'backup.ps1'
+    if (Test-Path $backupScript) {
+        Write-Info 'backing up the site before removing the volumes'
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $backupScript
+        if ($LASTEXITCODE -ne 0) { throw 'backup failed - refusing to delete the volumes' }
+    }
+    $env:ALLOW_SITE_RECREATE = '1'
     Invoke-Compose @('down', '-v', '--remove-orphans') | Out-Null
 } elseif ($SkipProvision) {
     # The `down` below removes the bench container, and with it the whole bench

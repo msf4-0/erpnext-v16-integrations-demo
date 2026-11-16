@@ -148,6 +148,16 @@ $planner = $false
 try { $h = Invoke-RestMethod -Uri 'http://localhost:3101/api/health' -TimeoutSec 15; $planner = [bool]$h.status } catch { }
 if ($planner) { Pass 'planner health OK' } else { Fail 'planner health failed' }
 
+Step '7b non-admin demo user can actually transact'
+$demoTest = Join-Path $WorkDir 'tests\verify-demo-user.ps1'
+if (Test-Path $demoTest) {
+    $demoOut = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $demoTest 2>&1
+    if ($LASTEXITCODE -eq 0) { Pass 'demo user saved Delivery Note / Sales Invoice / Stock Entry' }
+    else { Fail "demo user cannot transact: $($demoOut | Select-Object -Last 3)" }
+} else {
+    Fail 'tests/verify-demo-user.ps1 is missing from the clone'
+}
+
 Step '8  teardown'
 if ($Keep) {
     Write-Host "  kept: $WorkDir and project $Project" -ForegroundColor Yellow

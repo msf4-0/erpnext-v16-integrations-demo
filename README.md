@@ -142,6 +142,40 @@ powershell -ExecutionPolicy Bypass -File .\setup.ps1
 
 Expected end state: `SETUP COMPLETE - all checks pass`, ERPNext / Planner / Node-RED up, and all three webhooks returning HTTP 200 both locally and through the tunnel.
 
+## 6b. Your data: what survives what
+
+The short version: **the database is durable, the seed snapshot is not your work.**
+
+| Action | Site DB (`db_data`) | Site files (`bench_sites`) | Custom apps / bench code |
+|---|---|---|---|
+| `docker restart`, Docker Desktop restart, `start.ps1` | kept | kept | rebuilt from the image |
+| `docker compose down` (no `-v`) | **kept** | kept | container layer gone, restored from image |
+| `docker compose down -v`, `up.ps1 -Fresh`, `setup.ps1 -Full -Wipe` | **deleted** | deleted | rebuilt |
+| Site recreated by `bench new-site --force` | **deleted** | kept | – |
+
+Two things used to destroy work silently, and both are now blocked:
+
+1. **`--force` site recreation.** If `bench new-site` failed, provisioning retried
+   with `--force`, which drops the site database. It now refuses unless
+   `ALLOW_SITE_RECREATE=1` is set (only `-Full -Wipe` does that) and prints the
+   backup command instead.
+2. **Restoring a stale snapshot.** When the volume is gone, the seeder restores
+   `seed/frontend-database.sql.gz` — a snapshot from the day it was last
+   committed. Everything newer (BOMs, items, work orders) disappears. That is
+   the "I lost more this week than last week" pattern.
+
+So before anything destructive:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\backup.ps1            # -> backups\<timestamp>\
+powershell -ExecutionPolicy Bypass -File .\backup.ps1 -RefreshSeed   # also update seed/ so clones get current data
+powershell -ExecutionPolicy Bypass -File .\restore.ps1 -Backup 20261116-110434
+```
+
+`setup.ps1 -Full` and `up.ps1 -Fresh` call `backup.ps1` automatically and abort
+if the backup fails. `start.ps1` refuses to seed over a missing volume when host
+backups exist unless you confirm.
+
 ## 7. Known gotchas
 
 - The site database lives on the `db_data` Docker volume, so a container stop, a `docker compose down`, or a Docker Desktop restart **keeps your data**. It is no longer tmpfs. Only `docker compose down -v` (or `-Fresh` / `-Wipe`) destroys the site, the Metabase metadata and the Node-RED flow store. Earlier revisions of this guide said the DB was tmpfs and that every restart wiped it — that is out of date.
@@ -286,6 +320,8 @@ before any shared use.
 | Script | When to use it | Time |
 | `start.ps1` | **First command for a new machine.** Creates `.env`, creates/starts the containers in the right order, waits for the seed restore, then converges. Idempotent. | ~8 min warm, 25–40 min cold |
 | `up.ps1` | Rebuild the bench from zero (provisioning path). Rarely needed now that the seed dump exists. | 25–35 min |
+| `backup.ps1` | Snapshot the site to `backups/<timestamp>/` on the host. `-RefreshSeed` also updates the tracked dump. | ~15 s |
+| `restore.ps1` | Restore a `backups/<timestamp>/` snapshot (takes a safety backup first). | ~1 min |
 | `setup.ps1` | Every normal session. Converges the existing stack to match `.env` and verifies it. Safe to repeat. | 2–4 min |
 | `setup.ps1 -VerifyOnly` | Read-only health report. | ~30 s |
 | `setup.ps1 -Full` | Runs `up.ps1` first, then converges. | 25–35 min |
@@ -353,6 +389,7 @@ before any shared use.
 ```
 docker-compose.yml        the services (planner build context ./scheduler)
 start.ps1                 one-command first run: .env -> create -> seed -> start -> converge
+backup.ps1 / restore.ps1  host-side DB snapshots; run before anything destructive
 setup.cmd / setup.ps1     idempotent converge + verify of an existing stack (run this daily)
 up.ps1                    full bring-up: compose -> bench -> apps -> seed -> Shopify -> planner -> flow -> tunnel -> verify
 verify-all.ps1            41-check end-to-end suite (container + HTTP + browser DOM check)
