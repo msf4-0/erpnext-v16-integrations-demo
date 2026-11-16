@@ -23,9 +23,11 @@
     the planner will return 401 until you run setup.ps1 yourself.
 
 .PARAMETER Pull
-    Pull the published bench image before creating containers. Without this the
-    image is pulled only if the tag is public, otherwise it is built locally
-    (25-35 minutes, one time).
+    Force a re-pull of the published bench image, even when it is already on
+    this machine. Pulling is the default on a first run; use -NoPull to skip it.
+
+.PARAMETER NoPull
+    Never contact GHCR: use a local image if present, otherwise build it.
 
 .PARAMETER Recreate
     Recreate the stateless containers (node-red, metabase, planner). Volumes are
@@ -40,6 +42,7 @@
 param(
     [switch]$NoWiring,
     [switch]$Pull,
+    [switch]$NoPull,
     [switch]$Recreate
 )
 
@@ -101,11 +104,37 @@ $BenchName = "$Project-bench-1"
 # 2. containers
 # ---------------------------------------------------------------------------
 $existing = (& docker ps -a --format '{{.Names}}') 2>&1
-if ($Pull) {
-    $img = $cfg['BENCH_IMAGE']; if (-not $img) { $img = 'ghcr.io/msf4-0/comp-demo-bench:v16' }
-    Say "pulling $img"
-    & docker pull $img | Out-Null
-    if ($LASTEXITCODE -ne 0) { Warn "pull failed (is the package public?) - falling back to a local build" }
+
+# The 3 GB bench image is the only slow first-run step (25-40 min to build).
+# CI publishes it to GHCR; pulling it takes a normal connection ~3-8 min. Try
+# that BEFORE `compose create`, because compose silently builds instead when
+# the tag is not local - which is exactly the "setup never finishes" report.
+# Only treat BENCH_IMAGE as a registry ref when it has a namespace; a bare
+# local tag like `comp_demo-bench:v16` is the compose default, not a pull target.
+$GhcrImage = if ($cfg['BENCH_IMAGE'] -and $cfg['BENCH_IMAGE'] -match '/') { $cfg['BENCH_IMAGE'] } else { 'ghcr.io/msf4-0/comp-demo-bench:v16' }
+$LocalTag  = 'comp_demo-bench:v16'
+$haveImage = $false
+& docker image inspect $LocalTag *> $null
+if ($LASTEXITCODE -eq 0) { $haveImage = $true }
+
+if (-not $NoPull -and (-not $haveImage -or $Pull)) {
+    Say "pulling prebuilt bench image $GhcrImage (3 GB, one time)"
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    & docker pull --platform linux/amd64 $GhcrImage 2>&1 | Select-Object -Last 2
+    if ($LASTEXITCODE -eq 0) {
+        & docker tag $GhcrImage $LocalTag | Out-Null
+        Ok ("bench image pulled in {0:n1} min" -f $sw.Elapsed.TotalMinutes)
+        $haveImage = $true
+    } else {
+        Warn 'prebuilt image not pullable (package still private, or you are offline)'
+        Warn '  one-time fix: https://github.com/msf4-0?tab=packages -> comp-demo-bench'
+        Warn '                -> Package settings -> Change visibility -> Public'
+        Warn '  falling back to a local build - 25-40 minutes, once'
+    }
+} elseif ($haveImage) {
+    Ok "bench image present locally ($LocalTag)"
+} else {
+    Say 'skipping GHCR (-NoPull) - a local build will be used'
 }
 
 # If the containers are gone but host backups exist, this run will restore the
@@ -122,11 +151,8 @@ if (-not ($volumes -match [regex]::Escape("${Project}_db_data")) -and (Test-Path
 }
 
 if (-not ($existing -match [regex]::Escape($BenchName))) {
-    $benchImage = $cfg['BENCH_IMAGE']; if (-not $benchImage) { $benchImage = 'comp_demo-bench:v16' }
-    & docker image inspect $benchImage *> $null
-    if ($LASTEXITCODE -ne 0) {
-        Warn 'the bench image is not on this machine - the first run builds it once (20-40 minutes, ~3 GB)'
-        Warn 'if the GitHub package is public, `start.ps1 -Pull` downloads it instead'
+    if (-not $haveImage) {
+        Warn 'the bench image is still not on this machine - the first run builds it once (25-40 minutes, ~3 GB)'
     }
     Say 'docker compose create'
     & docker compose --project-directory $Root create

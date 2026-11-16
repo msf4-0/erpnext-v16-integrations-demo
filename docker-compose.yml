@@ -25,9 +25,11 @@ services:
     # Baked image: frappe + erpnext v16 + barcode_shrdc + shopify + eu_einvoice
     # + render deps are baked INTO the image at build time (bake/bench.Dockerfile),
     # so a fresh clone can reproduce the exact image without re-provisioning.
-    # Pull the prebuilt image when BENCH_IMAGE points at the registry:
-    #   BENCH_IMAGE=ghcr.io/msf4-0/comp-demo-bench:v16
-    # Default keeps the local build tag so `docker compose build bench` still works.
+    # `start.ps1` pulls ghcr.io/msf4-0/comp-demo-bench:v16 on a first run and
+    # tags it as comp_demo-bench:v16, so this service starts without a build.
+    # The build: block below is the offline fallback (25-40 min). The image is
+    # private until a maintainer flips the package to Public - see
+    # docs/DISTRIBUTION.md.
     image: ${BENCH_IMAGE:-comp_demo-bench:v16}
     build:
       context: .

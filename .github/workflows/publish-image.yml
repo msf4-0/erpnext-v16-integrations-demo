@@ -50,10 +50,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Make the package pullable without a token
-        # Public packages are pullable anonymously; this just reminds the
-        # operator what to check if a colleague gets "unauthorized".
+      - name: Verify the package is pullable without a token
+        # Public packages are pullable anonymously. This turns the one-time
+        # visibility flip into a visible per-release signal instead of a
+        # colleague discovering it as an "unauthorized" pull.
+        continue-on-error: true
         run: |
-          echo "If pulls fail with 'unauthorized', open"
-          echo "  https://github.com/msf4-0?tab=packages"
-          echo "and set the comp-demo-bench package visibility to Public."
+          docker logout ghcr.io
+          if docker manifest inspect ghcr.io/msf4-0/comp-demo-bench:v16 > /dev/null 2>&1; then
+            echo "::notice::anonymous pull works - the fast path is live"
+          else
+            echo "::warning::anonymous pull FAILED - comp-demo-bench is still private;"
+            echo "::warning::colleagues will rebuild locally (25-40 min). Fix:"
+            echo "::warning::https://github.com/msf4-0?tab=packages -> comp-demo-bench -> Package settings -> Change visibility -> Public"
+          fi

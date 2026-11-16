@@ -56,18 +56,26 @@ It is idempotent — run it again any time instead of remembering the order.
 Timing on a warm machine: **~8 min** when the image is already present,
 **25–40 min** on the first run because the 3 GB bench image is built locally.
 
-**The image is the slow part.** `docker-compose.yml` defaults to a locally built
-`comp_demo-bench:v16`. CI publishes `ghcr.io/msf4-0/comp-demo-bench:v16`, but that
-package is currently **private**, so an anonymous pull fails with `unauthorized`
-and compose falls back to the build. One maintainer action makes the fast path
-work for everyone: GitHub → Packages → `comp-demo-bench` → Package settings →
-Change visibility → Public. After that:
+**The image is the slow part.** `docker-compose.yml` defaults to a locally
+built `comp_demo-bench:v16`. CI publishes `ghcr.io/msf4-0/comp-demo-bench:v16`,
+and `start.ps1` now pulls that image automatically on a first run (it tags it as
+`comp_demo-bench:v16`, so compose uses it and never builds).
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\start.ps1 -Pull
+If the pull fails, the package is still **private** and the script says so:
+
+```
+WARN  prebuilt image not pullable (package still private, or you are offline)
+WARN    one-time fix: https://github.com/msf4-0?tab=packages -> comp-demo-bench
+WARN                  -> Package settings -> Change visibility -> Public
 ```
 
-Skipping the pull is safe — it is just slower.
+That one maintainer click is the only thing between "works on my laptop" and
+"works for everyone". Until it is done, the script falls back to the 25-40 min
+build. `-NoPull` skips GHCR entirely; `-Pull` forces a fresh pull.
+
+See [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) for the acceptance criteria,
+the go-live checklist and the measured timings.
+
 
 ### 3a-bis. Manual equivalent (if you prefer explicit steps)
 
