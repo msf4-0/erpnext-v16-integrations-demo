@@ -88,13 +88,19 @@ try {
     Invoke-WebRequest $BundleUrl -OutFile $bundle -UseBasicParsing -TimeoutSec 1800
     $expected = $null
     try {
-        $shaText = (Invoke-WebRequest "$BundleUrl.sha256" -UseBasicParsing -TimeoutSec 60).Content
+        # PS 5.1 hands back byte[] for text/plain here, so decode before matching.
+        $shaResp = Invoke-WebRequest "$BundleUrl.sha256" -UseBasicParsing -TimeoutSec 60
+        $shaText = if ($shaResp.Content -is [byte[]]) {
+            [Text.Encoding]::UTF8.GetString($shaResp.Content)
+        } else { [string]$shaResp.Content }
         if ($shaText -match '([0-9a-fA-F]{64})') { $expected = $Matches[1].ToLower() }
     } catch { Warn 'no .sha256 published - skipping checksum verification' }
     if ($expected) {
         $actual = (Get-FileHash $bundle -Algorithm SHA256).Hash.ToLower()
         if ($actual -ne $expected) { throw "checksum mismatch: expected $expected, got $actual" }
-        Ok 'checksum verified'
+        Ok 'bundle checksum verified'
+    } elseif ($shaText) {
+        Warn 'downloaded .sha256 but could not parse it - continuing unverified'
     }
     Say 'docker load'
     $loadOut = cmd /c "docker load -i `"$bundle`" 2>&1"
