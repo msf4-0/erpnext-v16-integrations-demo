@@ -56,9 +56,12 @@ docker image inspect --format '{{index .RepoDigests 0}}' comp_demo-bench:v16
 
 | Measure | Value |
 |---|---|
-| Local uncompressed image | ~3.0 GB (13 days after build, `docker image ls`) |
-| Compressed (registry) | measured per release by `scripts/image-size.sh` |
+| Local uncompressed image | ~3.0 GB (`docker image ls`) |
+| Compressed (registry) | **0.98 GB** - measured 2026-11-16 on `:main`, run `43823831734`, 25 layers |
 | Budget | **3.0 GB compressed** (warning, see below) |
+
+Over the wire a colleague downloads ~1 GB, not 3 GB: the 3 GB figure is the
+unpacked local image. That is why a pull takes minutes, not an hour.
 
 `publish-image.yml` runs `scripts/image-size.sh <ref> 3000000000`, which sums the
 compressed layer sizes for `linux/amd64` and prints them in the job log. It is a

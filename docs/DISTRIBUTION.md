@@ -11,7 +11,7 @@ already true, what is blocked, and the exact steps to finish.
 
 ## 1. The one slow step, and why it is slow
 
-`bake/bench.Dockerfile` produces a **3 GB** image containing Frappe, ERPNext v16
+`bake/bench.Dockerfile` produces a **3 GB** image (0.98 GB compressed on the wire) containing Frappe, ERPNext v16
 and five custom apps. Building it takes **25–40 minutes** on a laptop and is the
 reason setup "never gets past the setup phase" on a fresh machine.
 
