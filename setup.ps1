@@ -67,7 +67,9 @@ param(
     [switch]$Wipe,
     [switch]$SkipShopify,
     [switch]$ForceFlow,
-    [switch]$Planner
+    [switch]$Planner,
+    [switch]$NonInteractive,
+    [switch]$SkipTunnel
 )
 
 $ErrorActionPreference = 'Stop'
@@ -92,6 +94,7 @@ $MandatoryServices = @('db', 'redis-cache', 'redis-queue', 'bench', 'node-red')
 
 $script:Issues = New-Object System.Collections.Generic.List[string]
 $script:Fixed = New-Object System.Collections.Generic.List[string]
+$script:Optional = New-Object System.Collections.Generic.List[string]
 
 # ---------------------------------------------------------------------------
 # output helpers
@@ -112,6 +115,11 @@ function Write-Warn([string]$m) { Write-Host "  WARN  $m" -ForegroundColor Yello
 function Write-Fail([string]$m) {
     Write-Host "  FAIL  $m" -ForegroundColor Red
     $script:Issues.Add($m)
+}
+# An optional-integration problem: reported, but it must not fail the run.
+function Write-Skip([string]$m) {
+    Write-Host "  SKIP  $m" -ForegroundColor DarkGray
+    $script:Optional.Add($m)
 }
 
 # ---------------------------------------------------------------------------
@@ -198,6 +206,11 @@ function Test-PlaceholderValue([string]$Value) {
 }
 
 function Prompt-ShopifyCredentials([hashtable]$cfg, [string]$EnvPath) {
+    if ($NonInteractive) {
+        Write-Skip 'Shopify not configured (-NonInteractive) - fill SHOPIFY_* in .env later and rerun setup.ps1'
+        return
+    }
+
     # A fresh clone has no .env (git-ignored) and placeholder Shopify values in
     # .env.example. Collect what is missing so a new user never needs the
     # original author's secrets. Every answer is optional (Enter keeps the
@@ -380,7 +393,10 @@ $siteName     = if ($cfg['SITE_NAME'])         { $cfg['SITE_NAME'] }         els
 $shopifyStore = $cfg['SHOPIFY_STORE']
 $shopifyVer   = if ($cfg['SHOPIFY_API_VERSION']) { $cfg['SHOPIFY_API_VERSION'] } else { '2026-04' }
 
+$shopifyConfigured = $shopifyStore -and ($shopifyStore -notmatch '^_*FILL_ME_*$') -and
+                    $cfg['SHOPIFY_CLIENT_ID'] -and $cfg['SHOPIFY_CLIENT_ID'] -notmatch '_*FILL_ME_*$'
 if (-not $shopifyStore) { Write-Fail 'SHOPIFY_STORE missing from .env' }
+elseif (-not $shopifyConfigured) { Write-Skip 'Shopify not configured - the Shopify bridge stays off (core demo unaffected)' }
 if (-not $cfg['SHOPIFY_CLIENT_ID'] -or -not $cfg['SHOPIFY_CLIENT_SECRET']) {
     Write-Warn 'SHOPIFY_CLIENT_ID / SHOPIFY_CLIENT_SECRET missing - the Shopify token cannot be minted'
 }
@@ -780,7 +796,8 @@ if ($shopifyToken) { $shopifyValid = Test-ShopifyToken $shopifyToken $shopifySto
 if ($SkipShopify -and $shopifyToken) {
     Write-Ok 'kept the existing SHOPIFY_ACCESS_TOKEN (-SkipShopify)'
 } elseif ($VerifyOnly) {
-    if (-not $shopifyToken) { Write-Fail 'SHOPIFY_ACCESS_TOKEN missing' }
+    if (-not $shopifyConfigured) { Write-Skip 'Shopify not configured - nothing to verify' }
+    elseif (-not $shopifyToken) { Write-Fail 'SHOPIFY_ACCESS_TOKEN missing' }
     elseif ($shopifyValid) { Write-Ok 'token valid against the Shopify Admin API' }
     else { Write-Fail 'SHOPIFY_ACCESS_TOKEN is expired or rejected (401)' }
 } elseif ($shopifyValid) {
@@ -901,7 +918,9 @@ function Get-PublicUrl {
 }
 
 $publicUrl = Get-PublicUrl
-if (-not $publicUrl -and -not $VerifyOnly) {
+if ($SkipTunnel) {
+    Write-Skip 'ngrok skipped (-SkipTunnel) - the three outbound webhooks stay unwired'
+} elseif (-not $publicUrl -and -not $VerifyOnly) {
     $ngrokExe = (Get-Command ngrok -ErrorAction SilentlyContinue).Source
     if (-not $ngrokExe) {
         $ngrokExe = Get-ChildItem 'C:\Program Files\WindowsApps\ngrok.ngrok_*' -Filter 'ngrok.exe' -ErrorAction SilentlyContinue |
@@ -919,12 +938,14 @@ if (-not $publicUrl -and -not $VerifyOnly) {
         do { Start-Sleep -Seconds 4; $publicUrl = Get-PublicUrl } while ((Get-Date) -lt $deadline -and -not $publicUrl)
         if ($publicUrl) { Write-Change "tunnel started: $publicUrl" }
     } else {
-        Write-Fail 'no ngrok binary found'
+        Write-Skip 'no ngrok binary found - webhooks stay off (core demo unaffected)'
     }
 }
 
 if (-not $publicUrl) {
-    Write-Fail 'no ngrok tunnel - webhooks cannot be pointed anywhere'
+    Write-Skip 'no ngrok tunnel - the three ERPNext webhooks stay off (core demo unaffected)'
+} elseif ($SkipTunnel) {
+    Write-Skip 'webhook wiring skipped (-SkipTunnel)'
 } else {
     Write-Ok "tunnel $publicUrl -> localhost:$nodeRedPort"
 
@@ -1027,8 +1048,10 @@ if ($erpToken) {
 # ---------------------------------------------------------------------------
 Write-Host ''
 Write-Host ('=' * 74) -ForegroundColor $(if ($script:Issues.Count -eq 0) { 'Green' } else { 'Red' })
-if ($script:Issues.Count -eq 0) {
+if ($script:Issues.Count -eq 0 -and $script:Optional.Count -eq 0) {
     Write-Host '  SETUP COMPLETE - all checks pass' -ForegroundColor Green
+} elseif ($script:Issues.Count -eq 0) {
+    Write-Host '  SETUP COMPLETE (core demo) - optional integrations skipped' -ForegroundColor Green
 } else {
     Write-Host "  SETUP INCOMPLETE - $($script:Issues.Count) problem(s)" -ForegroundColor Red
 }
@@ -1048,6 +1071,11 @@ if ($script:Issues.Count -gt 0) {
     Write-Host '  outstanding:'
     $script:Issues | ForEach-Object { Write-Host "    - $_" -ForegroundColor Red }
 }
+if ($script:Optional.Count -gt 0) {
+    Write-Host ''
+    Write-Host '  skipped (optional - the core demo still works):'
+    $script:Optional | ForEach-Object { Write-Host "    - $_" -ForegroundColor DarkGray }
+}
 Write-Host ''
 
 # ---------------------------------------------------------------------------
@@ -1057,7 +1085,7 @@ $launchPlanner = $false
 if (-not $VerifyOnly -and $script:Issues.Count -eq 0) {
     if ($Planner) {
         $launchPlanner = $true
-    } else {
+    } elseif (-not $NonInteractive) {
         $answer = Read-Host 'Launch the erpnext-planner agent to design custom doctypes? [y/N]'
         if ($answer -match '^(y|yes)$') { $launchPlanner = $true }
     }

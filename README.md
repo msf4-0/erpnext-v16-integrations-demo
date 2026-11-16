@@ -38,25 +38,51 @@ Notes:
 ```powershell
 git clone https://github.com/msf4-0/erpnext-v16-integrations-demo.git
 cd erpnext-v16-integrations-demo
-copy .env.example .env
-docker compose up -d --wait
+powershell -ExecutionPolicy Bypass -File .\start.ps1
 ```
 
-What happens: `seed` restores the bundled demo database (~5 min, `seed/`),
-then `bench` starts and its startup block re-creates the import paths and asset
-links. You end up at <http://localhost:8000> with data already in it — no
-`up.ps1`, no Shopify/ngrok secrets.
+`start.ps1` is the entry point for someone who has never seen this project:
 
-To skip the local image build entirely, pull the published image instead of
-building `bake/bench.Dockerfile`:
+1. creates `.env` from `.env.example` (no secrets required for the local demo)
+2. `docker compose create` — pulls the bench image, or builds it once if the tag
+   is not pullable
+3. starts db + redis, waits for the database to be healthy
+4. runs the one-shot `seed` service and waits for the ~5 min restore
+5. starts bench / node-red / metabase / planner and waits for `/api/method/ping`
+6. runs `setup.ps1 -NonInteractive -SkipTunnel` to mint the API tokens and start
+   the background jobs, skipping Shopify and ngrok (both optional)
+
+It is idempotent — run it again any time instead of remembering the order.
+Timing on a warm machine: **~8 min** when the image is already present,
+**25–40 min** on the first run because the 3 GB bench image is built locally.
+
+**The image is the slow part.** `docker-compose.yml` defaults to a locally built
+`comp_demo-bench:v16`. CI publishes `ghcr.io/msf4-0/comp-demo-bench:v16`, but that
+package is currently **private**, so an anonymous pull fails with `unauthorized`
+and compose falls back to the build. One maintainer action makes the fast path
+work for everyone: GitHub → Packages → `comp-demo-bench` → Package settings →
+Change visibility → Public. After that:
 
 ```powershell
-$env:BENCH_IMAGE = 'ghcr.io/msf4-0/comp-demo-bench:v16'
-docker compose up -d --wait
+powershell -ExecutionPolicy Bypass -File .\start.ps1 -Pull
 ```
 
-If your clone still takes 25-35 minutes, it is building the image locally — the
-image is the slow part, not the code.
+Skipping the pull is safe — it is just slower.
+
+### 3a-bis. Manual equivalent (if you prefer explicit steps)
+
+```powershell
+copy .env.example .env
+docker compose create
+docker start comp_demo-db-1 comp_demo-redis-cache-1 comp_demo-redis-queue-1
+docker start comp_demo-seed-1          # wait until it exits 0
+docker start comp_demo-bench-1 comp_demo-node-red-1 comp_demo-metabase-1
+powershell -ExecutionPolicy Bypass -File .\setup.ps1 -NonInteractive -SkipTunnel
+```
+
+`docker compose up -d` hangs on some Docker Desktop hosts; `create` + `start` is
+the measured workaround, which is why both scripts use it.
+
 ### 3b. What actually works after that command
 
 Be precise about this before promising a colleague "everything works".
@@ -73,7 +99,7 @@ Be precise about this before promising a colleague "everything works".
 | ngrok tunnel + the 3 ERPNext webhooks | ❌ skipped (no tunnel) | install + `ngrok config add-authtoken`, then `.\setup.ps1` |
 | Metabase + "ERPNext Monitoring" dashboard | ✅ works – the seeder restores the `metabase` schema (137 tables) alongside the site, including the admin, the `ERPNext` data source and the 4-card dashboard | log in at :3005 with `METABASE_ADMIN_EMAIL` / `METABASE_ADMIN_PASSWORD` from `.env` |
 | E-invoicing (`eu_einvoice`) | ⚠️ installed, but EU EN 16931 only – a Malaysian SST invoice will not validate | add an EU VAT template, or install `my_invois` (see `docs/ARCHITECTURE.md`) |
-| `my_invois` (LHDN / MyInvois) | ❌ not installed by design | 3 commands in `docs/ARCHITECTURE.md` |
+| `my_invois` (LHDN / MyInvois) | ❌ not installed and **not in this repository** — `docs/HANDOFF.md` §2 describes a build that had it, but no source and no fixture rows exist here, and the seed dump contains zero `my_invois` records | obtain the MY app source (the original is 404), then install it |
 
 So: **core ERPNext, barcode, item tracking and the demo data are hands-off.**
 The four integrations that need external credentials (planner API, Shopify,
@@ -249,7 +275,7 @@ for real users, not just the build agent:
 | Login | Password | Role | Scope |
 |---|---|---|---|
 | `Administrator` | `admin` | System Manager | build/maintenance only — do not hand to end users |
-| `demo@compdemo.local` | `demo` | `Demo User` (+ Employee Self Service) | read/write/create/submit on Items, Stock, Delivery Note, Sales Invoice/Order, Work Order, Job Card, Barcode Printing, E Invoice Import, Shopify — read-only on masters (Company, Warehouse, Customer, Supplier, …) |
+| `demo@compdemo.local` | `demo` | `Demo User` | read/write/create/submit on Items, Stock, Delivery Note, Sales Invoice/Order, Work Order, Job Card, Barcode Printing, E Invoice Import — read-only on masters (Company, Warehouse, Customer, Supplier) **and on the finance masters needed to save a document** (Account, Cost Center, Payment Terms Template, Tax Rule, Tax Category, Item Tax Template, Journal Entry, Payment Entry) |
 
 The `Demo User` role has **no** System Manager or Setup access, so the account
 cannot reach financial setup or destructive actions. Change the `demo` password
@@ -258,7 +284,8 @@ before any shared use.
 ## Scripts
 
 | Script | When to use it | Time |
-| `up.ps1` | Blank machine, or after a Docker restart wiped the DB. Builds everything from zero. | 25–35 min |
+| `start.ps1` | **First command for a new machine.** Creates `.env`, creates/starts the containers in the right order, waits for the seed restore, then converges. Idempotent. | ~8 min warm, 25–40 min cold |
+| `up.ps1` | Rebuild the bench from zero (provisioning path). Rarely needed now that the seed dump exists. | 25–35 min |
 | `setup.ps1` | Every normal session. Converges the existing stack to match `.env` and verifies it. Safe to repeat. | 2–4 min |
 | `setup.ps1 -VerifyOnly` | Read-only health report. | ~30 s |
 | `setup.ps1 -Full` | Runs `up.ps1` first, then converges. | 25–35 min |
@@ -325,6 +352,7 @@ before any shared use.
 
 ```
 docker-compose.yml        the services (planner build context ./scheduler)
+start.ps1                 one-command first run: .env -> create -> seed -> start -> converge
 setup.cmd / setup.ps1     idempotent converge + verify of an existing stack (run this daily)
 up.ps1                    full bring-up: compose -> bench -> apps -> seed -> Shopify -> planner -> flow -> tunnel -> verify
 verify-all.ps1            41-check end-to-end suite (container + HTTP + browser DOM check)

@@ -76,6 +76,19 @@ MASTERS = [
     "Item Price", "Serial No", "Batch", "Customer Group", "Supplier Group",
 ]
 
+# Finance masters. ERPNext resolves the Company's default receivable / income /
+# cost-center accounts *while saving* every stock and sales document, and the
+# controller raises "User don't have permissions to select/read this account"
+# when the user cannot read Account. Without this block the Demo User can open
+# the desk and read records, but Save on a Delivery Note or Sales Invoice fails -
+# i.e. every advertised end-user flow is Administrator-only.
+FINANCE_READ = [
+    "Account", "Cost Center", "Payment Terms Template", "Tax Rule",
+    "Tax Category", "Item Tax Template", "Finance Book", "Mode of Payment",
+    "Bank Account", "Party Type", "Territory", "Sales Person", "Department",
+    "Journal Entry", "Payment Entry",
+]
+
 
 def upsert_role():
     if frappe.db.exists("Role", ROLE):
@@ -97,7 +110,9 @@ def upsert_role():
     # the whole planner API down with "Insufficient Permission". `copy_perms()`
     # snapshots every shipped rule into Custom DocPerm first; only then is it
     # safe to add ours.
-    desired = [(dt, FULL) for dt in TRANSACTIONAL] + [(dt, READ) for dt in MASTERS]
+    desired = ([(dt, FULL) for dt in TRANSACTIONAL]
+               + [(dt, READ) for dt in MASTERS]
+               + [(dt, READ) for dt in FINANCE_READ])
 
     missing = []
     for dt, flags in desired:
@@ -127,7 +142,7 @@ def upsert_role():
     frappe.db.commit()
     print(f"[demo-user] role '{ROLE}' ready: "
           f"{len(desired) - len(missing)} doctypes granted, {len(TRANSACTIONAL)} transaction + "
-          f"{len(MASTERS)} read-only requested")
+          f"{len(MASTERS)} read-only + {len(FINANCE_READ)} finance read-only requested")
     if missing:
         print(f"[demo-user] skipped doctypes not installed yet: {missing}")
 

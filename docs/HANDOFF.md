@@ -1,5 +1,13 @@
 # Handoff — remaining work (next workspace)
 
+> **Status note (2026-11-16):** this file is a historical handoff, not current
+> state. `my_invois` (section 2) is **not** in this repository and **not**
+> installed on the demo site — there is no `repos/my_invois` and the seed dump
+> contains no `my_invois` rows. Treat section 2 as "a build that once existed on
+> another machine". The deployable stack is what `README.md` describes:
+> `start.ps1`, the seeded `frontend` site, and the non-admin `demo@compdemo.local`
+> login.
+
 > Session ended at a clean checkpoint. This file is the authoritative "what's
 > done, what's left, and the exact commands" for the next agent.
 
