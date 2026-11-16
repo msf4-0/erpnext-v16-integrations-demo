@@ -69,12 +69,18 @@ documented in README section 9.
 
 ## 3. Go-live checklist (maintainer, ~2 minutes)
 
-1. Open <https://github.com/msf4-0?tab=packages>.
-2. Select **comp-demo-bench**.
-3. **Package settings** → **Danger Zone** → **Change visibility** → **Public**.
+1. Open <https://github.com/organizations/msf4-0/settings/packages>.
+   **Organization settings -> Packages**: allow public package visibility.
+   Verified 2026-11-16: the package dialog greys out **Public** with
+   "Setting is disabled by organization administrators", so the per-package
+   step cannot succeed until this org policy is changed. Only an organization
+   owner can do it.
+2. Open <https://github.com/msf4-0?tab=packages>.
+3. Select **comp-demo-bench**.
+4. **Package settings** -> **Danger Zone** -> **Change visibility** -> **Public**.
    - If the dialog offers to link the package to the repository, link
      `erpnext-v16-integrations-demo`. Public visibility alone is enough.
-4. From any machine that is **not** logged in to GHCR, run:
+5. From any machine that is **not** logged in to GHCR, run:
 
    ```powershell
    docker logout ghcr.io
@@ -84,7 +90,7 @@ documented in README section 9.
 
    Expected: a manifest listing, then layers downloading. No `unauthorized`.
 
-5. Run the whole path on a clean clone:
+6. Run the whole path on a clean clone:
 
    ```powershell
    git clone https://github.com/msf4-0/erpnext-v16-integrations-demo.git

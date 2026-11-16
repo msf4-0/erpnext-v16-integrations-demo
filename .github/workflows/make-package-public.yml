@@ -12,9 +12,12 @@ name: make-package-public
 #      GHCR_ADMIN_PAT = <the PAT>
 #   3. Run this workflow (Actions -> make-package-public -> Run workflow).
 #
-# Without the secret, the UI path is one click:
-#   https://github.com/msf4-0?tab=packages -> comp-demo-bench
-#   -> Package settings -> Change visibility -> Public
+# Without the secret, the UI path is:
+#   0. Org owner: https://github.com/organizations/msf4-0/settings/packages
+#      -> enable public package visibility (the package dialog greys out Public
+#      with "Setting is disabled by organization administrators" otherwise)
+#   1. https://github.com/msf4-0?tab=packages -> comp-demo-bench
+#   2. -> Package settings -> Change visibility -> Public
 
 on:
   workflow_dispatch:
