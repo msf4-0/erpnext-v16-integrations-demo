@@ -70,7 +70,7 @@ JSON
 fi
 if [ ! -f sites/apps.txt ]; then
     echo "seed: writing sites/apps.txt"
-    printf 'frappe\nerpnext\nbarcode_shrdc\nshopify\neu_einvoice\nitem_tracking\nmetabase_integration\n' > sites/apps.txt
+    printf 'frappe\nerpnext\nbarcode_shrdc\nshopify\neu_einvoice\nitem_tracking\nmetabase_integration\nmy_invois\n' > sites/apps.txt
 fi
 
 # --- case 2: create the site record, then restore over it -------------------
@@ -105,6 +105,24 @@ echo "seed: migrating + clearing cache"
 bench --site "${SITE}" migrate --skip-search-index || true
 bench --site "${SITE}" clear-cache
 bench --site "${SITE}" clear-website-cache || true
+
+# --- my_invois: install when the dump predates it ---------------------------
+# The site dump was taken before my_invois existed, so restoring it does not
+# install the app. Register it, put it on the venv path, and install it once.
+# Guarded: a failure here must not abort the seed (core demo stays usable).
+if ! grep -qx 'my_invois' sites/apps.txt 2>/dev/null; then
+    echo "seed: registering my_invois in sites/apps.txt"
+    echo 'my_invois' >> sites/apps.txt
+fi
+if ! bench --site "${SITE}" list-apps 2>/dev/null | awk '{print $1}' | grep -qx 'my_invois'; then
+    echo "seed: installing my_invois (LHDN MyInvois)"
+    SP=$(dirname "$(find /home/frappe/frappe-bench/env -name 'frappe.pth' -print -quit)")
+    printf '/home/frappe/frappe-bench/apps/my_invois\n' > "${SP}/my_invois.pth"
+    bench --site "${SITE}" install-app my_invois \
+        || echo "seed: WARN my_invois install failed - e-invoicing stays unavailable"
+    bench --site "${SITE}" migrate --skip-search-index || true
+    bench --site "${SITE}" clear-cache || true
+fi
 
 # Re-assert a host-agnostic grant: the restored dump's user was created bound to
 # some old container IP, which is the classic post-restore 1045 failure.
