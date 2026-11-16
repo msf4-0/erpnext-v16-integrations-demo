@@ -686,11 +686,19 @@ if ($siteCheck.Code -ne 0 -or -not $siteCheck.Output.Trim()) {
 Write-Step '5b/10  background jobs (scheduler + worker)'
 
 if ($siteCheck.Code -eq 0 -and $siteCheck.Output.Trim()) {
-    $procList = (Invoke-Bench 'ps -eo args' -Capture).Output
+    # The bench image ships no procps, so `ps -eo args` printed
+    # "ps: command not found" and returned an empty list. Every run therefore
+    # believed neither process existed and started another scheduler + worker -
+    # the duplicates accumulated. Read /proc through a bundled script instead.
+    $procScript = Join-Path $SandboxDir 'scripts/bench-procs.sh'
+    Invoke-BenchRoot 'mkdir -p /tmp/scripts' | Out-Null
+    Invoke-Docker -Arguments @('cp', $procScript, "${BenchName}:/tmp/scripts/bench-procs.sh") -Capture | Out-Null
+    Invoke-BenchRoot 'chmod 0755 /tmp/scripts/bench-procs.sh' | Out-Null
+    $procList = (Invoke-Bench 'bash /tmp/scripts/bench-procs.sh' -Capture).Output
 
     foreach ($job in @(
-            @{ Match = 'frappe schedule'; Label = 'bench schedule'; Cmd = 'cd /home/frappe/frappe-bench && setsid nohup bench schedule > /tmp/bench-schedule.log 2>&1 &'; Why = 'no background/cron hook will ever fire' },
-            @{ Match = 'frappe worker'; Label = 'bench worker'; Cmd = 'cd /home/frappe/frappe-bench && setsid nohup bench worker --queue short,default,long >> logs/worker.log 2>&1 &'; Why = 'queued jobs will never execute' }
+            @{ Match = 'schedule'; Label = 'bench schedule'; Cmd = 'cd /home/frappe/frappe-bench && setsid nohup bench schedule > /tmp/bench-schedule.log 2>&1 &'; Why = 'no background/cron hook will ever fire' },
+            @{ Match = 'worker'; Label = 'bench worker'; Cmd = 'cd /home/frappe/frappe-bench && setsid nohup bench worker --queue short,default,long >> logs/worker.log 2>&1 &'; Why = 'queued jobs will never execute' }
         )) {
         if ($procList -match [regex]::Escape($job.Match)) {
             Write-Ok "$($job.Label) running"
