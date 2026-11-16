@@ -74,9 +74,12 @@ WARN    one-time fix: https://github.com/msf4-0?tab=packages -> comp-demo-bench
 WARN                  -> Package settings -> Change visibility -> Public
 ```
 
-That one maintainer click is the only thing between "works on my laptop" and
-"works for everyone". Until it is done, the script falls back to the 25-40 min
-build. `-NoPull` skips GHCR entirely; `-Pull` forces a fresh pull.
+That maintainer click is still the clean way to make GHCR public, but it is no
+longer the only path: `pull-bench.ps1` / `start.sh` now fall back to the
+**public GitHub Release bundle** - one ~1 GB asset, no account, no token,
+checksum verified, then `docker load`. Only if both fail does the script build
+locally (25-40 min). `-NoPull` skips both fetches; `-Pull` forces a fresh try.
+See [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) section 5.
 
 See [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md) for the acceptance criteria,
 the go-live checklist and the measured timings.
