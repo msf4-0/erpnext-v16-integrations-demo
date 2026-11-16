@@ -40,5 +40,5 @@ body:
       label: Definition of done
       options:
         - label: Works on a clean clone with no extra manual steps
-        - label: `setup.ps1 -VerifyOnly` reports it
+        - label: "`setup.ps1 -VerifyOnly` reports it"
         - label: README capability table updated

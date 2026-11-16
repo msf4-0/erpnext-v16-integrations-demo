@@ -32,6 +32,11 @@ Notes:
 - A one-line `setup.cmd` launcher is included so you don't have to remember the flags; the real work is in `setup.ps1` (and `up.ps1`).
 - In PowerShell, plain `.\setup.ps1` also works if your execution policy allows scripts. A bare `setup.ps1` without `.\` does not run.
 - The `-ExecutionPolicy Bypass` form works in `cmd.exe` as well and avoids "running scripts is disabled" errors.
+
+Linux/macOS: run `./start.sh` (bash, Docker Compose v2). It pins the image
+platform, seeds, starts, and runs `setup.ps1` through `pwsh` when PowerShell 7
+is installed. `--no-pull`, `--no-wiring` and `--recreate` mirror the PowerShell
+flags.
 - `setup.ps1` exits 0 when all checks pass and 1 if anything is still broken.
 ### 3a. Fresh clone — one command
 
@@ -413,3 +418,13 @@ docs/                     guides + MILESTONES.md (status, fixes, known gaps)
 ```
 
 Status of every milestone, the fixes applied, and the honest not-ready list: [`docs/MILESTONES.md`](docs/MILESTONES.md).
+
+## License
+
+GPL-3.0-or-later - see [LICENSE](LICENSE). The apps import Frappe/ERPNext
+(GPL-3.0), so GPL is the compatible choice.
+
+- Contributing and the CI contract: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Reporting a vulnerability: [SECURITY.md](SECURITY.md)
+- Image tags, digests, platforms and size budget: [docs/IMAGE-POLICY.md](docs/IMAGE-POLICY.md)
+- Release criteria for "works for everyone": [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)

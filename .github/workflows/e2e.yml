@@ -1,0 +1,127 @@
+name: e2e
+
+# Cold-start end-to-end test: pull the published image, seed a fresh database,
+# start the bench, log in, and read a seeded DocType. The `smoke` job in ci.yml
+# only imports Python modules; this job catches the failures colleagues report:
+# a broken seed dump, a site that 500s after restore, a bench that never answers.
+#
+# Nightly + manual. It needs ~10-15 min, so it does not run on every push.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"   # 03:17 UTC nightly
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: e2e
+  cancel-in-progress: true
+
+jobs:
+  cold-start:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        # The bench image is 3 GB and the seed adds a MariaDB volume; the default
+        # runner is tight but enough after removing the preinstalled SDKs.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - name: Log in to GHCR
+        # The package is private until a maintainer flips it; read access is
+        # enough for this test, and anonymous visibility is checked separately
+        # by publish-image.yml.
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create .env from the example
+        run: cp .env.example .env
+
+      - name: Pull the published bench image
+        run: |
+          docker pull --platform linux/amd64 ghcr.io/msf4-0/comp-demo-bench:v16
+          docker tag ghcr.io/msf4-0/comp-demo-bench:v16 comp_demo-bench:v16
+          docker image inspect --format '{{index .RepoDigests 0}}' comp_demo-bench:v16
+
+      - name: Start db and redis
+        run: |
+          docker compose up -d db redis-cache redis-queue
+          for i in $(seq 1 40); do
+            s=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' comp_demo-db-1 || true)
+            echo "db: $s"
+            [ "$s" = "healthy" ] && exit 0
+            sleep 5
+          done
+          echo "::error::database did not become healthy"
+          docker compose logs db
+          exit 1
+
+      - name: Seed a fresh site (~5-6 min)
+        run: |
+          docker compose run --rm seed
+          docker compose ps -a
+
+      - name: Start the bench and wait for ping
+        run: |
+          docker compose up -d bench
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 http://localhost:8000/api/method/ping || true)
+            echo "ping: $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 5
+          done
+          echo "::error::bench never answered /api/method/ping"
+          docker compose logs --tail=200 bench
+          exit 1
+
+      - name: Log in as Administrator and read a seeded DocType
+        run: |
+          set -euo pipefail
+          jar=$(mktemp)
+          code=$(curl -s -o /tmp/login.json -w '%{http_code}' -c "$jar" \
+            -H 'Content-Type: application/json' \
+            -d '{"usr":"Administrator","pwd":"admin"}' \
+            http://localhost:8000/api/method/login)
+          echo "login: $code"; cat /tmp/login.json
+          [ "$code" = "200" ] || { echo "::error::login failed"; exit 1; }
+
+          # A seeded doctype that only exists if the dump restored correctly.
+          curl -s -b "$jar" -o /tmp/item.json -w 'item: %{http_code}\n' \
+            'http://localhost:8000/api/resource/Item?limit_page_length=1'
+          python3 - <<'PY'
+          import json
+          d = json.load(open('/tmp/item.json'))
+          rows = d.get('data', [])
+          assert rows, f"no Items returned: {d}"
+          print("first item:", rows[0].get('name'))
+          PY
+
+      - name: Planner health
+        run: |
+          docker compose up -d scheduler
+          for i in $(seq 1 24); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -m 5 http://localhost:3001/api/health || true)
+            echo "planner: $code"
+            [ "$code" = "200" ] && exit 0
+            sleep 5
+          done
+          echo "::error::planner /api/health did not answer"
+          docker compose logs --tail=100 scheduler
+          exit 1
+
+      - name: Dump logs on failure
+        if: failure()
+        run: |
+          docker compose ps -a || true
+          docker compose logs --tail=200 || true
