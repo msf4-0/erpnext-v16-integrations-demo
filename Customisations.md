@@ -40,7 +40,7 @@ customisations are currently installed.
 ## Standing rollback policy (human-ordered)
 
 **When rolling back, the ONLY thing that is never rolled back is the chatbot
-(`chat_widget`).** Enforced in `sandbox/scripts/rollback-app.sh`: `KEEP`
+(`chat_widget`).** Policy only — **no rollback script exists in this repository**; `KEEP`
 defaults to `chat_widget`, single-app removal of it is refused unless a human
 sets `FORCE_CHATBOT_ROLLBACK=1`, and every rollback report ends with a
 `CONFIRMED: chat_widget (chatbot) preserved` line. The agent must quote that
@@ -96,7 +96,7 @@ prior Sales Order. Rollback: run `wipe_demo_data`.
 The workspace must remain **stock ERPNext/Frappe v16** apart from the
 customisations listed above. To strip everything back to base:
 
-1. Run `sandbox/scripts/rollback-app.sh --all` (`KEEP` defaults to
+1. Roll back by hand (no script exists); `KEEP` defaults to
    `chat_widget`, so the chatbot survives; name other apps in `KEEP=` to spare
    them too), or manually: uninstall each non-core app **except `chat_widget**,
    delete its `repos/` tree,
@@ -112,7 +112,7 @@ customisations listed above. To strip everything back to base:
 
 For this app specifically:
 `bench --site <site> uninstall-app custom_manufacturing` then remove
-`repos/custom_manufacturing`. First run `demo_data.wipe_demo_data` to clear the
+`repos/custom_manufacturing` (absent from this repo — historical records only). First run `demo_data.wipe_demo_data` to clear the
 SANDBOX demo records, and note that submitted stock docs (BOMs, Stock Entry)
 must be cancelled before the app's records can be deleted.
 

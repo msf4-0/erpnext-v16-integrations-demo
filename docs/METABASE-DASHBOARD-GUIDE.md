@@ -119,7 +119,7 @@ Add a `doc_events` hook in the existing **`item_tracking`** app (it already owns
        }
    }
    ```
-2. `repos/item_tracking/item_tracking/events/stock_entry.py`:
+2. `repos/item_tracking/item_tracking/item_tracking/doctype/stock_entry_tracked_item/stock_entry_tracked_item.py`:
    ```python
    import frappe
    from frappe.utils import cint

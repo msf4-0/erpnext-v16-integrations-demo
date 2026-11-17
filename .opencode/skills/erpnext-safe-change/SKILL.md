@@ -121,9 +121,7 @@ step-0 backup.
 > **plus the agreed apps**", not "delete everything". Confirm the keep-list with
 > the user before deleting any app.
 
-Helper: `sandbox/scripts/cx_rollback.sh` implements exactly this (backup →
-uninstall → remove → drop leftovers → migrate → verify). Run it with the app name
-argument, or `--all` to remove every non-core app. See `erpnext-test-sandbox`.
+There is **no rollback script in this repository** (none has ever been committed). Do it by hand, in this order: `bench --site <site> backup --with-files`, `bench --site <site> uninstall-app <app> --yes`, remove the app dir, drop leftover doctypes/`tabSingles` rows, `bench --site <site> migrate`, then `bench --site <site> list-apps` to verify. Take a backup first and confirm with the user.
 
 ## Data-loss warnings (say these out loud in the rollback note)
 - Submitted **GL / Stock** entries are real accounting events: you **cancel +

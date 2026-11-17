@@ -12,8 +12,8 @@ Commits: `ad19680` (P0), `076bb1f` (P1+P2), plus the P3 doc-fact commit.
 
 | # | Change | Status |
 |---|---|---|
-| 1 | `repos/metabase_integration/.../__init__.py` had **no** `__version__` → added | Implemented |
-| 1b | **New defect found:** `repos/my_invois/.../__init__.py` shipped `__version__ = " 0.0.1` — an **unterminated string**, so the module failed to import. Rewritten | Implemented |
+| 1 | `repos/metabase_integration/metabase_integration/__init__.py` had **no** `__version__` → added | Implemented |
+| 1b | **New defect found:** `repos/my_invois/my_invois/__init__.py` shipped `__version__ = " 0.0.1` — an **unterminated string**, so the module failed to import. Rewritten | Implemented |
 | 3 | `.env` line 68 (corrupted comment) truncated: **250,318 → 3,954 bytes**, 79 lines preserved | Implemented |
 | 7 | `versions.env text eol=lf` added to `.gitattributes`; `env_value()` now does `sub(/\r$/,"")` | Implemented |
 
@@ -51,7 +51,7 @@ Reference proof method: every tracked text file (572) was loaded and searched fo
 basename, skipping the file itself; files with zero hits were quarantined. Result: **52 remain**
 (18 launcher-referenced + 34 referenced from docs/agents), 108 dead, 68 pre-existing archived.
 
-`docs/MANIFEST.md` was **deleted**: its counts were stale, it documented the removed
+`MANIFEST.md` (root) was **deleted**: its counts were stale, it documented the removed
 `sandbox/.env.ai-fix`, and it was the last carrier of an `ai-fix` reference. This differs from the
 prompt's "regenerate last or delete" only in choosing delete.
 
