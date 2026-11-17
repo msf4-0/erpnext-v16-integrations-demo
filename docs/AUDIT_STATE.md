@@ -194,3 +194,28 @@ $ GET http://localhost:1880/ -> HTTP 200   (log: "Started flows", "Server now ru
   release cycle before removal.
 - `Customisations.md:31` still describes `my_invois` as "current state unverified"; it is installed,
   but the *fixtures* really are unsynced, so the row needs a human decision rather than a rewrite.
+
+---
+
+## Round 3 — P4 EOL hardening + P5 first slice
+
+**P4.** `versions.env`, `bake/bench.Dockerfile` and `sandbox/scripts/bootstrap_masters.py` were the
+only *shipped executables* with CRLF; all three are now LF on disk and in git. `repos/**` Python was
+deliberately left alone (vendored upstream, CRLF is harmless there, and the category is "never
+edit"). `.gitattributes` pins `*.sh`, `*.py`, `*.yml`, `*.yaml`, `versions.env`, `Dockerfile` to LF.
+Verified: `docker compose … config -q` exit 0 with the LF `versions.env`, and `env_value()` in
+`up-linux.sh` now strips `\r` defensively.
+
+**P5 (first slice).** Moved to `docs/archive/`, with 0 inbound references each:
+
+| File | Was | Now |
+|---|---|---|
+| `erpnext-demo-stabilise-modularise.md` | 48 KB plan for a target state never built | `docs/archive/` |
+| `docs/HANDOFF.md` | 4 claims false vs the live stack | `docs/archive/` |
+| `docs/ASSESSMENT-einvoicing-barcode.md` | point-in-time assessment | `docs/archive/` |
+
+Root now holds **9** own markdown files, down from 11; `docs/` is 9 (8 after these moves).
+
+**Not done in P5:** the full 74 → ~12 restructure (splitting README into
+`docs/installation/`, per-module pages, `docs/troubleshooting/`). That rewrites cross-links in
+dozens of files and should not be bundled with defect repair; it remains the largest open item.
