@@ -41,7 +41,7 @@ python3 sandbox/scripts/validate-env.py --env-file .env
 env_value() {
   awk -F= -v key="$1" '
     /^[[:space:]]*#/ || !index($0, "=") { next }
-    $1 == key { sub(/^[^=]*=/, ""); print; exit }
+    $1 == key { sub(/^[^=]*=/, ""); sub(/\r$/, ""); print; exit }
   ' "$2"
 }
 
