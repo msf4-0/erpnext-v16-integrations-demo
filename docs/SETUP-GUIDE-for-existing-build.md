@@ -37,12 +37,18 @@ cp sandbox/.env.ai-fix.example sandbox/.env.ai-fix
 #    fill in .env:  DB_ROOT_PASSWORD, SHOPIFY_STORE, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET
 #    (NGROK_AUTHTOKEN optional - it falls back to your ngrok config)
 
-powershell -ExecutionPolicy Bypass -File .\up.ps1          # Windows
-# bash ./sandbox/up.ps1                                     # Linux/macOS equivalent
+powershell -ExecutionPolicy Bypass -File .\up.ps1          # Windows: full integration setup
+bash ./up-linux.sh                                         # Linux: core ERPNext site
+bash ./install-apps-linux.sh                               # Linux: install custom apps
 ```
 
-Then: ERPNext <http://localhost:8000> (Administrator/admin) · planner <http://localhost:3001> ·
-Node-RED <http://localhost:1880>. Verify with `verify-all.ps1` (41 checks).
+The Linux commands install the custom apps but do not configure the planner,
+Metabase, Node-RED, Shopify credentials, ngrok, or demo data. The full
+integration workflow is currently orchestrated by the PowerShell scripts.
+
+After the full Windows setup: ERPNext <http://localhost:8000> (Administrator/admin) ·
+planner <http://localhost:3001> · Node-RED <http://localhost:1880>. Verify with
+`verify-all.ps1` (41 checks).
 
 > The site DB is stored in the `db_data` named volume and survives container and Docker restarts.
 > From the repo root, `docker compose --env-file .env --env-file versions.env down -v` removes that volume.

@@ -18,6 +18,18 @@ powershell -File .\up.ps1 -SkipInstall     # reuse installed apps
 powershell -File .\up.ps1 -SkipScheduler   # skip the planner image build (~6 min)
 ```
 
+On Linux, use the native Bash core-site launcher (no PowerShell required):
+
+```bash
+cp .env.example .env   # if missing; set passwords before sharing the site
+bash ./up-linux.sh
+bash ./install-apps-linux.sh
+```
+
+The first command provisions core ERPNext; the second installs barcode, Shopify,
+e-invoicing, and item-tracking apps. Neither configures the planner, Metabase,
+Node-RED, Shopify credentials, ngrok, or demo data.
+
 Full build ≈ 25–35 min. Status/down/logs (also usable directly):
 
 ```powershell
@@ -57,8 +69,9 @@ Skills live in `.opencode/skills/` (interview, doctype-builder, production-workf
 
 ## Gotchas
 
-- **`docker compose up -d` HANGS on this host.** `up.ps1` starts containers with `docker compose create` + `docker start`.
+- **On the original Windows Docker Desktop host, `docker compose up -d` HANGS.** The Windows launcher uses `create` + `start`; Linux uses `docker compose up -d`.
 - **The DB lives in the `db_data` named volume** mounted at `/var/lib/mysql` and persists across container and Docker restarts. `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml down -v` deletes it; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 - Verification is **REST-based** (`/api/resource/...`), not UI-based. Never treat a returned UI action as proof of change.
 - Never run destructive flows (`down -v`, cancel/delete/submit financial docs) without explicit confirmation.
-- No `pwsh` on PATH; use `powershell.exe -NoProfile -ExecutionPolicy Bypass -File`.
+- `pwsh` is needed for the full PowerShell integration workflow on Linux; the
+  native core-site launcher `up-linux.sh` does not need it.

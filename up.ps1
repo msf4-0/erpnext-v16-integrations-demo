@@ -59,9 +59,14 @@ $RootDir = $DemoDir
 $ComposeFile = Join-Path $DemoDir 'docker-compose.yml'
 $EnvPath = Join-Path $DemoDir '.env'
 $VersionsPath = Join-Path $DemoDir 'versions.env'
-$EnvValidator = Join-Path $DemoDir 'sandbox\scripts\validate-env.py'
+$EnvValidator = Join-Path $DemoDir 'sandbox/scripts/validate-env.py'
 $Project = 'comp_demo'
-$NgrokYml = Join-Path $env:LOCALAPPDATA 'Packages\ngrok.ngrok_1g87z0zv29zzc\LocalCache\Local\ngrok\ngrok.yml'
+$script:IsWindowsHost = $env:OS -eq 'Windows_NT'
+$NgrokYml = if ($script:IsWindowsHost -and $env:LOCALAPPDATA) {
+    Join-Path $env:LOCALAPPDATA 'Packages/ngrok.ngrok_1g87z0zv29zzc/LocalCache/Local/ngrok/ngrok.yml'
+} else {
+    Join-Path $HOME '.config/ngrok/ngrok.yml'
+}
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -254,8 +259,8 @@ if ($cfg['NGROK_PUBLIC_URL']) { Write-Info "pinning the tunnel to $($cfg['NGROK_
 # build the image" error a fresh machine sees. Force both paths to resolve inside
 # THIS project, whatever its clone location. Process env wins over --env-file for
 # compose interpolation, so these override any stale .env value.
-$env:FLOWS_PATH = Join-Path $SandboxDir 'node-red\flows.json'
-$env:NODE_RED_SOURCE_FLOW = Join-Path $SandboxDir 'node-red\source-flow.json'
+$env:FLOWS_PATH = Join-Path $SandboxDir 'node-red/flows.json'
+$env:NODE_RED_SOURCE_FLOW = Join-Path $SandboxDir 'node-red/source-flow.json'
 
 Write-Info "project      : $Project"
 Write-Info "ERPNext      : http://localhost:$erpnextPort  (site '$siteName', v$erpVersion)"
@@ -273,10 +278,12 @@ Write-Step '1/11  freeing the ports the old host-level services hold'
 # points at a Node-RED with no flows deployed, so stopping it costs nothing and
 # lets the containerised agent own the tunnel.
 $hostNgrok = Get-Process -Name 'ngrok' -ErrorAction SilentlyContinue
-if ($hostNgrok) {
+if ($hostNgrok -and $script:IsWindowsHost) {
     Write-Info ("stopping host-level ngrok (pid " + (($hostNgrok | ForEach-Object Id) -join ',') + ') - the stack runs its own')
     $hostNgrok | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
+} elseif ($hostNgrok) {
+    Write-Info 'leaving the existing host-level ngrok running; the configured tunnel will be reused if available'
 } else {
     Write-Info 'no host-level ngrok running'
 }
@@ -285,7 +292,7 @@ if ($hostNgrok) {
 # 2. node-red seed flow
 # ---------------------------------------------------------------------------
 Write-Step '2/11  preparing the Node-RED flow file'
-$flowsPath = Join-Path $SandboxDir 'node-red\flows.json'
+$flowsPath = Join-Path $SandboxDir 'node-red/flows.json'
 if (-not (Test-Path $flowsPath)) {
     Set-Content -LiteralPath $flowsPath -Value '[]' -Encoding ASCII
     Write-Info 'wrote placeholder flows.json (the real flow is built in step 8)'
@@ -312,19 +319,20 @@ if ($Fresh) {
     # and make the next `up` fail with a name conflict. Volumes are preserved.
     Invoke-Compose @('down', '--remove-orphans') | Out-Null
 }
-if ((Invoke-Compose @('create')) -ne 0) { throw 'docker compose create failed' }
-
-# WHY NOT `docker compose up -d`: on this host `up` HANGS with the containers
-# left in the `Created` state (Docker Desktop attaches agent hooks to the compose
-# up subcommand; it affects the standalone docker-compose.exe shim too). `create`
-# returns fine, and `docker start` on the created containers takes ~15 s, so we
-# split the two - measured, not guessed.
-$demoServices = @('db', 'redis-cache', 'redis-queue', 'bench', 'node-red', 'metabase')
-$demoNames = $demoServices | ForEach-Object { "$Project-$_-1" }
-if ((Invoke-Native -Exe 'docker' -Arguments (@('start') + $demoNames)) -ne 0) {
-    throw 'docker start failed for the demo stack'
+if ($script:IsWindowsHost) {
+    # On the Windows Docker Desktop host used for this demo, `compose up -d`
+    # hangs in the CLI hook layer; create + docker start avoids that host issue.
+    if ((Invoke-Compose @('create')) -ne 0) { throw 'docker compose create failed' }
+    $demoServices = @('db', 'redis-cache', 'redis-queue', 'bench', 'node-red', 'metabase')
+    $demoNames = $demoServices | ForEach-Object { "$Project-$_-1" }
+    if ((Invoke-Native -Exe 'docker' -Arguments (@('start') + $demoNames)) -ne 0) {
+        throw 'docker start failed for the demo stack'
+    }
+    Write-Info ('containers started: ' + ($demoNames -join ', '))
+} else {
+    if ((Invoke-Compose @('up', '-d')) -ne 0) { throw 'docker compose up failed' }
+    Write-Info 'containers started with docker compose up -d'
 }
-Write-Info ('containers started: ' + ($demoNames -join ', '))
 
 $deadline = (Get-Date).AddSeconds(180)
 do {
@@ -568,10 +576,10 @@ if ($depOk -match 'DEPSOK') {
 # dashboard only when it is absent. Non-fatal: BI must not block the stack.
 Write-Step '7f/11  Metabase schema + dashboard'
 try {
-    & (Join-Path $PSScriptRoot 'sandbox\scripts\ensure_metabase.ps1') `
+    & (Join-Path $PSScriptRoot 'sandbox/scripts/ensure_metabase.ps1') `
         -DbUser $metabaseDbUser -DbPassword $metabaseDbPass `
         -AdminEmail $metabaseAdminEmail -AdminPassword $metabaseAdminPassword
-    & (Join-Path $PSScriptRoot 'sandbox\scripts\ensure_metabase_app.ps1') `
+    & (Join-Path $PSScriptRoot 'sandbox/scripts/ensure_metabase_app.ps1') `
         -AdminEmail $metabaseAdminEmail -AdminPassword $metabaseAdminPassword
 } catch {
     Write-Warn ("metabase setup did not complete: " + $_.Exception.Message)
@@ -701,13 +709,13 @@ Write-Step '10/11  building the Node-RED flow'
 $flowSrc = $cfg['NODE_RED_SOURCE_FLOW']
 if (-not $flowSrc -or -not (Test-Path $flowSrc)) {
     # vendored next to the flow builder; use the copy inside this workspace
-    $fallback = Join-Path $SandboxDir 'node-red\source-flow.json'
+    $fallback = Join-Path $SandboxDir 'node-red/source-flow.json'
     if (Test-Path $fallback) { $flowSrc = $fallback }
 }
 if (-not $flowSrc -or -not (Test-Path $flowSrc)) {
     Write-Warn "source flow export not found ($flowSrc) - keeping the existing flows.json"
 } else {
-    $builder = Join-Path $SandboxDir 'node-red\build-flows.py'
+    $builder = Join-Path $SandboxDir 'node-red/build-flows.py'
     $python = (Get-Command python -ErrorAction SilentlyContinue)
     if (-not $python) { $python = (Get-Command python3 -ErrorAction SilentlyContinue) }
     if (-not $python) { throw 'python is required to build the Node-RED flow' }
@@ -733,7 +741,7 @@ Write-Step '11/11  starting the tunnel and wiring ERPNext webhooks'
 # Node-RED on its published host port. Either way the public URL is read back
 # from the agent's local API and written into the webhooks.
 $ngrokExe = (Get-Command ngrok -ErrorAction SilentlyContinue).Source
-if (-not $ngrokExe) {
+if (-not $ngrokExe -and $script:IsWindowsHost) {
     $ngrokExe = Get-ChildItem 'C:\Program Files\WindowsApps\ngrok.ngrok_*' -Filter 'ngrok.exe' -ErrorAction SilentlyContinue |
         Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
 }
@@ -758,8 +766,14 @@ if (-not $alreadyTunnelling -and $ngrokExe) {
     # 3.5-minute run looked like a 7.5-minute one with nothing left to print.
     $ngrokLog = Join-Path $cacheDir 'ngrok.log'
     Remove-Item -LiteralPath $ngrokLog -ErrorAction SilentlyContinue
-    Start-Process -FilePath $ngrokExe -ArgumentList @('http', $nodeRedPort, '--log', $ngrokLog) `
-        -WindowStyle Hidden | Out-Null
+    $ngrokArgs = @('http', $nodeRedPort, '--log', $ngrokLog)
+    if ($script:IsWindowsHost) {
+        Start-Process -FilePath $ngrokExe -ArgumentList $ngrokArgs -WindowStyle Hidden | Out-Null
+    } else {
+        Start-Process -FilePath $ngrokExe -ArgumentList $ngrokArgs `
+            -RedirectStandardOutput (Join-Path $cacheDir 'ngrok.stdout.log') `
+            -RedirectStandardError (Join-Path $cacheDir 'ngrok.stderr.log') | Out-Null
+    }
     Start-Sleep -Seconds 6
 } elseif (-not $ngrokExe) {
     Write-Warn 'no ngrok binary found - the public tunnel will not come up'
@@ -786,7 +800,7 @@ if ($publicUrl) {
     }
 } else {
     Write-Warn 'no ngrok tunnel came up - webhooks left unconfigured'
-    Write-Warn ("see " + (Join-Path $RootDir '.cache\ngrok.log'))
+    Write-Warn ("see " + (Join-Path $RootDir '.cache/ngrok.log'))
 }
 
 # ---------------------------------------------------------------------------

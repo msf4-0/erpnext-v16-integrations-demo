@@ -19,8 +19,11 @@ See [`THIRD-PARTY.md`](THIRD-PARTY.md) for vendored-app licensing and redistribu
 
 ## 2. Prerequisites
 
-- Windows with Docker Desktop (engine 29.x was used), Python 3.14, and the host ngrok binary — already logged in to ngrok.
-- Use Windows PowerShell (`powershell.exe`).
+- Windows with Docker Desktop, or Linux with Docker Engine and the Compose plugin.
+- PowerShell for the full integration workflow (Windows PowerShell on Windows;
+  PowerShell 7 / `pwsh` on Linux). The native Linux launchers use Bash, Python
+  3, and curl without `pwsh`.
+- Python 3.14 and the host ngrok binary (logged in) for the full integration workflow.
 - A populated `.env` in the project folder (section 4). If it is missing, copy `.env.example` to `.env`.
 
 ## 3. Which command to type
@@ -30,6 +33,19 @@ Run from the repository root:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\setup.ps1
 ```
+
+On Linux, use the native Bash launcher for a core ERPNext site:
+
+```bash
+cp .env.example .env       # if missing; edit the passwords
+./up-linux.sh              # provision core ERPNext
+./install-apps-linux.sh    # install barcode, Shopify, e-invoicing, item tracking
+```
+
+The app installer uses the repo's mounted app sources and installation helpers.
+It does not configure Shopify credentials, Node-RED, ngrok, the planner,
+Metabase, or demo data. The full integration workflow remains in
+`up.ps1` / `setup.ps1`.
 
 Notes:
 
@@ -46,7 +62,7 @@ All secrets live in `.env` (git-ignored). The repo ships `.env.example` with `__
 
 1. **Preflight** — Docker engine, Python, compose file, project files.
 2. **.env paths and secrets** — absolute paths self-heal to the current folder.
-3. **Containers** — created and started with `docker compose create` + `docker start`, loading `.env` and `versions.env`.
+3. **Containers** — the full PowerShell workflow loads `.env` and `versions.env`; the native Linux launcher starts only `db`, Redis, and `bench`.
 4. **Bench** — site present, log folder present, background scheduler and worker started (step 5b).
 5. **ERPNext token** — validated, rotated if rejected.
 6. **Shopify token** — 24 h Admin API token minted from client credentials.
@@ -63,18 +79,31 @@ For the first build or a deliberate full reprovision:
 powershell -ExecutionPolicy Bypass -File .\up.ps1
 ```
 
+On Linux:
+
+```bash
+bash ./up-linux.sh
+bash ./install-apps-linux.sh
+```
+
+The first command provisions core ERPNext; the second installs the custom apps.
+Neither configures the optional integrations described below.
+
 Every other session:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\setup.ps1
 ```
 
-Expected end state: `SETUP COMPLETE - all checks pass`, ERPNext / Planner / Node-RED up, and all three webhooks returning HTTP 200 both locally and through the tunnel.
+On Linux, rerun `bash ./up-linux.sh` to start/reuse the core site, and
+`bash ./install-apps-linux.sh` to ensure the custom apps are installed.
+
+Expected end state for the full PowerShell workflow: ERPNext, Planner, and Node-RED are up, and the webhooks respond locally and through the tunnel. The Linux launcher verifies only the core ERPNext site.
 
 ## 7. Known gotchas
 
 - The database lives in the `db_data` named volume and survives container and Docker restarts. `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml down -v` deletes it; see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
-- `docker compose up -d` hangs on this host. The scripts use `create` + `start` instead — do not replace this.
+- On the original Windows Docker Desktop host, `docker compose up -d` hangs; the Windows launcher uses `create` + `start`. The Linux core launcher uses `docker compose up -d`.
 - Shopify tokens expire after 24 h; `setup.ps1` mints a new one each run.
 - The ngrok URL changes on each tunnel start unless `NGROK_PUBLIC_URL` is pinned. `setup.ps1` re-wires the webhooks for you.
 - Do not run `down -v` or `-Wipe` without intending to destroy the site.

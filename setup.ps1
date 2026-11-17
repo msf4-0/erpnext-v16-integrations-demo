@@ -80,13 +80,13 @@ $DemoDir    = $PSScriptRoot
 $SandboxDir = Join-Path $DemoDir 'sandbox'
 $EnvPath    = Join-Path $DemoDir '.env'
 $VersionsPath = Join-Path $DemoDir 'versions.env'
-$EnvValidator = Join-Path $DemoDir 'sandbox\scripts\validate-env.py'
+$EnvValidator = Join-Path $DemoDir 'sandbox/scripts/validate-env.py'
 $ComposeFile = Join-Path $DemoDir 'docker-compose.yml'
-$FlowPath   = Join-Path $SandboxDir 'node-red\flows.json'
-$FlowSrc    = Join-Path $SandboxDir 'node-red\source-flow.json'
-$Builder    = Join-Path $SandboxDir 'node-red\build-flows.py'
-$FlowCheck  = Join-Path $SandboxDir 'scripts\check-flow.py'
-$WhScript   = Join-Path $SandboxDir 'scripts\ai-fix-wire-webhooks.sh'
+$FlowPath   = Join-Path $SandboxDir 'node-red/flows.json'
+$FlowSrc    = Join-Path $SandboxDir 'node-red/source-flow.json'
+$Builder    = Join-Path $SandboxDir 'node-red/build-flows.py'
+$FlowCheck  = Join-Path $SandboxDir 'scripts/check-flow.py'
+$WhScript   = Join-Path $SandboxDir 'scripts/ai-fix-wire-webhooks.sh'
 $Project    = 'comp_demo'
 $BenchName  = "$Project-bench-1"
 $NodeRedName = "$Project-node-red-1"
@@ -397,10 +397,16 @@ if (-not $cfg['SHOPIFY_CLIENT_ID'] -or -not $cfg['SHOPIFY_CLIENT_SECRET']) {
 if ($Full) {
     Write-Step '3/10  full rebuild (delegating to up.ps1)'
     if ($VerifyOnly) { throw '-Full and -VerifyOnly are mutually exclusive' }
-    $upArgs = @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $DemoDir 'up.ps1'))
+    if ($env:OS -eq 'Windows_NT') {
+        $shellExe = 'powershell.exe'
+        $upArgs = @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $DemoDir 'up.ps1'))
+    } else {
+        $shellExe = 'pwsh'
+        $upArgs = @('-NoProfile', '-File', (Join-Path $DemoDir 'up.ps1'))
+    }
     if ($Wipe) { $upArgs += '-Fresh' }
     Write-Info 'this takes 25-35 minutes and streams up.ps1 output'
-    $rc = Invoke-Native -Exe 'powershell.exe' -Arguments $upArgs
+    $rc = Invoke-Native -Exe $shellExe -Arguments $upArgs
     if ($rc -ne 0) { Write-Fail "up.ps1 exited $rc" } else { Write-Ok 'up.ps1 completed' }
 }
 
@@ -909,7 +915,7 @@ function Get-PublicUrl {
 $publicUrl = Get-PublicUrl
 if (-not $publicUrl -and -not $VerifyOnly) {
     $ngrokExe = (Get-Command ngrok -ErrorAction SilentlyContinue).Source
-    if (-not $ngrokExe) {
+    if (-not $ngrokExe -and $env:OS -eq 'Windows_NT') {
         $ngrokExe = Get-ChildItem 'C:\Program Files\WindowsApps\ngrok.ngrok_*' -Filter 'ngrok.exe' -ErrorAction SilentlyContinue |
             Sort-Object FullName -Descending | Select-Object -First 1 -ExpandProperty FullName
     }
@@ -917,10 +923,18 @@ if (-not $publicUrl -and -not $VerifyOnly) {
         $cacheDir = Join-Path $DemoDir '.cache'
         New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
         Write-Info "starting ngrok http localhost:$nodeRedPort"
-        Start-Process -FilePath $ngrokExe -ArgumentList @('http', $nodeRedPort, '--log', 'stdout') `
-            -WindowStyle Hidden `
-            -RedirectStandardOutput (Join-Path $cacheDir 'ngrok.log') `
-            -RedirectStandardError (Join-Path $cacheDir 'ngrok.err.log') | Out-Null
+        $ngrokArgs = @('http', $nodeRedPort, '--log', 'stdout')
+        $ngrokStdout = Join-Path $cacheDir 'ngrok.log'
+        $ngrokStderr = Join-Path $cacheDir 'ngrok.err.log'
+        if ($env:OS -eq 'Windows_NT') {
+            Start-Process -FilePath $ngrokExe -ArgumentList $ngrokArgs `
+                -WindowStyle Hidden -RedirectStandardOutput $ngrokStdout `
+                -RedirectStandardError $ngrokStderr | Out-Null
+        } else {
+            Start-Process -FilePath $ngrokExe -ArgumentList $ngrokArgs `
+                -RedirectStandardOutput $ngrokStdout `
+                -RedirectStandardError $ngrokStderr | Out-Null
+        }
         $deadline = (Get-Date).AddSeconds(60)
         do { Start-Sleep -Seconds 4; $publicUrl = Get-PublicUrl } while ((Get-Date) -lt $deadline -and -not $publicUrl)
         if ($publicUrl) { Write-Change "tunnel started: $publicUrl" }

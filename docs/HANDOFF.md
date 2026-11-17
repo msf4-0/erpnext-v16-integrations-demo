@@ -108,7 +108,7 @@ bench --site frontend set-config myinvois_client_secret "<secret>"
   source under `repos/<app>`. The container `apps/` dir is NOT a bind mount —
   sync edits with `docker cp` (or `docker cp` the whole app), then
   `bench build --app <app>` (JS) and `bench --site frontend clear-cache` (Python/hooks).
-- `docker compose up -d` HANGS on this host; use `create`+`start` (see `up.ps1`).
+- On the original Windows Docker Desktop host, `docker compose up -d` HANGS; the Windows launcher uses `create`+`start`. The native Linux `up-linux.sh` uses Compose to bring up and provision the core ERPNext site; it does not configure optional integrations.
 - DB is on the `db_data` named volume and persists across `docker restart`.
 - Windows→bash quoting is painful (see `docs/WINDOWS-QUOTING.md`); prefer
   `docker exec -w <dir> ... cat <file>` and single-quoted PowerShell strings;

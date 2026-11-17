@@ -10,8 +10,12 @@
 The project is the repository root, with Docker Compose project name `comp_demo`
 and ERPNext site `frontend` by default. Run commands from the repository root;
 paths in this document are repository-relative. `docker-compose.yml` is the
-authoritative definition of the container stack. `up.ps1` and `setup.ps1` are
-the supported Windows PowerShell entry points.
+authoritative definition of the container stack. The PowerShell entry points
+`up.ps1` and `setup.ps1` handle the full integration workflow. Linux also has
+the native Bash `up-linux.sh` for the core ERPNext site and
+`install-apps-linux.sh` for the bundled custom apps; they need Docker Compose,
+Python 3, and curl, but not PowerShell. They do not configure the planner,
+Metabase, Node-RED, Shopify credentials, ngrok, or demo data.
 
 ## Services and dependencies
 
