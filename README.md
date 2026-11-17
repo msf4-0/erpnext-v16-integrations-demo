@@ -356,7 +356,7 @@ before any shared use.
 | `SHOPIFY_STORE`, `SHOPIFY_API_VERSION` | store host, API version | Set |
 | `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` | Mint the Shopify Admin token | Set |
 | `SHOPIFY_ACCESS_TOKEN` | `shpat_…` Admin token, valid 24 h | Re-minted by `setup.ps1` |
-| `SCHEDULER_ERPNEXT_API_KEY` / `_SECRET` | Credentials for `planner@ai-fix.local` | Set |
+| `SCHEDULER_ERPNEXT_API_KEY` / `_SECRET` | Credentials for `planner@fix.local` | Set |
 | `NODE_RED_PORT`, `SCHEDULER_PORT`, `NGROK_API_PORT` | 1880, 3001, 4040 | Set |
 | `NODE_RED_SOURCE_FLOW`, `FLOWS_PATH` | Absolute paths to the Node-RED flow files | Self-healed on folder rename |
 | `NGROK_AUTHTOKEN` | ngrok authtoken | Placeholder `__FILL_ME__`; the host ngrok binary uses its own saved config |
@@ -372,7 +372,7 @@ before any shared use.
 | `SHOPIFY_CLIENT_SECRET` | `.env`, from the same page | You, once |
 | `SHOPIFY_ACCESS_TOKEN` | `.env`, `shpat_…` | `setup.ps1` / `up.ps1` (auto, every 24 h) |
 | `ERPNEXT_API_TOKEN` | `.env`, key:secret | Scripts (auto-rotated on 401) |
-| `SCHEDULER_ERPNEXT_API_KEY` / `_SECRET` | `.env` | Scripts (minted for `planner@ai-fix.local`) |
+| `SCHEDULER_ERPNEXT_API_KEY` / `_SECRET` | `.env` | Scripts (minted for `planner@fix.local`) |
 | ngrok authtoken | Host ngrok config: `ngrok config add-authtoken <token>` once | You, once |
 
 ## Troubleshooting

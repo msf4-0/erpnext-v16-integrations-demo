@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# ai-fix-verify.sh — prove the two fixes actually work, rather than "no error".
+# fix-verify.sh — prove the two fixes actually work, rather than "no error".
 #
 # Run inside the bench container:
-#   bash /tmp/scripts/ai-fix-verify.sh [https://<tunnel>.ngrok-free.dev]
+#   bash /tmp/scripts/fix-verify.sh [https://<tunnel>.ngrok-free.dev]
 #
 # Checks
 #   A. both apps are installed and their doctypes exist
@@ -17,7 +17,7 @@ set -uo pipefail
 PUBLIC_URL="${1:-}"
 SITE="${SITE_NAME:-frontend}"
 B="http://localhost:8000"
-J=/tmp/aifix-verify
+J=/tmp/fix-verify
 PASS=0
 FAIL=0
 
@@ -47,10 +47,10 @@ done
 
 # =========================================================== B. barcode scanner
 head "B. barcode scanner lookup (the reported failure)"
-cat > apps/barcode_shrdc/barcode_shrdc/_aifix_verify.py <<'PYEOF'
+cat > apps/barcode_shrdc/barcode_shrdc/_fix_verify.py <<'PYEOF'
 import frappe
 
-TEST_ITEM = "AI-FIX-SCAN-TEST"
+TEST_ITEM = "FIX-SCAN-TEST"
 TEST_BARCODE = "AI0FIX0SCAN0TEST"
 
 
@@ -88,7 +88,7 @@ def seed():
 			{
 				"doctype": "Item",
 				"item_code": TEST_ITEM,
-				"item_name": "AI-FIX barcode scan test",
+				"item_name": "FIX barcode scan test",
 				"item_group": "Products",
 				"stock_uom": "Nos",
 				"is_stock_item": 1,
@@ -118,7 +118,7 @@ def cleanup():
 	return True
 PYEOF
 
-SEED=$(bench --site "$SITE" execute barcode_shrdc._aifix_verify.seed 2>&1 | grep -o 'MARK_SEED .*' || true)
+SEED=$(bench --site "$SITE" execute barcode_shrdc._fix_verify.seed 2>&1 | grep -o 'MARK_SEED .*' || true)
 BARCODE=$(echo "$SEED" | awk '{print $3}')
 ITEM=$(echo "$SEED" | awk '{print $2}')
 if [ -n "$BARCODE" ]; then
@@ -162,7 +162,7 @@ fi
 
 # =========================================================== C. print rendering
 head "C. server-side barcode/QR rendering (no CDN)"
-cat > apps/barcode_shrdc/barcode_shrdc/_aifix_render.py <<'PYEOF'
+cat > apps/barcode_shrdc/barcode_shrdc/_fix_render.py <<'PYEOF'
 import inspect
 
 import frappe
@@ -187,11 +187,11 @@ def run():
 	)
 
 	b = _call(get_barcode_image, "123456789012", "Code128")
-	q = _call(get_qr_image, "https://example.invalid/ai-fix")
+	q = _call(get_qr_image, "https://example.invalid/fix")
 	print("MARK_RENDER barcode=%s qr=%s" % (b or "NONE", q or "NONE"))
 	return {"barcode": b, "qr": q}
 PYEOF
-R=$(bench --site "$SITE" execute barcode_shrdc._aifix_render.run 2>&1)
+R=$(bench --site "$SITE" execute barcode_shrdc._fix_render.run 2>&1)
 if echo "$R" | grep -q 'MARK_RENDER .*barcode=/files/'; then
   ok "barcode image rendered server-side into /files/"
 else
@@ -201,7 +201,7 @@ fi
 
 # =========================================================== D. webhooks
 head "D. ERPNext webhooks -> live tunnel"
-cat > apps/barcode_shrdc/barcode_shrdc/_aifix_wh.py <<'PYEOF'
+cat > apps/barcode_shrdc/barcode_shrdc/_fix_wh.py <<'PYEOF'
 import frappe
 
 
@@ -218,7 +218,7 @@ def run():
 		)
 	return rows
 PYEOF
-WH=$(bench --site "$SITE" execute barcode_shrdc._aifix_wh.run 2>&1 | grep '^MARK_WH' || true)
+WH=$(bench --site "$SITE" execute barcode_shrdc._fix_wh.run 2>&1 | grep '^MARK_WH' || true)
 if [ -z "$WH" ]; then
   bad "no Webhook records found"
 else
@@ -264,11 +264,11 @@ if [ -n "$PUBLIC_URL" ]; then
 fi
 
 # cleanup
-bench --site "$SITE" execute barcode_shrdc._aifix_verify.cleanup >/dev/null 2>&1 || true
-rm -f apps/barcode_shrdc/barcode_shrdc/_aifix_verify.py \
-      apps/barcode_shrdc/barcode_shrdc/_aifix_render.py \
-      apps/barcode_shrdc/barcode_shrdc/_aifix_wh.py
-find apps/barcode_shrdc -name '_aifix_*' -delete 2>/dev/null || true
+bench --site "$SITE" execute barcode_shrdc._fix_verify.cleanup >/dev/null 2>&1 || true
+rm -f apps/barcode_shrdc/barcode_shrdc/_fix_verify.py \
+      apps/barcode_shrdc/barcode_shrdc/_fix_render.py \
+      apps/barcode_shrdc/barcode_shrdc/_fix_wh.py
+find apps/barcode_shrdc -name '_fix_*' -delete 2>/dev/null || true
 
 echo
 echo "=============================================="

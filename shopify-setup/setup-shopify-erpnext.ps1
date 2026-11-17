@@ -1144,7 +1144,7 @@ if ($whFields.Count -eq 0) {
     # / Webhook Data) with an EMPTY parent on this Frappe build, so the headers
     # silently end up as blank rows. The server-side document API does not have
     # that problem - it is the same technique the build's own
-    # sandbox/scripts/ai-fix-wire-webhooks.sh uses.
+    # sandbox/scripts/fix-wire-webhooks.sh uses.
     $benchOk = $false
     $useBench = $false
     if ($BenchContainer) {

@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    ERPNEXT-AI-FIX - one-shot bring-up of a self-contained ERPNext stack with a
+    ERPNEXT-FIX - one-shot bring-up of a self-contained ERPNext stack with a
     working barcode scanner and a working Shopify <-> ERPNext bridge.
 
 .DESCRIPTION
@@ -9,7 +9,7 @@
     ERPNext Webhook records pointed at a dead tunnel URL.
 
     This script:
-      1. starts its OWN compose project (`erpnext-ai-fix`): bench + db + redis
+      1. starts its OWN compose project (`erpnext-fix`): bench + db + redis
          + node-red + ngrok, on its own ports and volumes
       2. provisions an ERPNext v16 site
       3. installs barcode_shrdc (from the downloaded source, with the v16 fix
@@ -38,7 +38,7 @@
 .EXAMPLE
     # Run from the repository root. There is exactly ONE bring-up script and it
     # is this file. The old sandbox\up.ps1 belonged to the retired
-    # `erpnext-ai-fix` project, provisioned a DIFFERENT compose project, and has
+    # `erpnext-fix` project, provisioned a DIFFERENT compose project, and has
     # been deleted - if you still have a copy, do not run it.
     powershell -ExecutionPolicy Bypass -File .\up.ps1
     powershell -ExecutionPolicy Bypass -File .\up.ps1 -Fresh
@@ -58,7 +58,7 @@ $script:RunStart = Get-Date
 $DemoDir = $PSScriptRoot
 # SELF-CONTAINED BY DEFAULT: everything this script stages (sandbox scripts,
 # recipes, the Node-RED flow, the app sources under repos/, and the planner) lives
-# inside comp_demo. The step-0 guard below falls back to ERPNEXT-AI-FIX only if the
+# inside comp_demo. The step-0 guard below falls back to ERPNEXT-FIX only if the
 # vendored sandbox is missing, so an in-flight run keeps working.
 $SandboxDir = Join-Path $DemoDir 'sandbox'
 $RootDir = $DemoDir
@@ -463,8 +463,8 @@ Write-Info 'barcode render dependencies prepared (cairo + reportlab + rlPyCairo)
 # ---------------------------------------------------------------------------
 if (-not $SkipInstall) {
     Write-Step '7/11  installing barcode_shrdc + shopify (long step)'
-    if ((Invoke-Bench 'bash /tmp/scripts/ai-fix-install.sh') -ne 0) {
-        Add-Failure 'apps' 'ai-fix-install.sh failed - barcode_shrdc / shopify are NOT installed'
+    if ((Invoke-Bench 'bash /tmp/scripts/fix-install.sh') -ne 0) {
+        Add-Failure 'apps' 'fix-install.sh failed - barcode_shrdc / shopify are NOT installed'
     } else {
         Write-Info 'barcode_shrdc + shopify installed'
     }
@@ -633,7 +633,7 @@ if (-not (Test-Path $barcodeFixed) -and (Test-Path $barcodeMaster)) {
 # ---------------------------------------------------------------------------
 Write-Step '8/11  Shopify post-setup (master data + product/order sync)'
 if ($shopifyToken) {
-    if ((Invoke-Bench "bash /tmp/scripts/ai-fix-postsetup.sh $shopifyToken $shopifyStore $shopifyVersion $shopifyClientId $shopifyClientSecret") -ne 0) {
+    if ((Invoke-Bench "bash /tmp/scripts/fix-postsetup.sh $shopifyToken $shopifyStore $shopifyVersion $shopifyClientId $shopifyClientSecret") -ne 0) {
         Write-Warn 'Shopify post-setup reported errors - review the output above'
     }
 } else {
@@ -800,7 +800,7 @@ while ((Get-Date) -lt $deadline) {
 
 if ($publicUrl) {
     Write-Info "tunnel: $publicUrl -> localhost:$nodeRedPort"
-    if ((Invoke-Bench "bash /tmp/scripts/ai-fix-wire-webhooks.sh $publicUrl") -ne 0) {
+    if ((Invoke-Bench "bash /tmp/scripts/fix-wire-webhooks.sh $publicUrl") -ne 0) {
         Write-Warn 'webhook wiring failed'
     }
 } else {
@@ -850,7 +850,7 @@ if ($publicUrl) {
 
 Write-Host ''
 Write-Host ('=' * 72) -ForegroundColor Green
-Write-Host '  ERPNEXT-AI-FIX is up' -ForegroundColor Green
+Write-Host '  ERPNEXT-FIX is up' -ForegroundColor Green
 Write-Host ('=' * 72) -ForegroundColor Green
 Write-Host "  ERPNext        : $erpUrl" -ForegroundColor Green
 Write-Host '  Login          : Administrator / admin' -ForegroundColor Green

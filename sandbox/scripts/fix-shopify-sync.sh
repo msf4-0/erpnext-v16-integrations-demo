@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ai-fix-shopify-sync.sh — configure the Shopify Access credential and prove the
+# fix-shopify-sync.sh — configure the Shopify Access credential and prove the
 # ERPNext <-> Shopify link is real, by importing the store's products as Items
 # and its orders as Sales Orders.
 #
@@ -9,9 +9,9 @@
 #   * lists the resulting Sales Orders (compare with the store's order list)
 #
 # Run inside the bench container:
-#   bash /tmp/scripts/ai-fix-shopify-sync.sh <shpat_token> <store_host> <api_version>
+#   bash /tmp/scripts/fix-shopify-sync.sh <shpat_token> <store_host> <api_version>
 # e.g.
-#   bash /tmp/scripts/ai-fix-shopify-sync.sh shpat_xxx 4e1075.myshopify.com 2026-04
+#   bash /tmp/scripts/fix-shopify-sync.sh shpat_xxx 4e1075.myshopify.com 2026-04
 set -uo pipefail
 
 TOKEN="${1:-}"
@@ -32,7 +32,7 @@ say() { echo; echo "----- $* -----"; }
 # 1. Shopify Access record
 # ---------------------------------------------------------------------------
 say "Shopify Access credential"
-cat > "$APP/_aifix_access.py" <<'PYEOF'
+cat > "$APP/_fix_access.py" <<'PYEOF'
 import frappe
 
 TOKEN = "__TOKEN__"
@@ -61,26 +61,26 @@ PYEOF
 
 python3 - "$TOKEN" "$STORE" "$VERSION" <<'PYSUB'
 import pathlib, sys
-p = pathlib.Path("/home/frappe/frappe-bench/apps/shopify/shopify/_aifix_access.py")
+p = pathlib.Path("/home/frappe/frappe-bench/apps/shopify/shopify/_fix_access.py")
 t = p.read_text()
 t = t.replace("__TOKEN__", sys.argv[1]).replace("__STORE__", sys.argv[2]).replace("__VERSION__", sys.argv[3])
 p.write_text(t)
 PYSUB
 
-ACCESS=$(bench --site "$SITE" execute shopify._aifix_access.run 2>&1 | tee /tmp/aifix_access.log | grep -o 'MARK_ACCESS .*')
+ACCESS=$(bench --site "$SITE" execute shopify._fix_access.run 2>&1 | tee /tmp/fix_access.log | grep -o 'MARK_ACCESS .*')
 if [ -n "$ACCESS" ]; then
   echo "  $ACCESS"
 else
   echo "  FAILED to create Shopify Access:"
-  tail -20 /tmp/aifix_access.log
+  tail -20 /tmp/fix_access.log
 fi
-rm -f "$APP/_aifix_access.py"
+rm -f "$APP/_fix_access.py"
 
 # ---------------------------------------------------------------------------
 # 2. import products -> Items
 # ---------------------------------------------------------------------------
 say "import Shopify products as Items"
-cat > "$APP/_aifix_sync.py" <<'PYEOF'
+cat > "$APP/_fix_sync.py" <<'PYEOF'
 import frappe
 
 from shopify.retrieve_order import retrieve_shopify_orders
@@ -129,20 +129,20 @@ def orders():
 	return len(rows)
 PYEOF
 
-bench --site "$SITE" execute shopify._aifix_sync.products 2>&1 | tee /tmp/aifix_prod.log | grep -E '^MARK_' | head -40
+bench --site "$SITE" execute shopify._fix_sync.products 2>&1 | tee /tmp/fix_prod.log | grep -E '^MARK_' | head -40
 echo "  item sync errors (if any):"
-grep -iE 'error|traceback|exception' /tmp/aifix_prod.log | head -5
+grep -iE 'error|traceback|exception' /tmp/fix_prod.log | head -5
 
 # ---------------------------------------------------------------------------
 # 3. import orders -> Sales Orders
 # ---------------------------------------------------------------------------
 say "import Shopify orders as Sales Orders"
-bench --site "$SITE" execute shopify._aifix_sync.orders 2>&1 | tee /tmp/aifix_ord.log | grep -E '^MARK_' | head -40
+bench --site "$SITE" execute shopify._fix_sync.orders 2>&1 | tee /tmp/fix_ord.log | grep -E '^MARK_' | head -40
 echo "  order sync errors (if any):"
-grep -iE 'error|traceback|exception' /tmp/aifix_ord.log | head -8
+grep -iE 'error|traceback|exception' /tmp/fix_ord.log | head -8
 
-rm -f "$APP/_aifix_sync.py"
-find "$APP" -name '_aifix_*' -delete 2>/dev/null || true
+rm -f "$APP/_fix_sync.py"
+find "$APP" -name '_fix_*' -delete 2>/dev/null || true
 
 say "summary"
 bench --site "$SITE" --cmd "list-apps" 2>/dev/null || bench --site "$SITE" list-apps

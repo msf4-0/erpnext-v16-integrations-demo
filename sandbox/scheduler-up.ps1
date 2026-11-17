@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
     Bring up the drag-and-drop production planner that sits beside ERPNext in the
-    ERPNEXT-AI-FIX stack, and prove it is wired to the site.
+    ERPNEXT-FIX stack, and prove it is wired to the site.
 
 .DESCRIPTION
     The planner is the operator's standalone Node/Express + React app
     (`scheduler/`), not a bench app. This script:
 
       1. builds + starts the `scheduler` compose service
-      2. mints an API token for the dedicated planner user (planner@ai-fix.local)
-         and writes it into sandbox/.env.ai-fix
+      2. mints an API token for the dedicated planner user (planner@fix.local)
+         and writes it into sandbox/.env.fix
       3. seeds demo manufacturing data (workstations, BOMs, Work Orders, Job Cards)
          when the site has none
       4. adds a "Production Planner" shortcut to the Manufacturing workspace
@@ -43,10 +43,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $SandboxDir = $PSScriptRoot
-$EnvPath = Join-Path $SandboxDir '.env.ai-fix'
-$ComposeFile = Join-Path $SandboxDir 'docker-compose.erpnext-ai-fix.yml'
+$EnvPath = Join-Path $SandboxDir '.env.fix'
+$ComposeFile = Join-Path $SandboxDir 'docker-compose.erpnext-fix.yml'
 $ScriptsDir = Join-Path $SandboxDir 'scripts'
-$Project = 'erpnext-ai-fix'
+$Project = 'erpnext-fix'
 
 function Write-Step([string]$Message) {
     Write-Host ''
@@ -133,10 +133,10 @@ Write-Step "2/5  ERPNext API token for the planner"
 # bench container, then run with the bench venv python.
 Push-Location $SandboxDir
 try {
-    foreach ($helper in @('ai-fix-scheduler-token.py', 'seed_planner_demo.py', 'ai-fix-planner-workspace.py', 'planner_probe.py', 'planner_capacity_snapshot.py')) {
+    foreach ($helper in @('fix-scheduler-token.py', 'seed_planner_demo.py', 'fix-planner-workspace.py', 'planner_probe.py', 'planner_capacity_snapshot.py')) {
         $src = Join-Path $ScriptsDir $helper
         if (-not (Test-Path $src)) { throw "missing helper script: $src" }
-        & docker cp $src "erpnext-ai-fix-bench-1:/tmp/$helper" | Out-Null
+        & docker cp $src "erpnext-fix-bench-1:/tmp/$helper" | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "docker cp failed for $helper" }
     }
 } finally {
@@ -150,19 +150,19 @@ $secret = $envMap['SCHEDULER_ERPNEXT_API_SECRET']
 function Set-PlannerToken([switch]$Force) {
     $current = Read-EnvFile $EnvPath
     if ($current['SCHEDULER_ERPNEXT_API_KEY'] -and $current['SCHEDULER_ERPNEXT_API_SECRET'] -and -not $Force) {
-        Write-Info 'reusing the token already in .env.ai-fix (use -RotateToken to change it)'
+        Write-Info 'reusing the token already in .env.fix (use -RotateToken to change it)'
         return
     }
     $extra = @()
     if ($Force) { $extra += '--rotate' }
-    $out = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-ai-fix-bench-1 `
-        bash -lc "cd /home/frappe/frappe-bench && ./env/bin/python /tmp/ai-fix-scheduler-token.py $($extra -join ' ')" 2>&1
+    $out = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-fix-bench-1 `
+        bash -lc "cd /home/frappe/frappe-bench && ./env/bin/python /tmp/fix-scheduler-token.py $($extra -join ' ')" 2>&1
     $keyLine = ($out | Select-String -Pattern '^PLANNER_API_KEY=').Line
     $secretLine = ($out | Select-String -Pattern '^PLANNER_API_SECRET=').Line
     if (-not $keyLine -or -not $secretLine) { throw "could not mint an API token:`n$($out -join "`n")" }
     Set-EnvValue $EnvPath 'SCHEDULER_ERPNEXT_API_KEY' ($keyLine -replace '^PLANNER_API_KEY=', '')
     Set-EnvValue $EnvPath 'SCHEDULER_ERPNEXT_API_SECRET' ($secretLine -replace '^PLANNER_API_SECRET=', '')
-    Write-Info 'token minted for planner@ai-fix.local and written to .env.ai-fix'
+    Write-Info 'token minted for planner@fix.local and written to .env.fix'
 }
 
 Set-PlannerToken -Force:$RotateToken
@@ -178,7 +178,7 @@ $seedArgs = @()
 if ($Seed) { $seedArgs += '--force-orders' }
 if ($Reseed) { $seedArgs += '--reset-orders' }
 if ($Seed -or $Reseed) {
-    $out = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-ai-fix-bench-1 `
+    $out = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-fix-bench-1 `
         bash -lc "cd /home/frappe/frappe-bench && ./env/bin/python /tmp/seed_planner_demo.py $($seedArgs -join ' ')" 2>&1
     $out | Select-String -Pattern 'MARK (work order|reset|bom|FAILED)' | ForEach-Object { Write-Info $_.Line }
     $summary = ($out | Select-String -Pattern '^SUMMARY ').Line
@@ -186,7 +186,7 @@ if ($Seed -or $Reseed) {
 } else {
     # Counts come from planner_probe.py (staged in 2/5), not an inline python -c:
     # the Windows docker CLI mangles the nested quoting of a one-liner.
-    $counts = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-ai-fix-bench-1 `
+    $counts = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-fix-bench-1 `
         /home/frappe/frappe-bench/env/bin/python /tmp/planner_probe.py 2>&1
     $counts | Select-String -Pattern '^count (Work Order|Job Card|Workstation|BOM)\s' |
         ForEach-Object { Write-Info $_.Line }
@@ -201,7 +201,7 @@ if ($Seed -or $Reseed) {
         Set-PlannerToken -Force
         $rc = Invoke-Compose @('up', '-d', '--no-deps', 'scheduler')
         if ($rc -ne 0) { throw 'compose up scheduler (after token rotation) failed' }
-        $out = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-ai-fix-bench-1 `
+        $out = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-fix-bench-1 `
             bash -lc "cd /home/frappe/frappe-bench && ./env/bin/python /tmp/seed_planner_demo.py" 2>&1
         $out | Select-String -Pattern 'MARK (work order|reset|bom|FAILED)' | ForEach-Object { Write-Info $_.Line }
     }
@@ -209,8 +209,8 @@ if ($Seed -or $Reseed) {
 
 # ---------------------------------------------------------------------------
 Write-Step "4/5  Manufacturing workspace shortcut"
-$wsOut = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-ai-fix-bench-1 `
-    bash -lc "cd /home/frappe/frappe-bench && ./env/bin/python /tmp/ai-fix-planner-workspace.py --url $plannerUrl" 2>&1
+$wsOut = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-fix-bench-1 `
+    bash -lc "cd /home/frappe/frappe-bench && ./env/bin/python /tmp/fix-planner-workspace.py --url $plannerUrl" 2>&1
 $wsOut | Select-String -Pattern 'MARK|WARN' | ForEach-Object { Write-Info $_.Line }
 
 # ---------------------------------------------------------------------------
@@ -237,7 +237,7 @@ if (@($schedule.workOrders).Count -gt 0) {
     # round-trip below (and every real drag) erodes the seeded plan. The rows are
     # put back afterwards, which keeps repeat runs idempotent. Measured before
     # this existed: 65 rows -> 64 after one verification run.
-    $snapDump = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-ai-fix-bench-1 `
+    $snapDump = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-fix-bench-1 `
         bash -lc "cd /home/frappe/frappe-bench && ./env/bin/python /tmp/planner_capacity_snapshot.py --dump" 2>&1
     $countBefore = ($snapDump | Select-String -Pattern '^count rows\s+(\d+)').Matches[0].Groups[1].Value
     Write-Info "capacity plan snapshot: $countBefore job-card schedule rows"
@@ -263,7 +263,7 @@ if (@($schedule.workOrders).Count -gt 0) {
         Invoke-RestMethod -Uri "$plannerUrl/api/schedule/sync-reschedule" -Method Put `
             -ContentType 'application/json' -Body $restore -TimeoutSec 60 | Out-Null
 
-        $snapRestore = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-ai-fix-bench-1 `
+        $snapRestore = & docker exec -u frappe -e "SITE_NAME=$siteName" erpnext-fix-bench-1 `
             bash -lc "cd /home/frappe/frappe-bench && ./env/bin/python /tmp/planner_capacity_snapshot.py --restore" 2>&1
         $countAfter = ($snapRestore | Select-String -Pattern '^count rows\s+(\d+)').Matches[0].Groups[1].Value
         if ($countAfter -ne $countBefore) {

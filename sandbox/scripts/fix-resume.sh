@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# ai-fix-resume.sh — finish the ERPNEXT-AI-FIX bring-up inside an
-# already-`bench init`-ed bench, logging every step to /tmp/ai-fix-resume.log.
+# fix-resume.sh — finish the ERPNEXT-FIX bring-up inside an
+# already-`bench init`-ed bench, logging every step to /tmp/fix-resume.log.
 #
 # Written as a FILE (not an inline `docker exec ... bash -lc "..."` command)
 # because this host's PowerShell/Windows quoting mangles nested bash badly.
 #
 # Run inside the bench container as the `frappe` user:
-#   bash /tmp/scripts/ai-fix-resume.sh
+#   bash /tmp/scripts/fix-resume.sh
 set -uo pipefail
 
 SITE="${SITE_NAME:-frontend}"
 DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD:-admin}"
 BENCH="/home/frappe/frappe-bench"
-LOG=/tmp/ai-fix-resume.log
+LOG=/tmp/fix-resume.log
 : > "$LOG"
 exec > >(tee -a "$LOG") 2>&1
 
@@ -108,10 +108,10 @@ done
 # 5. barcode_shrdc + shopify
 # ---------------------------------------------------------------------------
 say "install apps"
-if [ -f /tmp/scripts/ai-fix-install.sh ]; then
-  bash /tmp/scripts/ai-fix-install.sh
+if [ -f /tmp/scripts/fix-install.sh ]; then
+  bash /tmp/scripts/fix-install.sh
 else
-  echo "WARNING: /tmp/scripts/ai-fix-install.sh missing"
+  echo "WARNING: /tmp/scripts/fix-install.sh missing"
 fi
 
 # ---------------------------------------------------------------------------

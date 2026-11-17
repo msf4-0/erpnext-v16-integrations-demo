@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ai-fix-provision-site.sh — create the ERPNext site inside an ALREADY
+# fix-provision-site.sh — create the ERPNext site inside an ALREADY
 # `bench init`-ed bench.
 #
 # Why this exists instead of provision-base.sh: provision-base.sh runs
@@ -11,7 +11,7 @@
 # (the DB datadir is tmpfs - see the compose file).
 #
 # Run inside the bench container as the `frappe` user:
-#   bash /tmp/scripts/ai-fix-provision-site.sh
+#   bash /tmp/scripts/fix-provision-site.sh
 set -uo pipefail
 
 SITE="${SITE_NAME:-frontend}"

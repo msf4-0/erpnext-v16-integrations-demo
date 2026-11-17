@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only probe of the running ERPNEXT-AI-FIX site.
+"""Read-only probe of the running ERPNEXT-FIX site.
 
 Prints the facts the production planner integration depends on: ERPNext version,
 installed apps, manufacturing master data, and the writability of the Job Card

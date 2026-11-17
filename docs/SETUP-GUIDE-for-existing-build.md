@@ -2,7 +2,7 @@
 > This document describes the old `erpnext-build.zip` bundle (different folder
 > name, different `.env`). For a `git clone` of this repo, follow
 > [`README.md`](../README.md) section 3 and run `.\up.ps1` from the repo root.
-> The `sandbox/up.ps1` it references belonged to the retired `erpnext-ai-fix`
+> The `sandbox/up.ps1` it references belonged to the retired `erpnext-fix`
 > project and no longer exists.
 # Adding the missing functions to an existing ERPNext v16 build
 
@@ -46,7 +46,7 @@ cp .env.example .env
 
 powershell -ExecutionPolicy Bypass -File .\up.ps1          # Windows
 # Linux/macOS: pwsh -File ./up.ps1 (PowerShell 7+). There is no bash
-# equivalent - sandbox/up.ps1 belonged to the retired erpnext-ai-fix project
+# equivalent - sandbox/up.ps1 belonged to the retired erpnext-fix project
 # and has been deleted.
 ```
 
@@ -117,11 +117,11 @@ bench --site <site> clear-cache
 ### B4. A user for the planner (least privilege)
 
 ```bash
-SITE_NAME=<site> ./env/bin/python erpnext-build/sandbox/scripts/ai-fix-scheduler-token.py
+SITE_NAME=<site> ./env/bin/python erpnext-build/sandbox/scripts/fix-scheduler-token.py
 # prints PLANNER_API_KEY=... PLANNER_API_SECRET=...
 ```
 
-It creates `planner@ai-fix.local` with Manufacturing Manager/User + Sales User + Stock User —
+It creates `planner@fix.local` with Manufacturing Manager/User + Sales User + Stock User —
 the planner needs all three (Sales for the forecast tab, Stock for stock lookups).
 
 ### B5. Run the planner
@@ -191,7 +191,7 @@ Point your three ERPNext **Webhook** records at the tunnel (ERPNext → *Webhook
 | Stock Reconciliation · on_submit | `https://<your-tunnel>.ngrok-free.app/stock-recon` |
 
 Set **enabled = 1** and add header `ngrok-skip-browser-warning: 1` in the webhook's headers.
-`erpnext-build/sandbox/scripts/ai-fix-wire-webhooks.sh <public-url>` does the same three records
+`erpnext-build/sandbox/scripts/fix-wire-webhooks.sh <public-url>` does the same three records
 if your bench layout matches ours.
 
 Test through the tunnel, not locally:
@@ -264,7 +264,7 @@ Sales Invoice with einvoice_profile=XRECHNUNG      # .xml attached
 6. **Don't run `up.ps1` against your own site.** It creates its own compose project (`comp_demo`)
    and its own tmpfs database; Path B is the integration path.
 7. **Planner API user needs 3 role families** (Manufacturing, Sales, Stock) or the forecast/batch
-   tabs answer 403 — `ai-fix-scheduler-token.py` grants them.
+   tabs answer 403 — `fix-scheduler-token.py` grants them.
 
 ---
 

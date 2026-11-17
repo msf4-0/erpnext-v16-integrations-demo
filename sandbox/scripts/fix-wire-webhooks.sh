@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ai-fix-wire-webhooks.sh — point ERPNext's outbound Webhooks at the current
+# fix-wire-webhooks.sh — point ERPNext's outbound Webhooks at the current
 # ngrok public URL and enable them.
 #
 # This is the automated replacement for the manual "open Webhook List and
@@ -8,7 +8,7 @@
 # every tunnel restart.
 #
 # Run inside the bench container:
-#   bash /tmp/scripts/ai-fix-wire-webhooks.sh https://<id>.ngrok-free.dev
+#   bash /tmp/scripts/fix-wire-webhooks.sh https://<id>.ngrok-free.dev
 set -uo pipefail
 
 PUBLIC_URL="${1:-}"
@@ -22,7 +22,7 @@ PUBLIC_URL="${PUBLIC_URL%/}"
 
 cd /home/frappe/frappe-bench || exit 1
 
-cat > apps/barcode_shrdc/barcode_shrdc/_aifix_webhooks.py <<'PYEOF'
+cat > apps/barcode_shrdc/barcode_shrdc/_fix_webhooks.py <<'PYEOF'
 import frappe
 
 BASE_URL = "__BASE_URL__"
@@ -164,17 +164,17 @@ PYEOF
 # Inject the tunnel URL (heredoc keeps the file readable; substitute after).
 python3 - "$PUBLIC_URL" <<'PYSUB'
 import sys, pathlib
-p = pathlib.Path("apps/barcode_shrdc/barcode_shrdc/_aifix_webhooks.py")
+p = pathlib.Path("apps/barcode_shrdc/barcode_shrdc/_fix_webhooks.py")
 text = p.read_text()
 p.write_text(text.replace("__BASE_URL__", sys.argv[1]))
 PYSUB
 
 echo "-- configuring webhooks for $PUBLIC_URL"
-OUT=$(bench --site "$SITE" execute barcode_shrdc._aifix_webhooks.run 2>&1)
+OUT=$(bench --site "$SITE" execute barcode_shrdc._fix_webhooks.run 2>&1)
 echo "$OUT" | grep -E '^MARK_WEBHOOK|Error|Traceback' | sed 's/^MARK_WEBHOOK /  /' || true
 
-rm -f apps/barcode_shrdc/barcode_shrdc/_aifix_webhooks.py
-find apps/barcode_shrdc -name '_aifix_webhooks*' -delete 2>/dev/null || true
+rm -f apps/barcode_shrdc/barcode_shrdc/_fix_webhooks.py
+find apps/barcode_shrdc -name '_fix_webhooks*' -delete 2>/dev/null || true
 
 if echo "$OUT" | grep -q '^MARK_WEBHOOK'; then
   echo "-- webhooks configured and enabled"

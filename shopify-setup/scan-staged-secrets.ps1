@@ -9,7 +9,7 @@ param(
 
 $envFiles = @(
     (Join-Path $RepoRoot '.env')
-    (Join-Path $RepoRoot 'sandbox\.env.ai-fix')
+    (Join-Path $RepoRoot 'sandbox\.env.fix')
     (Join-Path $RepoRoot 'shopify-setup\.env')
 )
 

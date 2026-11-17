@@ -4,18 +4,18 @@
 The planner is a separate Node service, so it cannot use a browser session: it
 authenticates with an API key/secret pair. Rather than hand it the Administrator
 token (which would give the planner full control of the site), this creates a
-dedicated `planner@ai-fix.local` user holding only Manufacturing roles.
+dedicated `planner@fix.local` user holding only Manufacturing roles.
 
 `generate_keys()` is used deliberately instead of writing `api_secret` straight
 into the table: the field is a Password column, so a raw write stores plaintext
-and every request then dies with "Failed to decrypt key" (see docs/AI-FIX.md).
+and every request then dies with "Failed to decrypt key" (see docs/FIX.md).
 
 Emits two machine-readable lines for the caller to parse:
 
     PLANNER_API_KEY=<key>
     PLANNER_API_SECRET=<secret>
 
-    env/bin/python /tmp/ai-fix-scheduler-token.py [--rotate]
+    env/bin/python /tmp/fix-scheduler-token.py [--rotate]
 """
 import os
 import sys
@@ -26,7 +26,7 @@ sys.path.insert(0, "/home/frappe/frappe-bench/apps")
 import frappe  # noqa: E402
 
 SITE = os.environ.get("SITE_NAME", "frontend")
-EMAIL = os.environ.get("PLANNER_USER", "planner@ai-fix.local")
+EMAIL = os.environ.get("PLANNER_USER", "planner@fix.local")
 ROLES = [
 	"Manufacturing Manager",
 	"Manufacturing User",

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ai-fix-install.sh — container-side (bench container, `frappe` user) installer
-# for the ERPNEXT-AI-FIX stack.
+# fix-install.sh — container-side (bench container, `frappe` user) installer
+# for the ERPNEXT-FIX stack.
 #
 # Installs, in order:
 #   1. barcode_shrdc  — the operator's downloaded source, with the v16 runtime
@@ -15,7 +15,7 @@
 #   /tmp/repos/     the app sources
 #
 # Usage (inside the container):
-#   bash /tmp/scripts/ai-fix-install.sh
+#   bash /tmp/scripts/fix-install.sh
 set -uo pipefail
 
 SCRIPTDIR="${SCRIPTDIR:-/tmp/scripts}"
@@ -125,7 +125,7 @@ bench --site "$SITE" set-config host_name "$HOST_URL" >/dev/null 2>&1 \
 # 4. API token for the Node-RED flow
 # ---------------------------------------------------------------------------
 step "4/4 ERPNext API token for Node-RED"
-cat > apps/barcode_shrdc/barcode_shrdc/_aifix_token.py <<'PYEOF'
+cat > apps/barcode_shrdc/barcode_shrdc/_fix_token.py <<'PYEOF'
 import frappe
 
 
@@ -138,9 +138,9 @@ def run(user="Administrator"):
 	print("MARK_TOKEN %s:%s" % (api_key, api_secret))
 PYEOF
 
-TOKEN_LINE=$(bench --site "$SITE" execute barcode_shrdc._aifix_token.run 2>&1 | grep -o 'MARK_TOKEN .*' || true)
-rm -f apps/barcode_shrdc/barcode_shrdc/_aifix_token.py
-find apps/barcode_shrdc -name '_aifix_token*' -delete 2>/dev/null || true
+TOKEN_LINE=$(bench --site "$SITE" execute barcode_shrdc._fix_token.run 2>&1 | grep -o 'MARK_TOKEN .*' || true)
+rm -f apps/barcode_shrdc/barcode_shrdc/_fix_token.py
+find apps/barcode_shrdc -name '_fix_token*' -delete 2>/dev/null || true
 
 TOKEN="${TOKEN_LINE#MARK_TOKEN }"
 if [ -n "$TOKEN" ] && [ "${TOKEN#*:}" != "$TOKEN" ]; then
@@ -161,8 +161,8 @@ echo "-- serve ping: $(curl -s -o /dev/null -w '%{http_code}' -H "Host: $SITE" h
 
 echo
 if [ "${#fails[@]}" -gt 0 ]; then
-  echo "AI-FIX-INSTALL: COMPLETED WITH ERRORS"
+  echo "FIX-INSTALL: COMPLETED WITH ERRORS"
   for f in "${fails[@]}"; do echo "  - $f"; done
   exit 1
 fi
-echo "AI-FIX-INSTALL: OK"
+echo "FIX-INSTALL: OK"

@@ -3,7 +3,7 @@
 ## Project layout Ã¢â‚¬â€ self-contained
 
 Everything needed to rebuild and verify the demo lives **inside `F:\ERPNEXT\erpnext-build`**
-(~36 MB / 1.5k files). Nothing is read from `ERPNEXT-AI-FIX` any more.
+(~36 MB / 1.5k files). Nothing is read from `ERPNEXT-FIX` any more.
 
 | Path | What it is |
 |---|---|
@@ -16,17 +16,17 @@ Everything needed to rebuild and verify the demo lives **inside `F:\ERPNEXT\erpn
 | `sandbox/scripts/` | provisioning, install, seeders, probes and the verification suite staged into the container |
 | `sandbox/recipes/` | per-app install recipes (`barcode_shrdc`, `shopify`, `eu_einvoice`) |
 | `sandbox/node-red/` | flow builder, built `flows.json`, vendored `source-flow.json` export |
-| `sandbox/.env.ai-fix` | planner API key/secret + Shopify token shared with the planner script |
+| `sandbox/.env.fix` | planner API key/secret + Shopify token shared with the planner script |
 | `repos/barcode-shrdc-v16-fixed` | `barcode_shrdc` app source (durable fork with the v16 fixes) |
 | `repos/shopify-shrdc-v16-fixed` | `shopify` app source (incl. `shopify/auth.py` token minting) |
-| `repos/eu_einvoice` | `eu_einvoice` app source (was still only in ERPNEXT-AI-FIX) |
+| `repos/eu_einvoice` | `eu_einvoice` app source (was still only in ERPNEXT-FIX) |
 | `scheduler/` | the production planner: `server.js`, `frontend/` + prebuilt `frontend/build`, `runtime-deps/node_modules`, `ui-tests/` |
 | `docs/` | this file + `WINDOWS-QUOTING.md` |
 
 Host prerequisites (not project files): Docker Desktop, the `ngrok` binary + authtoken,
 Node/npm (only to rebuild the planner frontend), Python (only for the Node-RED flow builder).
 Two intentional fallbacks remain in the scripts Ã¢â‚¬â€ `up.ps1` step 0 and `scheduler-up.ps1`
-still try `F:\ERPNEXT\ERPNEXT-AI-FIX\sandbox` **if** the vendored `sandbox/` is absent.
+still try `F:\ERPNEXT\ERPNEXT-FIX\sandbox` **if** the vendored `sandbox/` is absent.
 
 Last verified: **2026-10-26**, live stack on `F:\ERPNEXT\erpnext-build` (project `comp_demo`).
 Full test run: `powershell -File F:\ERPNEXT\erpnext-build\verify-all.ps1` Ã¢â€ â€™ **41 / 41 checks pass**
@@ -56,7 +56,7 @@ Installed apps: `frappe 16.53.0`, `erpnext 16.52.1`, `barcode_shrdc 0.0.1`, `sho
 | M4 | Shopify item/supplier/customer edits **and live push** | **done (push now live)** | Item create Ã¢â€ â€™ Shopify product `15435533484168` (`status=active`); Item edit Ã¢â€ â€™ Shopify price `27.75` + title updated; Customer create Ã¢â€ â€™ Shopify customer `31339731255432`; Supplier create+edit with **0** error-log rows; cleanup deletes the product in both systems |
 | M5 | Storefront has the products | **done** | `GET https://4e1075.myshopify.com/` 200 and `/products/planner-assembly-kit` 200; Admin API shows 13 `ACTIVE` products all with `publishedAt` set |
 | M6 | Planner + full build workflow | **done** | 12 WOs Ã‚Â· 24 JCs Ã‚Â· 4 workstations Ã‚Â· 6 submitted BOMs Ã‚Â· 64 `Job Card Scheduled Time` rows; `/api/schedule` returns 12/24/4/1 |
-| M7 | Drag-and-drop production planning | **done** | **API:** WO drag Ã¢â€ â€™ `planned_start_date` +2 days, `modified_by=planner@ai-fix.local`, blocks 4Ã¢â€ â€™4, rows 64Ã¢â€ â€™64; JC drag Ã¢â€ â€™ 3 blocks kept, parent WO carries a real clock time. **Real UI (headless Chrome):** matrix drag of `PO-JOB00002` Ã¢â€ â€™ `PUT Ã¢â‚¬Â¦ {"type":"jobcard","docName":"PO-JOB00002","start":"2026-10-28 14:10:00"} ` Ã¢â€ â€™ 200, toast *"Ã¢Å“â€œ Ã¢â‚¬Â¦ [JC: PO-JOB00002] & parent WO: MFG-WO-2026-00001 rescheduled"*, and all three capacity blocks shifted **together** (170/540/490 min preserved); calendar drag of `PO-JOB00001` Ã¢â€ â€™ 200 through the FullCalendar `eventDrop` path. Both restored. |
+| M7 | Drag-and-drop production planning | **done** | **API:** WO drag Ã¢â€ â€™ `planned_start_date` +2 days, `modified_by=planner@fix.local`, blocks 4Ã¢â€ â€™4, rows 64Ã¢â€ â€™64; JC drag Ã¢â€ â€™ 3 blocks kept, parent WO carries a real clock time. **Real UI (headless Chrome):** matrix drag of `PO-JOB00002` Ã¢â€ â€™ `PUT Ã¢â‚¬Â¦ {"type":"jobcard","docName":"PO-JOB00002","start":"2026-10-28 14:10:00"} ` Ã¢â€ â€™ 200, toast *"Ã¢Å“â€œ Ã¢â‚¬Â¦ [JC: PO-JOB00002] & parent WO: MFG-WO-2026-00001 rescheduled"*, and all three capacity blocks shifted **together** (170/540/490 min preserved); calendar drag of `PO-JOB00001` Ã¢â€ â€™ 200 through the FullCalendar `eventDrop` path. Both restored. |
 | M8 | Barcode scanning incl. changed barcode/QR values | **done** | CODE128 / CODE39 / EAN13 Ã¢â€ â€™ three distinct PNGs; a changed value Ã¢â€ â€™ different PNG; invalid EAN13 (`123`) **rejected with a message**; QR rendered per item; `/files/*.png` served as `image/png` |
 | M9 | Barcode/QR item tracking | **done** | `scan_barcode` resolves `SHRDC-BRK-0001 Ã¢â€ â€™ PLN-BRACKET` and `SHRDC-KIT-0001 Ã¢â€ â€™ PLN-KIT`, unknown Ã¢â€ â€™ empty; HTTP endpoint 200; Delivery Note `MAT-DN-2026-00001` submitted with `barcode_validation` and `checking_qty == qty`; Stock Entry `MAT-STE-2026-00003` submitted with `scan_stock_entry_barcode`; guest `/item_qr?item_code=PLN-BRACKET` Ã¢â€ â€™ 200 |
 | M9b | Scanned-quantity rule enforced **server-side** | **done** | a Delivery Note with `barcode_validation`, `qty 2` but `checking_qty 1` is rejected on submit with `ValidationError: Barcode validation failed Ã¢â‚¬Â¦ row 1 (PLN-BRACKET): qty 2.0 vs checked 1.0` Ã¢â‚¬â€ a REST submit can no longer bypass it |
@@ -73,7 +73,7 @@ tokens, so a single pasted `shpat_...` value can never stay valid.
 |---|---|---|
 | Token minting | new `shopify/auth.py` mints `POST /admin/oauth/access_token` (`grant_type=client_credentials`), caches the token in Redis until 5 min before expiry, clears the "paused" gate on success, and never raises into a save hook | `repos/shopify-shrdc-v16-fixed/shopify/auth.py` |
 | Single choke point | `get_shopify_access()` stamps the live token onto `doc.access_token`/`doc.secret_key` in memory, so every existing handler keeps working; `api.py` now routes its three direct `get_doc` lookups through it | `shopify/utils.py`, `shopify/api.py` |
-| Credentials | `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` in `comp_demo/.env` + `sandbox/.env.ai-fix`, persisted into the site's `site_config.json` by `shopify_sync.py` (args 4/5) | `sandbox/scripts/shopify_sync.py`, `sandbox/scripts/ai-fix-postsetup.sh`, `comp_demo/up.ps1` |
+| Credentials | `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` in `comp_demo/.env` + `sandbox/.env.fix`, persisted into the site's `site_config.json` by `shopify_sync.py` (args 4/5) | `sandbox/scripts/shopify_sync.py`, `sandbox/scripts/fix-postsetup.sh`, `comp_demo/up.ps1` |
 | Ops | `comp_demo/refresh-shopify-token.ps1` re-mints, rewrites `.env`, re-verifies `/shop.json` and rebuilds the Node-RED flow (the flow bakes the token into its Shopify nodes) | `comp_demo/refresh-shopify-token.ps1`, `sandbox/scripts/shopify-token.py` |
 
 ## Other fixes applied this session
@@ -100,14 +100,14 @@ Job Card(s) updated") and left the rest of the routing behind. The planner now w
 the schedule through the whitelisted Server Script `planner_shift_job_card`
 (child rows via `frappe.db.set_value`), falling back to the validated `PUT` only if
 that endpoint is unavailable. Requires `bench set-config -g server_script_enabled 1`
-Ã¢â‚¬â€ now done by `ai-fix-postsetup.sh`.
+Ã¢â‚¬â€ now done by `fix-postsetup.sh`.
 
 ### 4. `/api/work-orders/timers` was shadowed by `/api/work-orders/:id`
 Express matched the `:id` route first, looked up a Work Order literally named
 "timers" and answered 500. Route-order guard added in `scheduler/server.js`.
 
 ### 5. Sales Forecast tab answered 403
-The planner user only held Manufacturing roles. `ai-fix-scheduler-token.py` now also
+The planner user only held Manufacturing roles. `fix-scheduler-token.py` now also
 grants **Sales User** + **Stock User**.
 
 ### 6. EAN13 printed a different code instead of failing

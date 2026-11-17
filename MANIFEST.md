@@ -2,7 +2,7 @@
 
 Everything lives in **one folder**: `F:\ERPNEXT\erpnext-build` Ã¢â‚¬â€ **36.4 MB, 1 514 files**.
 No file outside it is read at build or run time (two deliberate fallbacks in `up.ps1` /
-`scheduler-up.ps1` point at `F:\ERPNEXT\ERPNEXT-AI-FIX\sandbox` and are used **only** if
+`scheduler-up.ps1` point at `F:\ERPNEXT\ERPNEXT-FIX\sandbox` and are used **only** if
 `comp_erpdemo\sandbox` is missing).
 > **Naming:** the project folder is `comp_erpdemo`, but the **Docker project and the
 > containers keep the original `comp_demo` id** (`comp_demo-bench-1`,
@@ -27,7 +27,7 @@ powershell -ExecutionPolicy Bypass -File F:\ERPNEXT\erpnext-build\verify-all.ps1
 |---|---|
 | `docker-compose.yml` | the 6 services; planner build context is `./scheduler` |
 | `.env` | ports, site name, DB root password, Shopify store + client credentials, planner port |
-| `sandbox\.env.ai-fix` | planner integration user's API key/secret (+ Shopify token for the planner script) |
+| `sandbox\.env.fix` | planner integration user's API key/secret (+ Shopify token for the planner script) |
 
 Plus the Docker images, which are not files in the folder:
 
@@ -52,14 +52,14 @@ Staged into the containers by `up.ps1`; nothing here is optional.
 |---|---|---|---|
 | `up.ps1` | 1 | 31 KB | 11-step bring-up (compose Ã¢â€ â€™ bench init Ã¢â€ â€™ new-site Ã¢â€ â€™ apps Ã¢â€ â€™ seed Ã¢â€ â€™ Shopify Ã¢â€ â€™ planner Ã¢â€ â€™ flow Ã¢â€ â€™ tunnel Ã¢â€ â€™ verify) |
 | `scheduler-up.ps1` | 1 | 15 KB | planner-only bring-up (token, demo WOs, desk shortcut, health) |
-| `sandbox\scripts\` | 198 | 0.6 MB | `provision-base.sh`, `install-app.sh`, `ai-fix-install.sh`, `ai-fix-postsetup.sh`, the seeders (`seed-demo-masters.py`, `seed-vwo-doctype.py`, `seed_planner_demo.py`), token helpers, probes |
+| `sandbox\scripts\` | 198 | 0.6 MB | `provision-base.sh`, `install-app.sh`, `fix-install.sh`, `fix-postsetup.sh`, the seeders (`seed-demo-masters.py`, `seed-vwo-doctype.py`, `seed_planner_demo.py`), token helpers, probes |
 | `sandbox\recipes\` | 9 | <0.1 MB | per-app install recipes (`barcode_shrdc`, `shopify`, `eu_einvoice`, Ã¢â‚¬Â¦) |
 | `sandbox\node-red\` | 3 | 0.1 MB | `build-flows.py`, built `flows.json`, vendored `source-flow.json` |
 | `repos\barcode-shrdc-v16-fixed\` | 52 | 0.5 MB | `barcode_shrdc` app (scan/fix fork) |
 | `repos\shopify-shrdc-v16-fixed\` | 53 | 0.8 MB | `shopify` app incl. `shopify/auth.py` (24 h token minting) |
 | `repos\eu_einvoice\` | 120 | 8.0 MB | e-invoicing app |
 | `scheduler\` | 1 008 | 23.8 MB | the planner: `server.js`, `Dockerfile`, `package.json`, `runtime-deps\node_modules` (847 files, 4.6 MB Ã¢â‚¬â€ pre-installed, never `npm ci` in the image), `frontend\` source + **prebuilt `frontend\build`** (7 files, 4.7 MB) |
-| `sandbox\.env.ai-fix` | 1 | 3 KB | planner creds |
+| `sandbox\.env.fix` | 1 | 3 KB | planner creds |
 
 `up.ps1` also needs the vendored `.env` (Tier A) Ã¢â‚¬â€ it reads ports, site name and the
 Shopify client id/secret from it.
@@ -104,7 +104,7 @@ Shopify client id/secret from it.
 
 ## Secrets in this folder
 
-`.env` and `sandbox\.env.ai-fix` hold the real values: DB root password, Shopify
+`.env` and `sandbox\.env.fix` hold the real values: DB root password, Shopify
 **client id/secret** and access token, ERPNext API token, planner API key/secret. Treat
 the folder as sensitive; rotate the Shopify client secret if you hand the bundle to
 someone else.
@@ -122,7 +122,7 @@ A clean, verified copy is produced by `make-bundle.ps1` (in this folder) into
 | `F:\erpnext-build-dist\comp_erpdemo-<date>.zip` | the same tree as one archive + `SHA256.txt` |
 
 **Share-safe variant** - `F:\comp_erpdemo-share\comp_erpdemo-share-<date>.zip` (7.9 MB) is the
-same tree with **every credential replaced by `__FILL_ME__`**: `.env`, `sandbox\.env.ai-fix`,
+same tree with **every credential replaced by `__FILL_ME__`**: `.env`, `sandbox\.env.fix`,
 the built `sandbox\node-red\flows.json` (which bakes in the ERPNext + Shopify tokens) and
 `up.ps1` (which carried the ngrok authtoken). It ships a `SETUP-SECRETS.md` listing what the
 recipient must fill in, and a leak scan over every text file confirms no live value survived.

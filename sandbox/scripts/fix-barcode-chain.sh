@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ai-fix-barcode-chain.sh — run the barcode_shrdc v16 fix chain correctly.
+# fix-barcode-chain.sh — run the barcode_shrdc v16 fix chain correctly.
 #
 # `fix-barcode-v16.sh` expects its print-format fixture at
 # /tmp/barcode_v16_print_formats.json, but the workspace keeps it in

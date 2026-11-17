@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ai-fix-postsetup.sh — everything that must happen AFTER the apps are installed
+# fix-postsetup.sh — everything that must happen AFTER the apps are installed
 # and BEFORE you can trust the Shopify bridge or edit an Item.
 #
 # Order matters:
@@ -16,7 +16,7 @@
 #      as Items and orders as Sales Orders. This is the proof the link is live.
 #
 # Run inside the bench container:
-#   bash /tmp/scripts/ai-fix-postsetup.sh <shpat_token> [store] [api_version] \
+#   bash /tmp/scripts/fix-postsetup.sh <shpat_token> [store] [api_version] \
 #        [client_id] [client_secret]
 #
 # The last two are the Dev Dashboard app credentials. They are persisted into

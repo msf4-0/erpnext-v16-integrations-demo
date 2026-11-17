@@ -86,7 +86,7 @@ $FlowPath   = Join-Path $SandboxDir 'node-red\flows.json'
 $FlowSrc    = Join-Path $SandboxDir 'node-red\source-flow.json'
 $Builder    = Join-Path $SandboxDir 'node-red\build-flows.py'
 $FlowCheck  = Join-Path $SandboxDir 'scripts\check-flow.py'
-$WhScript   = Join-Path $SandboxDir 'scripts\ai-fix-wire-webhooks.sh'
+$WhScript   = Join-Path $SandboxDir 'scripts\fix-wire-webhooks.sh'
 $Project    = 'comp_demo'
 $BenchName  = "$Project-bench-1"
 $NodeRedName = "$Project-node-red-1"
@@ -366,14 +366,14 @@ foreach ($k in $wantedPaths.Keys) {
 }
 
 # same for the planner-integration env file
-$PlannerEnv = Join-Path $SandboxDir '.env.ai-fix'
+$PlannerEnv = Join-Path $SandboxDir '.env.fix'
 if (Test-Path $PlannerEnv) {
     $pe = Read-EnvFile $PlannerEnv
     if ($pe['COMPOSE_PROJECT_NAME'] -and $pe['COMPOSE_PROJECT_NAME'] -ne $Project) {
-        if (-not $VerifyOnly) { Set-EnvValue $PlannerEnv 'COMPOSE_PROJECT_NAME' $Project | Out-Null; Write-Change ".env.ai-fix COMPOSE_PROJECT_NAME -> $Project" }
+        if (-not $VerifyOnly) { Set-EnvValue $PlannerEnv 'COMPOSE_PROJECT_NAME' $Project | Out-Null; Write-Change ".env.fix COMPOSE_PROJECT_NAME -> $Project" }
     }
     if ($pe['NODE_RED_SOURCE_FLOW'] -and -not (Test-Path $pe['NODE_RED_SOURCE_FLOW'])) {
-        if (-not $VerifyOnly) { Set-EnvValue $PlannerEnv 'NODE_RED_SOURCE_FLOW' $FlowSrc | Out-Null; Write-Change '.env.ai-fix NODE_RED_SOURCE_FLOW -> this build' }
+        if (-not $VerifyOnly) { Set-EnvValue $PlannerEnv 'NODE_RED_SOURCE_FLOW' $FlowSrc | Out-Null; Write-Change '.env.fix NODE_RED_SOURCE_FLOW -> this build' }
     }
 }
 
@@ -783,9 +783,9 @@ def run(user="Administrator"):
 '@
     $tmp = Join-Path $env:TEMP '_setup_mint.py'
     [System.IO.File]::WriteAllText($tmp, $mintModule, (New-Object System.Text.UTF8Encoding($false)))
-    $dest = '/home/frappe/frappe-bench/apps/barcode_shrdc/barcode_shrdc/_aifix_setup_mint.py'
+    $dest = '/home/frappe/frappe-bench/apps/barcode_shrdc/barcode_shrdc/_fix_setup_mint.py'
     Invoke-Docker -Arguments @('cp', $tmp, "${BenchName}:$dest") -Capture | Out-Null
-    $mintOut = (Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName execute barcode_shrdc._aifix_setup_mint.run" -Capture).Output
+    $mintOut = (Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName execute barcode_shrdc._fix_setup_mint.run" -Capture).Output
     Invoke-Bench "rm -f $dest" -Capture | Out-Null
 
     $m = [regex]::Match($mintOut, 'MARK_TOKEN\s+([0-9A-Za-z]+:[0-9A-Za-z]+)')
@@ -1005,7 +1005,7 @@ if (-not $publicUrl) {
             }
         }
     } elseif ($needWire) {
-        $tmpScript = '/tmp/scripts/ai-fix-wire-webhooks.sh'
+        $tmpScript = '/tmp/scripts/fix-wire-webhooks.sh'
         Invoke-BenchRoot 'mkdir -p /tmp/scripts' | Out-Null
         Invoke-Docker -Arguments @('cp', $WhScript, "${BenchName}:$tmpScript") -Capture | Out-Null
         Invoke-BenchRoot "chown frappe:frappe $tmpScript" | Out-Null

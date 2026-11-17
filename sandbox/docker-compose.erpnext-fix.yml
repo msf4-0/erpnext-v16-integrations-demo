@@ -1,4 +1,4 @@
-# ERPNEXT-AI-FIX — self-contained stack.
+# ERPNEXT-FIX — self-contained stack.
 #
 # Goal: ONE `docker compose up` gives a working ERPNext + barcode scanner +
 # Shopify automation path, with Node-RED and ngrok INSIDE the stack (no host
@@ -11,10 +11,10 @@
 #   ngrok      : public ingress for the webhook endpoints
 #
 # Start it with sandbox/up.ps1 (it provisions, builds flows, wires webhooks).
-# Project name is pinned to `erpnext-ai-fix` so it never collides with the
+# Project name is pinned to `erpnext-fix` so it never collides with the
 # original `erpnext-sandbox` / `frappe_docker-1` projects.
 
-name: ${COMPOSE_PROJECT_NAME:-erpnext-ai-fix}
+name: ${COMPOSE_PROJECT_NAME:-erpnext-fix}
 
 services:
   bench:
@@ -58,7 +58,7 @@ services:
     # container stop, or a Docker Desktop restart DISCARDS it, and ERPNext will
     # then report a missing/blank site. Re-run sandbox/up.ps1 to rebuild - that
     # is now a couple of minutes instead of hours. Set DB_USE_TMPFS=0 in
-    # sandbox/.env.ai-fix to fall back to the persistent db_data volume if you
+    # sandbox/.env.fix to fall back to the persistent db_data volume if you
     # would rather have durability than speed (expect a very slow first build).
     command:
       - --character-set-server=utf8mb4
@@ -147,8 +147,8 @@ services:
   # compose network (bench:8000, NOT localhost:8000 — inside this container
   # localhost is the scheduler itself) with an API token minted for this site.
   #
-  # The token is created by sandbox/scripts/ai-fix-scheduler.sh and written back
-  # to sandbox/.env.ai-fix as SCHEDULER_ERPNEXT_API_KEY / _SECRET.
+  # The token is created by sandbox/scripts/fix-scheduler.sh and written back
+  # to sandbox/.env.fix as SCHEDULER_ERPNEXT_API_KEY / _SECRET.
   #
   # REACT_APP_* are compile-time: changing them requires a rebuild
   # (`docker compose ... build scheduler`), not just a restart.

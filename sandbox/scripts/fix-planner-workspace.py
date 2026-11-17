@@ -16,7 +16,7 @@ still edited in place.
 Best-effort and idempotent: on any layout surprise it warns and leaves the
 workspace untouched - the planner is still reachable at its own URL.
 
-    env/bin/python /tmp/ai-fix-planner-workspace.py --url http://localhost:3001
+    env/bin/python /tmp/fix-planner-workspace.py --url http://localhost:3001
 """
 import argparse
 import json

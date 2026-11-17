@@ -3,7 +3,7 @@
 # One project, one command: ERPNext v16 + barcode/QR (barcode_shrdc) +
 # Shopify <-> ERPNext bridge (Node-RED + ngrok) + the drag-and-drop production
 # planner (scheduler). Nothing is shared with the old `erpnext-sandbox`,
-# `frappe_docker-1` or `erpnext-ai-fix` projects: own name, own volumes, own
+# `frappe_docker-1` or `erpnext-fix` projects: own name, own volumes, own
 # ports.
 #
 #   bench      : ERPNext v16 bench, baked from bake/bench.Dockerfile
@@ -277,7 +277,7 @@ services:
   scheduler:
     image: comp_demo-scheduler:latest
     build:
-      # vendored inside comp_demo so the project builds without ERPNEXT-AI-FIX
+      # vendored inside comp_demo so the project builds without ERPNEXT-FIX
       context: ./scheduler
       dockerfile: Dockerfile
       args:
