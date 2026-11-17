@@ -94,11 +94,11 @@ Remaining `4041` occurrences are intentional: a fallback default in `up.ps1:236`
 
 ## Not started — and why
 
-| Item | Reason |
+| Item | Reason / status |
 |---|---|
-| Defect 2 — regenerate `.env` from `.env.example` | Needs secrets re-entered by the owner; the corrupted line is truncated, but `ENVIRONMENT`, `TZ`, `ERPNEXT_ADMIN_PASSWORD`, `WEBHOOK_SINK_PORT`, `FORWARD_URL` are still missing and `DB_TMPFS_SIZE`/`ERPNEXT_VERSION` still obsolete. **Ask-first.** |
-| Defect 5 — bench container on untagged `6e4bb0e551ea` | Requires container recreate/rebuild. **Ask-first.** |
-| Defect 6 — Node-RED on `:latest` vs pinned 5.0.9 | Requires container recreate. **Ask-first.** |
+| Defect 2 — `.env` regeneration | **Done** — see Round 2 below. |
+| Defect 5 — bench container on untagged image | **Done differently** — see Round 2: retagged, pinned, recreated. |
+| Defect 6 — Node-RED on `:latest` vs pinned 5.0.9 | **Done** — see Round 2. |
 | Defect 8/11/16 — divergent launchers, service counts, `up-linux.sh` pull-then-build | Out of the executed scope (P4/P5). |
 | P4 — EOL hardening beyond `versions.env` | Only the two `env_value`/`.gitattributes` pieces landed. |
 | P5 — consolidate 74 docs to ~12 | Not attempted; large, and would conflict with the un-repaired `.env`/counts. |
@@ -120,3 +120,77 @@ Remaining `4041` occurrences are intentional: a fallback default in `up.ps1:236`
    `compose up -d`? Both are ask-first and were deliberately left alone.
 3. `lowdefy/` (19 files) is still undecided — document or archive.
 4. Is `_legacy/` (108 files) to be deleted outright after one release, or kept as an archive?
+
+---
+
+## Round 2 (same day) — defects 2, 5, 6 closed
+
+### P0.2 — `.env` regenerated from `.env.example`
+
+Method: every key in `.env.example` keeps its **live value** from the previous `.env`; only keys
+absent from it take the example default. Values were never printed. Result: **4,721 bytes, 37 keys**
+(was 29 keys). Carried 28 live values, added 7 (`ENVIRONMENT`, `TZ`, `ERPNEXT_ADMIN_PASSWORD`,
+`WEBHOOK_SINK_PORT`, `FORWARD_URL`, …). `DB_TMPFS_SIZE` / `ERPNEXT_VERSION` were retained because
+they are still read (`sandbox/scripts/fix-install.sh:25` uses `ERPNEXT_VERSION`), which contradicts
+the audit's "obsolete" claim. Backups: `.env.bak-20261117`, `.env.bak-20261117-regen`.
+
+Verified: `docker compose … config -q` exit 0; site answers `{"message":"pong"}`.
+
+### P0.5 — bench image: the audit's fix would have **broken the demo**
+
+`comp_demo-bench:v16` (`19d3f2b0a7f8`) contains **5 apps**, not 8 — it is missing `item_tracking`,
+`metabase_integration` and `my_invois`. Recreating the container onto it, as the prompt directed,
+would have removed three live apps. The running image was also **untagged** (`6e4bb0e551ea`).
+
+Root cause: `bake/bench.Dockerfile` COPYs only `barcode-shrdc-v16-fixed`, `shopify-shrdc-v16-fixed`,
+`eu_einvoice` (`:43-45`); the other three arrive by bind mount. The running container predated the
+`my_invois` mount, which is why the host-side `__init__.py` fix never appeared inside it.
+
+Action taken:
+1. `docker tag 6e4bb0e551ea comp_demo-bench:v16-live`
+2. `BENCH_IMAGE=comp_demo-bench:v16-live` added to `.env`, so `compose up` can no longer silently
+   swap in the incomplete `:v16` image. Verified: rendered config resolves
+   `image: comp_demo-bench:v16-live`.
+3. Recreated bench with `--no-build --no-deps`, which applied the `my_invois` mount.
+
+Verified after recreate:
+
+```
+$ docker inspect comp_demo-bench-1 --format '{{.Config.Image}}'
+comp_demo-bench:v16-live
+mounts: logs, sites, apps/barcode_shrdc, apps/item_tracking, apps/metabase_integration, apps/my_invois
+$ docker exec comp_demo-bench-1 bash -lc "bench --site frontend version"
+... item_tracking 0.0.2 / metabase_integration 0.0.1 / my_invois 0.0.1 / shopify 0.0.1
+$ curl http://localhost:8000/api/method/ping   ->  {"message":"pong"}
+```
+
+**Still open:** a fresh clone that builds from `bake/bench.Dockerfile` gets 5 apps, not 8. Either
+add the three COPY lines (and accept slower builds) or document that they are mount-only. Not
+changed here, because the mount-only design is deliberate for `item_tracking`/`metabase_integration`.
+
+### P0.6 — Node-RED pinned
+
+`docker pull nodered/node-red:5.0.9` (first attempt failed: Docker Hub TLS handshake timeout;
+retry succeeded), then `compose up -d --no-build --no-deps node-red`.
+
+```
+$ docker ps --filter name=node-red
+comp_demo-node-red-1 nodered/node-red:5.0.9 Up About a minute (healthy)
+$ node-red --version -> 5.0.9
+$ GET http://localhost:1880/ -> HTTP 200   (log: "Started flows", "Server now running")
+```
+
+### Docs corrected in this round
+
+- `docs/ARCHITECTURE.md:103` — Node-RED `:latest` → `:5.0.9` (pinned).
+- `README.md:138` — "not installed and not in this repository" → **installed** (`my_invois 0.0.1`),
+  source present at `repos/my_invois`, bind-mounted. This was the third conflicting version of the
+  same fact.
+
+### Remaining, explicitly not done
+
+- P4 beyond `versions.env` (repo-wide CRLF audit), P5 (74 → ~12 docs), P6 (structural move).
+- The 108 files in `sandbox/scripts/_legacy/` are quarantined, not deleted — intended to survive one
+  release cycle before removal.
+- `Customisations.md:31` still describes `my_invois` as "current state unverified"; it is installed,
+  but the *fixtures* really are unsynced, so the row needs a human decision rather than a rewrite.

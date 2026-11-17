@@ -100,7 +100,7 @@ Compose project: `comp_demo` · site: `frontend` · host ports: 8000 (ERPNext),
 | `db` | `mariadb:11.8` | site DB **and** Metabase metadata | – |
 | `redis-cache` | `redis:6.2-alpine` | frappe cache | – |
 | `redis-queue` | `redis:6.2-alpine` | background jobs | – |
-| `node-red` | `nodered/node-red:latest` | Shopify ↔ ERPNext bridge | bench (started) |
+| `node-red` | `nodered/node-red:5.0.9` (pinned in `versions.env`) | Shopify ↔ ERPNext bridge | bench (started) |
 | `scheduler` | `comp_demo-scheduler:latest` | production planner (Express + React) | bench (started) |
 | `metabase` | `metabase/metabase:v0.58.38.2` | BI dashboard | db (healthy) |
 
