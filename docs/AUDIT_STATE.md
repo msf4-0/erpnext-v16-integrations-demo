@@ -441,3 +441,26 @@ eight. This defect would have hit every restored deployment.
 | `install-apps-linux.sh` full run against a from-scratch (non-restored) site | Not started | the restore path was tested; the `bench new-site` path was not |
 | Metabase UI, Node-RED flow, planner SPA, Shopify token flow | Not started | services were started for the restore path only in local checks; no end-to-end UI pass |
 | Baked image published to GHCR (`docs/DISTRIBUTION.md`) | Not started | clean clones currently build locally (20-40 min); publishing remains a distribution task |
+
+### Confirmation run (after the apps.txt fix was committed)
+
+Rebuilt the image with the fixed installer baked in, recreated `bench` from it in the same isolated
+project, and ran the **image-baked** installer (no `docker cp`):
+
+```
+$ docker build -f bake/bench.Dockerfile --build-arg ERPNEXT_BASE=frappe/erpnext:v16.35.0 \
+      -t comp_demo-bench:p7-test .           -> image 1aba698c40ef, import ok x6
+$ docker compose -p comp_demo_p7 ... up -d --no-build bench
+$ docker compose -p comp_demo_p7 ... exec -T bench bash /usr/local/bin/install-all-apps.sh
+  import ok: frappe, erpnext, barcode_shrdc, shopify, eu_einvoice, item_tracking,
+             metabase_integration, my_invois
+  == install-all-apps: done - all requested apps installed on 'frontend' ==
+$ bench --site frontend version   -> all 8 apps
+$ curl -H "Host: frontend" http://localhost:18000/api/method/ping   -> {"message":"pong"}
+```
+
+Status: image build **Verified**, site restore **Verified**, all-8-apps install **Verified**,
+module import **Verified**, restart **Verified**, DB persistence **Verified** (`Item` count 72
+before and after restart), apps.txt/`bench version` **Verified** after the fix.
+Still not verified: genuinely cold machine, Windows launchers, from-scratch (`bench new-site`) path,
+UI-level integration pass - see the table above.
