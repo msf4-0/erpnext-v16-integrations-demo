@@ -105,7 +105,7 @@ Be precise about this before promising a colleague "everything works".
 
 | Capability | After `docker compose up` | To make it work |
 |---|---|---|
-| ERPNext + seeded demo data (70 items, 6 barcode docs, company SHRDC) | ✅ works | – |
+| ERPNext + generic manufacturing demo (15 items, 5 multi-level BOMs, company SHRDC) | ✅ works | – |
 | Logins: `Administrator`/`admin`, `demo@compdemo.local`/`demo` | ✅ works | – |
 | `barcode_shrdc` (scan field, Barcode Printing, both desk JS) | ✅ works | – |
 | `item_tracking` (Shift+I scanner, tracked items) | ✅ works | – |
@@ -113,7 +113,7 @@ Be precise about this before promising a colleague "everything works".
 | Planner schedule / work orders / job cards | ❌ **401** – `SCHEDULER_ERPNEXT_API_KEY/SECRET` are blank, and the seeded secret cannot be decrypted (the new site has a new `encryption_key`) | run `.\setup.ps1` once – it mints fresh planner credentials |
 | Shopify ↔ ERPNext bridge | ❌ skipped (no store/token) | fill `SHOPIFY_*` in `.env`, then `.\setup.ps1` |
 | ngrok tunnel + the 3 ERPNext webhooks | ❌ skipped (no tunnel) | install + `ngrok config add-authtoken`, then `.\setup.ps1` |
-| Metabase + "ERPNext Monitoring" dashboard | ✅ works – the seeder restores the `metabase` schema (137 tables) alongside the site, including the admin, the `ERPNext` data source and the 4-card dashboard | log in at :3005 with `METABASE_ADMIN_EMAIL` / `METABASE_ADMIN_PASSWORD` from `.env` |
+| Metabase + "ERPNext Monitoring" dashboard | ✅ works – the seeder restores the `metabase` schema alongside the site, including the admin, the `ERPNext` data source and the 4-card dashboard. It is embedded inside ERPNext at **http://localhost:8000/metabase** and linked from Manufacturing → Manufacturing Analytics. | log in at :3005 with `METABASE_ADMIN_EMAIL` / `METABASE_ADMIN_PASSWORD` from `.env` |
 | E-invoicing (`eu_einvoice`) | ⚠️ installed, but EU EN 16931 only – a Malaysian SST invoice will not validate | add an EU VAT template, or install `my_invois` (see `docs/ARCHITECTURE.md`) |
 | `my_invois` (LHDN / MyInvois) | ❌ not installed and **not in this repository** — `docs/HANDOFF.md` §2 describes a build that had it, but no source and no fixture rows exist here, and the seed dump contains zero `my_invois` records | obtain the MY app source (the original is 404), then install it |
 

@@ -168,6 +168,40 @@ if [ -f "${MB_DUMP}" ]; then
     else
         echo "seed: Metabase already initialised (${MB_TABLES} tables) - skipping"
     fi
+
+    # A restored Metabase dump carries the previous site's database name and
+    # its public dashboard UUID. Rebind the data source to the database that
+    # this restore actually created, and persist the dashboard URL in the
+    # site config so the /metabase page works immediately.
+    echo "seed: binding Metabase data source to ${DN}"
+    MYSQL_PWD="${DB_ROOT_PASSWORD}" mariadb -h db -uroot -e "
+        CREATE USER IF NOT EXISTS 'metabase_user'@'%' IDENTIFIED BY 'metabase_demo_2026';
+        ALTER USER 'metabase_user'@'%' IDENTIFIED BY 'metabase_demo_2026';
+        GRANT SELECT, SHOW VIEW ON \`${DN}\`.* TO 'metabase_user'@'%';
+        UPDATE metabase.metabase_database
+           SET details = JSON_SET(details, '$.dbname', '${DN}', '$.host', 'db',
+                                  '$.port', 3306, '$.user', 'metabase_user',
+                                  '$.password', 'metabase_demo_2026')
+         WHERE name = 'ERPNext';
+        FLUSH PRIVILEGES;" || echo "seed: WARN could not rebind Metabase data source"
+
+    MB_UUID=$(MYSQL_PWD="${DB_ROOT_PASSWORD}" mariadb -h db -uroot -N -B \
+        -e "select public_uuid from metabase.report_dashboard where id=2 and public_uuid is not null limit 1" 2>/dev/null || true)
+    if [ -n "${MB_UUID:-}" ]; then
+        /home/frappe/frappe-bench/env/bin/python - "$SITE" "$MB_UUID" <<'PY'
+import json
+import sys
+
+site, uuid = sys.argv[1], sys.argv[2]
+path = f"/home/frappe/frappe-bench/sites/{site}/site_config.json"
+with open(path) as handle:
+    cfg = json.load(handle)
+cfg["metabase_dashboard_url"] = f"http://localhost:3005/public/dashboard/{uuid}"
+with open(path, "w") as handle:
+    json.dump(cfg, handle, indent=1)
+print(f"seed: metabase_dashboard_url -> {cfg['metabase_dashboard_url']}")
+PY
+    fi
 fi
 
 echo "seed: done - site '${SITE}' restored"

@@ -1,7 +1,10 @@
 # Seed data
 
 `frontend-database.sql.gz` is a `bench backup` of a fully built demo site
-(company SHRDC, 60 items, 2 item barcodes, demo user, planner work orders).
+(company SHRDC, the small generic manufacturing dataset — 15 items and 5
+multi-level BOMs — plus barcode docs and the demo user). The old Go-Kart and
+Planner assembly BOMs are removed by the `seed_demo_manufacturing` patch, so a
+restored dump always converges on the same clean dataset.
 
 It exists so that **`docker compose up` on a fresh clone produces a working site
 instead of an empty one**. Without it, the bench container starts with an empty

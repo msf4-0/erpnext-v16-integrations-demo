@@ -28,6 +28,8 @@ docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml do
 | Service | URL | Notes |
 | --- | --- | --- |
 | ERPNext (Desk + REST) | http://localhost:8000 | `Administrator` / `admin`, site `frontend` |
+| Manufacturing Analytics (inside ERPNext) | http://localhost:8000/metabase | Frappe page embedding the Metabase dashboard |
+| Metabase | http://localhost:3005 | `admin@demo.local` / `DemoPass2026!` |
 | Production planner | http://localhost:3001 | drag-and-drop scheduling; user `planner@ai-fix.local` |
 | Node-RED (Shopify bridge) | http://localhost:1880 | flow: `../ERPNEXT-AI-FIX/sandbox/node-red/flows.json` |
 | ngrok API | http://localhost:4041 | host ngrok binary (no container) |

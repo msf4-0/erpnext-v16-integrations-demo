@@ -1,4 +1,4 @@
-﻿# comp_demo - COMPLETE self-contained ERPNext demo stack.
+# comp_demo - COMPLETE self-contained ERPNext demo stack.
 #
 # One project, one command: ERPNext v16 + barcode/QR (barcode_shrdc) +
 # Shopify <-> ERPNext bridge (Node-RED + ngrok) + the drag-and-drop production
@@ -194,6 +194,10 @@ services:
       # my_invois is not baked into the published image; the seeder needs the
       # source to run install-app, exactly like the bench service does.
       - ./repos/my_invois:/home/frappe/frappe-bench/apps/my_invois
+      # The demo-data patch and the generic BOM fixture live in barcode_shrdc.
+      # Mounting it here means `bench migrate` in the seeder runs the current
+      # source, not the older copy baked into the image.
+      - ./repos/barcode-shrdc-v16-fixed:/home/frappe/frappe-bench/apps/barcode_shrdc
     environment:
       - SITE_NAME=${SITE_NAME:-frontend}
       - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin}
