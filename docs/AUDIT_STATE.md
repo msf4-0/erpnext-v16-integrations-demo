@@ -319,3 +319,18 @@ the install guide, corrupting the example commands; the script was made fence-aw
 regenerated from `HEAD`. Verified afterwards: code blocks show single-`#` comments, 0 dangling paths.
 
 Counts: root markdown **6**, `docs/` **8**, `docs/archive/` 3 → **14 live docs**, inside the ≤15 target.
+
+---
+
+## Round 7 — remove the Tooljet skill (unrelated to this demo)
+
+`.opencode/skills/tooljet-app-builder/` deleted: **13 tracked files, 210 KB**. It builds Lowdefy/Tooljet
+apps, has no caller anywhere in the repo (`git grep -i tooljet` outside the directory: 0 hits), and
+nothing in the stack or the launchers touches it. 20 skills remain, all ERPNext/Frappe or workflow
+related.
+
+**Correction to Round 5:** I reported `scripts/browser-audit.js` (cited by that skill's `qa.md`) as a
+dangling path. It is not — the file exists at `.opencode/skills/tooljet-app-builder/scripts/browser-audit.js`,
+and the citation is relative to the skill directory. The scanner treated every backticked path as
+repo-relative. The scan now resolves each path both repo-relative **and** relative to the citing
+file's directory: **0 unexplained missing paths** repo-wide.
