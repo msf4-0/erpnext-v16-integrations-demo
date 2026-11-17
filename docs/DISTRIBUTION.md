@@ -1,4 +1,6 @@
-# Distributing comp_demo to other machines
+# Distributing comp_demo, and the bench image policy
+
+## Distributing comp_demo to other machines
 
 The goal: a colleague clones the repo, runs one command, and has a working
 demo in ~10 minutes — with **no local Docker build** and no knowledge of this
@@ -9,7 +11,7 @@ already true, what is blocked, and the exact steps to finish.
 
 ---
 
-## 1. The one slow step, and why it is slow
+### 1. The one slow step, and why it is slow
 
 `bake/bench.Dockerfile` produces a **3 GB** image (0.98 GB compressed on the wire) containing Frappe, ERPNext v16
 and five custom apps. Building it takes **25–40 minutes** on a laptop and is the
@@ -36,7 +38,7 @@ docker pull ghcr.io/msf4-0/comp-demo-bench:v16               # unauthorized = pr
 
 ---
 
-## 2. Acceptance criteria for "ready for everyone"
+### 2. Acceptance criteria for "ready for everyone"
 
 The demo is distributable only when all of these hold. Criteria 1–6 are the
 release gate; 7–8 are quality gates.
@@ -56,7 +58,7 @@ Not part of the gate: Shopify, ngrok and the planner API tokens need per-machine
 credentials. They are intentionally optional in `start.ps1 -SkipTunnel` and are
 documented in README section 9.
 
-### Machine prerequisites (put these in the invite)
+#### Machine prerequisites (put these in the invite)
 
 - Docker Desktop with **≥ 8 GB RAM** and **≥ 20 GB free disk** (bench image 3 GB,
   MariaDB volume, Metabase 3 GB limit).
@@ -67,7 +69,7 @@ documented in README section 9.
 
 ---
 
-## 3. Go-live checklist (maintainer, ~2 minutes)
+### 3. Go-live checklist (maintainer, ~2 minutes)
 
 1. Open <https://github.com/organizations/msf4-0/settings/packages>.
    **Organization settings -> Packages**: allow public package visibility.
@@ -113,7 +115,7 @@ answers `403`. Do not put such a PAT in the repo; use the UI once.
 
 ---
 
-## 4. What the repo does today (already done)
+### 4. What the repo does today (already done)
 
 - `.github/workflows/publish-image.yml` — builds on `v*` tags or manual dispatch,
   pushes `:v16` plus the immutable tag, uses GHA layer cache.
@@ -129,7 +131,7 @@ answers `403`. Do not put such a PAT in the repo; use the UI once.
   `build:` fallback kept for offline work.
 - `docs/DISTRIBUTION.md` (this file) — the contract above.
 
-## 5. If the package stays private: the release bundle (works today)
+### 5. If the package stays private: the release bundle (works today)
 
 The org currently disables public packages, so the GHCR pull needs a token. The
 **public fallback does not**: `release-bundle.yml` exports the same image as a
@@ -163,3 +165,97 @@ account can still run the demo; GHCR stays the primary path.
 If you would rather hand out tokens than use the bundle: each colleague runs
 `echo <PAT with read:packages> | docker login ghcr.io -u <user> --password-stdin`
 once, then `start.ps1` pulls normally.
+
+## Bench image policy (tags, digests, platforms, size)
+
+The 3 GB bench image is the only slow part of the demo. This file defines how it
+is named, pinned, measured and published so two colleagues can prove they run
+the same thing.
+
+### Tags
+
+| Tag | Moves? | Use |
+|---|---|---|
+| `ghcr.io/msf4-0/comp-demo-bench:v16` | yes | default; what `start.ps1` / `start.sh` pull |
+| `ghcr.io/msf4-0/comp-demo-bench:v16.3` | no | release tag, for pinning a known-good build |
+| `ghcr.io/msf4-0/comp-demo-bench:<git-sha>` | no | every `main` build from `ci.yml` |
+| `ghcr.io/msf4-0/comp-demo-bench@sha256:...` | no | the only fully reproducible reference |
+
+`publish-image.yml` prints the digest to the job summary on every release. Copy
+the `pin:` line from there.
+
+### Pinning
+
+Default (moving tag) — always the newest published build:
+
+```dotenv
+# .env
+# BENCH_IMAGE is optional; leave it unset to use comp_demo-bench:v16 locally.
+```
+
+Reproducible (digest) — the same bytes for everyone, forever:
+
+```dotenv
+# .env
+BENCH_IMAGE=ghcr.io/msf4-0/comp-demo-bench@sha256:<digest>
+```
+
+`start.ps1` / `start.sh` treat a namespaced `BENCH_IMAGE` as the pull target and
+still tag it locally as `comp_demo-bench:v16`, so compose does not build.
+
+Check what a machine is actually running:
+
+```powershell
+docker image inspect --format '{{index .RepoDigests 0}}' comp_demo-bench:v16
+```
+
+### Platforms
+
+- **linux/amd64** — default, tested by `e2e.yml` on every nightly run.
+- **linux/arm64** — experimental. Run `publish-image` manually with
+  `platforms=linux/amd64,linux/arm64`; the workflow adds QEMU and publishes a
+  multi-arch manifest under the same tags. Verify `docker manifest inspect`
+  lists both before advertising it.
+- Apple Silicon without an arm64 image: Docker Desktop runs the amd64 image under
+  emulation. It works but is slow; `start.sh`/`start.ps1` already pass
+  `--platform linux/amd64`.
+
+### Size budget
+
+| Measure | Value |
+|---|---|
+| Local uncompressed image | ~3.0 GB (`docker image ls`) |
+| Compressed (registry) | **0.98 GB** - measured 2026-11-16 on `:main`, run `43823831734`, 25 layers |
+| Budget | **3.0 GB compressed** (warning, see below) |
+
+Over the wire a colleague downloads ~1 GB, not 3 GB: the 3 GB figure is the
+unpacked local image. That is why a pull takes minutes, not an hour.
+
+`publish-image.yml` runs `scripts/image-size.sh <ref> 3000000000`, which sums the
+compressed layer sizes for `linux/amd64` and prints them in the job log. It is a
+**warning, not a gate** until a baseline has been reviewed across a few releases:
+the budget number needs evidence, not a guess. Once the measured values are
+stable, remove `continue-on-error` to make it a hard gate.
+
+Measure locally (needs registry access):
+
+```bash
+./scripts/image-size.sh ghcr.io/msf4-0/comp-demo-bench:v16 3000000000
+```
+
+Ideas if it grows: build-only deps out of the final layer, `pip --no-cache-dir`,
+prune `node_modules` after `bench build`, drop unused ERPNext locales.
+
+### What CI guarantees
+
+| Workflow | Guarantee |
+|---|---|
+| `ci.yml` | the image builds from `main`; pushed by digest; apps import |
+| `publish-image.yml` | tagged release is pushed, digest recorded, size measured, anonymous pull checked |
+| `e2e.yml` | the published image seeds, starts, answers ping, accepts a login, serves a seeded DocType |
+| `make-package-public.yml` | visibility can be flipped with an org-owner PAT, then re-verified anonymously |
+
+### Related
+
+- `docs/DISTRIBUTION.md` — the release gate and go-live checklist
+- `bake/bench.Dockerfile` — what goes into the image

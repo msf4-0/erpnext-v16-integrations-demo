@@ -221,7 +221,7 @@ filter_missing_custom_field_dts() {
   # Query the DB via the venv's pymysql and the site's own config, NOT via
   # frappe.init/connect: a raw frappe connect needs a full bench context and
   # dies with FileNotFoundError '/home/frappe/logs/database.log' when run
-  # outside it (docs/WINDOWS-QUOTING.md rule 7). We only need to know which
+  # outside it (docs/INSTALL.md#quoting-shell-commands-on-windows rule 7). We only need to know which
   # DocTypes exist, so a direct information_schema query is sufficient and
   # has no such dependency.
   "$BENCH_DIR/env/bin/python" - "$f" <<'PYEOF'
@@ -347,7 +347,7 @@ restart_bench_serve() {
   # Must be DETACHED: a plain `( … &)` dies when the exec session ends, and
   # `nohup … &` without a stdin redirect can hold the exec pipe open so the
   # tool call appears to hang. `setsid nohup … < /dev/null & disown` is the
-  # documented-good form (docs/WINDOWS-QUOTING.md rule 8).
+  # documented-good form (docs/INSTALL.md#quoting-shell-commands-on-windows rule 8).
   ( cd "$BENCH_DIR" && setsid nohup bench serve --port 8000 > /tmp/bench-serve.log 2>&1 < /dev/null & disown )
 }
 

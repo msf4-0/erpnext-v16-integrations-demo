@@ -486,5 +486,5 @@ GPL-3.0-or-later - see [LICENSE](LICENSE). The apps import Frappe/ERPNext
 
 - Contributing and the CI contract: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Reporting a vulnerability: [SECURITY.md](SECURITY.md)
-- Image tags, digests, platforms and size budget: [docs/IMAGE-POLICY.md](docs/IMAGE-POLICY.md)
+- Image tags, digests, platforms and size budget: [docs/DISTRIBUTION.md#image-policy](docs/DISTRIBUTION.md#image-policy)
 - Release criteria for "works for everyone": [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)

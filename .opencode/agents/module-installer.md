@@ -75,12 +75,12 @@ don't have to ask mid-way:
    app-specific facts in `sandbox/recipes/`. Superseded one-off scripts are
    kept under `sandbox/scripts/archive/` and `archive/` for reference only Ã¢â‚¬â€
    do not cite or run them. Before running any `docker compose exec ... bash
-   -lc` command, read `docs/WINDOWS-QUOTING.md` for the quoting rules (this is
+   -lc` command, read `docs/INSTALL.md#quoting-shell-commands-on-windows` for the quoting rules (this is
    a Windows PowerShell host â†’ Linux container workflow). Keep inline
    `bash -lc` to a **single simple command** Ã¢â‚¬â€ multi-command inline bash
    (`for ...; do ...; done`, `$(...)`, nested quotes) is rejected by the
    command parser, so put anything larger in a script file (or use the
-   base64-payload escape hatch, `WINDOWS-QUOTING.md` rule 5).
+   base64-payload escape hatch, `docs/INSTALL.md` (Windows quoting section) rule 5).
 
 ## The fast-path principle Ã¢â‚¬â€ applies to both jobs below
 

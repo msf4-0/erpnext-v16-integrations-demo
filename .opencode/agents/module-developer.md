@@ -54,7 +54,7 @@ Operational facts:
   before re-diagnosing something already solved. Superseded one-off scripts
   live under `sandbox/scripts/archive/` and `archive/` for reference only Ã¢â‚¬â€ do
   not cite or run them. Before running any `docker compose exec ... bash -lc`
-  command, read `docs/WINDOWS-QUOTING.md` for the quoting rules (this is a
+  command, read `docs/INSTALL.md#quoting-shell-commands-on-windows` for the quoting rules (this is a
   Windows PowerShell host â†’ Linux container workflow).
 - For the standard Frappe app layout and v16 conventions (doc `.json` / `.py` /
   `.js`, derived read-only summary fields, advisory vs. blocking validation,
@@ -206,7 +206,7 @@ docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-co
   is ephemeral Ã¢â‚¬â€ copy the canonical tree out into an app repo under `./repos/`
   (or author directly there) as the source of truth. Use the trailing `/.` form
   when copying out so it merges rather than nests (see
-  `docs/WINDOWS-QUOTING.md` rule 10).
+  `docs/INSTALL.md#quoting-shell-commands-on-windows` rule 10).
 - `bench new-app` runs `git init` with branch `version-16` and **no remote**;
   keep it local (do not add a remote or push) unless the user asks.
 

@@ -23,7 +23,7 @@ working around the restriction.
   something already solved. Superseded one-off scripts live under
   `sandbox/scripts/archive/` and `archive/` for reference only Ã¢â‚¬â€ do not cite or
   run them. Before running any `docker compose exec ... bash -lc` command, read
-  `docs/WINDOWS-QUOTING.md` for the quoting rules (this is a Windows PowerShell
+  `docs/INSTALL.md#quoting-shell-commands-on-windows` for the quoting rules (this is a Windows PowerShell
   host â†’ Linux container workflow).
 - The sandbox is a single docker compose project. The site is `frontend`, the
   bench service is `bench`, and the container-internal port is 8000 (host port

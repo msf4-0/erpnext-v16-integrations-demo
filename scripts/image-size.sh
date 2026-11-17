@@ -60,6 +60,6 @@ print(f"compressed layers: {len(layers)}")
 print(f"compressed size:   {gb:.2f} GB ({total} bytes)")
 print(f"budget:            {budget/1e9:.2f} GB")
 if total > budget:
-    print("::warning::image is over the documented size budget - see docs/IMAGE-POLICY.md")
+    print("::warning::image is over the documented size budget - see docs/DISTRIBUTION.md#image-policy")
     sys.exit(1)
 ' "$budget"

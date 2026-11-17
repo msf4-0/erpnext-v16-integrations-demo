@@ -25,7 +25,7 @@ Everything needed to rebuild and verify the demo lives **inside `F:\ERPNEXT\erpn
 | `repos/shopify-shrdc-v16-fixed` | `shopify` app source (incl. `shopify/auth.py` token minting) |
 | `repos/eu_einvoice` | `eu_einvoice` app source (was still only in ERPNEXT-FIX) |
 | `scheduler/` | the production planner: `server.js`, `frontend/` + prebuilt `frontend/build`, `runtime-deps/node_modules`, `ui-tests/` |
-| `docs/` | this file + `WINDOWS-QUOTING.md` |
+| `docs/` | this file + `docs/INSTALL.md` (Windows quoting section) |
 
 Host prerequisites (not project files): Docker Desktop, the `ngrok` binary + authtoken,
 Node/npm (only to rebuild the planner frontend), Python (only for the Node-RED flow builder).
