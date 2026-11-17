@@ -80,6 +80,11 @@ for app in $APPS; do
         *" $app "*) echo "-- skip: $app (in SKIP_APPS)"; skipped="$skipped $app"; continue ;;
     esac
     if is_installed "$app"; then
+        # apps.txt is bench-level (it drives `bench version`, asset builds and
+        # `bench serve`), and a site restored from a dump can have an app
+        # installed in the DB while apps.txt only lists frappe/erpnext. Keep the
+        # two in sync on every run, not just when installing.
+        register_in_apps_txt "$app"
         echo "-- present: $app"
         continue
     fi

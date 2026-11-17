@@ -204,6 +204,12 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      # `bench migrate` inside the seeder refuses to run without redis
+      # ("Service redis_cache is not running"), so wait for both.
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
     volumes:
       - bench_sites:/home/frappe/frappe-bench/sites
       - ./seed:/seed:ro

@@ -337,3 +337,107 @@ file's directory. Result: 4 remaining hits, all benign and enumerated — 3 are 
 naming the files it merged and deleted (`IMAGE-POLICY.md`, `WINDOWS-QUOTING.md`,
 `SETUP-GUIDE-for-existing-build.md`), and 1 is `scheduler/frontend/node_modules`, a directory generated
 by `npm ci`. **0 unresolved path references** in the repository.
+
+---
+
+## P7 — Reproducible fresh deployment: all 8 apps (branch `deployapp`)
+
+Scope: make a clean clone deployable with Docker alone. The cleanup work above is untouched.
+
+### App source inventory (audited before editing)
+
+| # | App | Source (git-tracked) | Bench dir | Deps | Baked before P7 | Installed before P7 |
+|---|---|---|---|---|---|---|
+| 1 | frappe | base image `frappe/erpnext:v16.35.0` | `apps/frappe` | image | yes (image) | yes |
+| 2 | erpnext | base image | `apps/erpnext` | image | yes (image) | yes |
+| 3 | barcode_shrdc | `repos/barcode-shrdc-v16-fixed` (64 files) | `apps/barcode_shrdc` | requirements.txt | yes + **bind mount** | yes |
+| 4 | shopify | `repos/shopify-shrdc-v16-fixed` (53 files) | `apps/shopify` | requirements.txt | yes | yes |
+| 5 | eu_einvoice | `repos/eu_einvoice` (120 files) | `apps/eu_einvoice` | pyproject (factur-x, drafthorse, saxonche) | yes | yes |
+| 6 | metabase_integration | `repos/metabase_integration` (9 files) | `apps/metabase_integration` | requirements.txt | **no - bind mount only** | yes |
+| 7 | item_tracking | `repos/item_tracking` (65 files) | `apps/item_tracking` | requirements.txt | **no - bind mount only** | yes |
+| 8 | my_invois | `repos/my_invois` (13 files, requirements.txt empty) | `apps/my_invois` | none | **no - bind mount only** | seed installed it if the dump predated it |
+
+All eight are git-tracked (324 files under `repos/`), so no network fetch is required for app source.
+Defect confirmed: the pre-P7 image contained **5** apps total (frappe, erpnext + 3 custom); three
+apps existed only as bind mounts, and `my_invois` was additionally uninstalled-but-mounted.
+
+### Changes
+
+| # | File | Change | Status |
+|---|---|---|---|
+| 1 | `bake/bench.Dockerfile` | COPY all six custom app sources; per-app `pip install -r requirements.txt`; build-time app-shape guard (`hooks.py`, `__init__.py`, `__version__`) that fails the build; build-time import smoke test for all six; bakes `/usr/local/bin/install-all-apps.sh` | Verified |
+| 2 | `sandbox/scripts/install-all-apps.sh` (new) | canonical ordered idempotent site installer: list-apps gate, `apps.txt` + `.pth` registration, install in dependency order, one `migrate`, then verify list-apps **and** module import; `SKIP_APPS` explicit opt-out; non-zero exit on any failure; `ALLOW_PARTIAL=1` only as an explicit override | Verified |
+| 3 | `seed/seed-site.sh` | replaced the my_invois-only special case with a call to the shared installer (one code path for bench, seed and manual runs) | Verified |
+| 4 | `docker-compose.yml` | removed 4 app bind mounts from `bench` and 2 from `seed` (image is now authoritative); seed waits for `redis-cache`/`redis-queue` (its `bench migrate` otherwise aborts with "Service redis_cache is not running"); seed gains `SKIP_APPS`/`ALLOW_PARTIAL` | Verified |
+| 5 | `up-linux.sh` | runs the canonical installer after provisioning, so a Linux deployment is one command | Implemented |
+| 6 | `install-apps-linux.sh` | app list extended from 4 to all 6 custom apps; help text points at the canonical installer | Implemented |
+| 7 | `sandbox/scripts/verify-deployment.sh` (new) | read-only 7-check acceptance verifier (compose config, containers, `bench version`, all 8 apps exactly once, module import, `/api/method/ping`, unresolved `hooks.py` assets) | Implemented |
+| 8 | `docs/DEPLOY.md` (new), `README.md` | clean-machine guide: prerequisites, clone, env, one command, what happens automatically, verification, stop/restart, troubleshooting, `SKIP_APPS`; README section 3a points to it | Implemented |
+
+### Why
+
+The image was not self-contained (3 apps came from bind mounts), nothing guaranteed all eight were
+*installed* (my_invois was mounted-but-not-installed; item_tracking/metabase_integration depended on
+a host folder existing), and `sites/apps.txt` was never reconciled with the restored DB, so
+`bench version` reported only 2 apps on a restored site.
+
+### Acceptance test — isolated project
+
+Host: Windows 11 + Docker 29.8.0. Isolated: project `comp_demo_p7`, own volumes
+`comp_demo_p7_db_data` / `comp_demo_p7_bench_sites`, own ports (18000/11880/13001/13005/18088).
+The live `comp_demo` stack was not touched; no `down -v`, no volume deletion, no site reinstall.
+
+```
+$ docker build -f bake/bench.Dockerfile --build-arg ERPNEXT_BASE=frappe/erpnext:v16.35.0 \
+      -t comp_demo-bench:p7-test .
+... app-source guard: all 6 custom app sources present and well-formed
+... import ok: barcode_shrdc 0.0.2 / shopify 0.0.1 / eu_einvoice 16.3.0
+... import ok: item_tracking 0.0.2 / metabase_integration 0.0.1 / my_invois 0.0.1
+... naming to docker.io/library/comp_demo-bench:p7-test   (build succeeded, no bind mounts involved)
+
+$ docker compose -p comp_demo_p7 ... up -d --no-build db redis-cache redis-queue bench
+seed-1 | Site frontend has been restored
+seed-1 | -- present: frappe erpnext barcode_shrdc shopify eu_einvoice item_tracking metabase_integration my_invois
+seed-1 | import ok: frappe, erpnext, barcode_shrdc, shopify, eu_einvoice, item_tracking, metabase_integration, my_invois
+seed-1 | seed: items after restore: 72
+seed-1 | seed: metabase_dashboard_url -> http://localhost:3005/public/dashboard/96f46652-...
+seed-1 | seed: done - site 'frontend' restored
+
+$ curl -H "Host: frontend" http://localhost:18000/api/method/ping
+{"message":"pong"}
+
+$ docker compose -p comp_demo_p7 exec -T bench bench --site frontend version
+barcode_shrdc 0.0.2  ()   erpnext 16.35.0  ()   eu_einvoice 16.3.0  ()
+frappe 16.35.0  ()        item_tracking 0.0.2  ()  metabase_integration 0.0.1  ()
+my_invois 0.0.1  ()       shopify 0.0.1  ()
+```
+
+Restart + persistence (same project, after `docker compose restart bench`):
+
+```
+$ curl -H "Host: frontend" http://localhost:18000/api/method/ping   -> {"message":"pong"}
+$ bench --site frontend list-apps                                    -> all 8, exactly once
+$ bench --site frontend execute frappe.db.count --args "['Item']"    -> 72
+$ ls sites/assets/                                                   -> barcode_shrdc eu_einvoice
+                                                                        item_tracking (+frappe/erpnext)
+$ test -e sites/assets/barcode_shrdc/js/scanner_barcode_patch.js    -> exists (the historical
+                                                                        reload-loop asset is served)
+```
+
+### Blocker found and fixed during the test
+
+First run installed nothing (the seeded dump already contained all eight apps), so
+`sites/apps.txt` stayed at `frappe, erpnext` and `bench --site frontend version` reported **2** apps.
+Fix: `install-all-apps.sh` now reconciles `apps.txt` for every app on **every** run, not only when
+installing. Re-ran the installer in the test container: `apps.txt` and `bench version` then listed all
+eight. This defect would have hit every restored deployment.
+
+### Remaining blockers / not verified
+
+| Item | Status | Note |
+|---|---|---|
+| Truly cold machine (no cached `frappe/erpnext` base layer, fresh Docker) | Not started | the base image was already pulled here; only the build/run/restart path was exercised |
+| Windows `up.ps1` / `setup.ps1` deployment path | Not started | P7 changes are Compose/Dockerfile-level, but the PowerShell launchers were not re-run |
+| `install-apps-linux.sh` full run against a from-scratch (non-restored) site | Not started | the restore path was tested; the `bench new-site` path was not |
+| Metabase UI, Node-RED flow, planner SPA, Shopify token flow | Not started | services were started for the restore path only in local checks; no end-to-end UI pass |
+| Baked image published to GHCR (`docs/DISTRIBUTION.md`) | Not started | clean clones currently build locally (20-40 min); publishing remains a distribution task |
