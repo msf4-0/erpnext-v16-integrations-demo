@@ -60,6 +60,13 @@ flags.
 - `setup.ps1` exits 0 when all checks pass and 1 if anything is still broken.
 ### 3a. Fresh clone — one command
 
+> **Clean machine with only Docker installed?** Read [`docs/DEPLOY.md`](docs/DEPLOY.md) instead.
+> It is the P7 guide: clone → `cp .env.example .env` → fill passwords → `./up-linux.sh`, and it
+> explains what is built automatically, how to verify all **eight** apps
+> (`./sandbox/scripts/verify-deployment.sh`), and what to do when a build fails.
+> On Linux/macOS `./up-linux.sh` now builds the self-contained bench image *and* installs every
+> app, so no second installer step is needed.
+
 ```powershell
 git clone https://github.com/msf4-0/erpnext-v16-integrations-demo.git
 cd erpnext-v16-integrations-demo

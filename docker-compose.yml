@@ -145,22 +145,13 @@ services:
       - "${ERPNEXT_PORT:-8000}:8000"
     volumes:
       - bench_sites:/home/frappe/frappe-bench/sites
-      # item_tracking normally lives only in the container's writable layer, so
-      # every container recreate (image rebuild / compose up) reverted it to the
-      # baked image copy and the Shift+I camera scanner + custom pages vanished.
-      # Bind-mount the host repo so the app code is permanent across restarts.
-      - ./repos/item_tracking:/home/frappe/frappe-bench/apps/item_tracking
-      - ./repos/metabase_integration:/home/frappe/frappe-bench/apps/metabase_integration
-      # barcode_shrdc has the same failure mode: the image ships an old copy
-      # (no get_serial_summary/ensure_serials) while the source repo has the
-      # version the Get Items Barcode button expects. Mount the repo so the
-      # serial-number flow exists and survives restarts.
-      - ./repos/barcode-shrdc-v16-fixed:/home/frappe/frappe-bench/apps/barcode_shrdc
-      # OPTIONAL Malaysia LHDN / MyInvois layer. Mounted so the source is
-      # present, but NOT installed - installing it alongside the EU eu_einvoice
-      # app would add a second, conflicting e-invoice doctype set. Install it
-      # deliberately with the three commands in docs/ARCHITECTURE.md.
-      - ./repos/my_invois:/home/frappe/frappe-bench/apps/my_invois
+      # P7: no application source is bind-mounted any more. All six custom apps
+      # (barcode_shrdc, shopify, eu_einvoice, item_tracking,
+      # metabase_integration, my_invois) are baked into the image by
+      # bake/bench.Dockerfile, so a clean clone runs on the image alone.
+      # To live-edit an app without rebuilding, re-add an override mount here,
+      # e.g.  - ./repos/item_tracking:/home/frappe/frappe-bench/apps/item_tracking
+      # (the container start-up block re-registers whatever is in apps/).
     depends_on:
       # A fresh clone has an empty bench_sites volume, so bench would serve
       # "404 localhost does not exist". `seed` restores the demo DB first, then
@@ -216,17 +207,16 @@ services:
     volumes:
       - bench_sites:/home/frappe/frappe-bench/sites
       - ./seed:/seed:ro
-      # my_invois is not baked into the published image; the seeder needs the
-      # source to run install-app, exactly like the bench service does.
-      - ./repos/my_invois:/home/frappe/frappe-bench/apps/my_invois
-      # The demo-data patch and the generic BOM fixture live in barcode_shrdc.
-      # Mounting it here means `bench migrate` in the seeder runs the current
-      # source, not the older copy baked into the image.
-      - ./repos/barcode-shrdc-v16-fixed:/home/frappe/frappe-bench/apps/barcode_shrdc
+      # P7: app sources are no longer mounted here either - they are baked into
+      # the image and installed by the image-baked /usr/local/bin/install-all-apps.sh.
     environment:
       - SITE_NAME=${SITE_NAME:-frontend}
       - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      # Space-separated apps to leave uninstalled, e.g. "my_invois" on a site
+      # where the LHDN MyInvois layer would conflict with eu_einvoice.
+      - SKIP_APPS=${SKIP_APPS:-}
+      - ALLOW_PARTIAL=${ALLOW_PARTIAL:-0}
     command: ["bash", "/seed/seed-site.sh"]
 
   db:

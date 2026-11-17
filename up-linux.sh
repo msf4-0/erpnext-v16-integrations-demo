@@ -89,6 +89,13 @@ compose exec -T -u root bench chown -R frappe:frappe /tmp/comp-demo-bootstrap
 echo "Provisioning or reusing ERPNext site '$SITE_NAME'..."
 compose exec -T bench bash /tmp/comp-demo-bootstrap/provision-base.sh "$FRAPPE_SERIES"
 
+# P7: install all eight apps with the SAME installer the image bakes in, so a
+# fresh Linux deployment is one command. Idempotent: on an already-complete
+# site this only prints the app list and exits 0.
+echo "Installing all comp_demo apps on site '$SITE_NAME'..."
+compose exec -T -e "SITE_NAME=$SITE_NAME" -e "SKIP_APPS=${SKIP_APPS:-}" bench \
+  bash /usr/local/bin/install-all-apps.sh
+
 # The running web process began before a new site existed. Restart it to load
 # the default-site setting written by provision-base.sh.
 compose restart bench

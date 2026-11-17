@@ -9,9 +9,14 @@ if [[ "${1:-}" == "--help" ]]; then
 Usage: ./install-apps-linux.sh
 
 Install the bundled custom apps into an already-provisioned comp_demo site:
-barcode_shrdc, shopify, eu_einvoice, and item_tracking.
-Run ./up-linux.sh first. This does not configure Shopify credentials,
-Node-RED, ngrok, the planner, or demo data.
+barcode_shrdc, shopify, eu_einvoice, item_tracking, metabase_integration,
+my_invois. Run ./up-linux.sh first (up-linux.sh already installs these, so this
+script is only useful for re-running the installer by hand).
+For a one-shot install of every app use the image-baked canonical installer:
+  docker compose -p comp_demo --env-file .env --env-file versions.env \
+    exec -T bench bash /usr/local/bin/install-all-apps.sh
+This does not configure Shopify credentials, Node-RED, ngrok, the planner, or
+demo data.
 HELP
   exit 0
 fi
@@ -66,7 +71,7 @@ if ! compose exec -T -e "SITE_NAME=$SITE_NAME" bench \
   exit 1
 fi
 
-apps=(barcode_shrdc shopify eu_einvoice item_tracking)
+apps=(barcode_shrdc shopify eu_einvoice item_tracking metabase_integration my_invois)
 for app in "${apps[@]}"; do
   if ! compose exec -T bench test -d "/home/frappe/frappe-bench/apps/$app"; then
     echo "ERROR: mounted app source '$app' is missing from the bench container." >&2
