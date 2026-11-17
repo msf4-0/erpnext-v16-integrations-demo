@@ -333,4 +333,7 @@ related.
 dangling path. It is not — the file exists at `.opencode/skills/tooljet-app-builder/scripts/browser-audit.js`,
 and the citation is relative to the skill directory. The scanner treated every backticked path as
 repo-relative. The scan now resolves each path both repo-relative **and** relative to the citing
-file's directory: **0 unexplained missing paths** repo-wide.
+file's directory. Result: 4 remaining hits, all benign and enumerated — 3 are this document
+naming the files it merged and deleted (`IMAGE-POLICY.md`, `WINDOWS-QUOTING.md`,
+`SETUP-GUIDE-for-existing-build.md`), and 1 is `scheduler/frontend/node_modules`, a directory generated
+by `npm ci`. **0 unresolved path references** in the repository.
