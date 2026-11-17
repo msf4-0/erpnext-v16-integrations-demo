@@ -79,7 +79,7 @@ Types in use: `feat`, `fix`, `docs`, `ci`, `chore`. Scope examples: `dist`,
 | `repos/<app>` | app sources baked into (or installed from) the image |
 | `seed/` | demo database dump and the one-shot seeder |
 | `docs/DISTRIBUTION.md` | release criteria for shipping the demo |
-| `docs/HANDOFF.md` | what was left unfinished and why |
+| `docs/archive/HANDOFF.md` | what was left unfinished and why |
 
 ## Reporting
 

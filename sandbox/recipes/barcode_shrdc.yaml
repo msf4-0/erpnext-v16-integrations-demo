@@ -16,8 +16,8 @@ repo: https://github.com/msf4-0/ERPNext-Barcode-Integration
 # mid-file). If you maintain a fixed fork, point `repo:` at it or add a
 # per-version `source:` (a local directory under ./repos/) — install-app.sh
 # accepts a directory as its <repo> argument and copies+registers it by hand:
-#   docker compose -p erpnext-sandbox cp ./repos/<your-fork> bench:/tmp/<your-fork>
-#   docker compose -p erpnext-sandbox exec bench bash -lc \
+#   docker compose -p comp_demo cp ./repos/<your-fork> bench:/tmp/<your-fork>
+#   docker compose -p comp_demo exec bench bash -lc \
 #     "/tmp/scripts/install-app.sh barcode_shrdc /tmp/<your-fork> 15 /tmp/recipes/barcode_shrdc.yaml"
 # The v12/v16 entries below apply to upstream master.
 
@@ -57,10 +57,10 @@ versions:
       unsaved-QR guard, maps CODE39 -> Standard39, renders the Stock Entry
       Barcode format server-side, and falls back to SVG when rlPyCairo is
       unavailable. Install it from the directory:
-        docker compose -p erpnext-sandbox cp ./repos/barcode-shrdc-v15-fixed bench:/tmp/barcode-shrdc-v15-fixed
-        docker compose -p erpnext-sandbox exec bench bash -lc "/tmp/scripts/install-app.sh barcode_shrdc /tmp/barcode-shrdc-v15-fixed 15 /tmp/recipes/barcode_shrdc.yaml"
+        docker compose -p comp_demo cp ./repos/barcode-shrdc-v15-fixed bench:/tmp/barcode-shrdc-v15-fixed
+        docker compose -p comp_demo exec bench bash -lc "/tmp/scripts/install-app.sh barcode_shrdc /tmp/barcode-shrdc-v15-fixed 15 /tmp/recipes/barcode_shrdc.yaml"
       For PDF/print images, set a container-reachable host name:
-        docker compose -p erpnext-sandbox exec bench bash -lc "bench --site frontend set-config host_name http://localhost:8000"
+        docker compose -p comp_demo exec bench bash -lc "bench --site frontend set-config host_name http://localhost:8000"
 
       Upstream fixtures (if installing upstream main) still ship the Frepple
       entry. On v15 `install-app`/`migrate` ABORTS the whole custom_field file
@@ -86,12 +86,12 @@ versions:
       `./repos/barcode-shrdc-v16` (branch `fix/v16-compat`, commit b79b4d6)
       carries all the v16 runtime fixes committed in source, so a fresh install
       is clean with NO post-install patching. Install it from the directory:
-        docker compose -p erpnext-sandbox cp ./repos/barcode-shrdc-v16 bench:/tmp/barcode-shrdc-v16
-        docker compose -p erpnext-sandbox exec -u root bench bash -lc \
+        docker compose -p comp_demo cp ./repos/barcode-shrdc-v16 bench:/tmp/barcode-shrdc-v16
+        docker compose -p comp_demo exec -u root bench bash -lc \
           "chown -R frappe:frappe /tmp/barcode-shrdc-v16"
-        docker compose -p erpnext-sandbox cp ./sandbox/scripts/fix-barcode-v16-renderdeps.sh bench:/tmp/scripts/
-        docker compose -p erpnext-sandbox exec -u root bench bash -lc "bash /tmp/scripts/fix-barcode-v16-renderdeps.sh"
-        docker compose -p erpnext-sandbox exec bench bash -lc \
+        docker compose -p comp_demo cp ./sandbox/scripts/fix-barcode-v16-renderdeps.sh bench:/tmp/scripts/
+        docker compose -p comp_demo exec -u root bench bash -lc "bash /tmp/scripts/fix-barcode-v16-renderdeps.sh"
+        docker compose -p comp_demo exec bench bash -lc \
           "/tmp/scripts/install-app.sh barcode_shrdc /tmp/barcode-shrdc-v16 16 /tmp/recipes/barcode_shrdc.yaml"
       The fork's requirements.txt now lists reportlab + rlPyCairo, but those
       need the native cairo headers FIRST, so run the root render-deps step

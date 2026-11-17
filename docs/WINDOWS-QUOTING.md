@@ -1,7 +1,7 @@
 # Windows / PowerShell -> `docker compose exec` quoting: rules for future runs
 
 All sandbox commands run from a Windows PowerShell 5.1 host into a Linux
-container via `docker compose -p erpnext-sandbox exec <svc> bash -lc "..."`.
+container via `docker compose -p comp_demo exec <svc> bash -lc "..."`.
 That is 3-4 interpolation layers (PowerShell -> docker CLI -> bash -> the
 Python/JSON/SQL/JS that bash then runs). Each layer mangles characters before
 the next sees them. These rules were extracted from a run that hit every one
@@ -40,7 +40,7 @@ runbooks, prefer paths relative to the repository root.
        print("hello from inside")
    '@
    $b64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($py))
-   docker compose -p erpnext-sandbox exec bench bash -lc "echo $b64 | base64 -d > /tmp/x.py && cd /home/frappe/frappe-bench && env/bin/python /tmp/x.py"
+   docker compose -p comp_demo exec bench bash -lc "echo $b64 | base64 -d > /tmp/x.py && cd /home/frappe/frappe-bench && env/bin/python /tmp/x.py"
    ```
    Same pattern for SQL (decode into a file, then `mariadb ... < file.sql`).
 

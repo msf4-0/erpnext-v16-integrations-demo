@@ -84,10 +84,10 @@ provenance was destroyed when they were copied.
 | `eu_einvoice` | `repos/eu_einvoice` | yes (`:44`) | no | `up.ps1` step 7b | no | image layer only |
 | `item_tracking` | `repos/item_tracking` | no | yes (`:101`) | `up.ps1` step 7b-2 | no | mount + runtime install |
 | `metabase_integration` | `repos/metabase_integration` | no | yes (`:102`) | `ensure_metabase_app.ps1` | **yes** | stub (6 files); original controllers lost |
-| `my_invois` | `repos/my_invois` | **no** | **no** | **no** | **yes** | written; installer missing; fixtures never synced; see [`docs/HANDOFF.md`](docs/HANDOFF.md) §2 |
+| `my_invois` | `repos/my_invois` | **no** | **no** | **no** | **yes** | written; installer missing; fixtures never synced; see [`HANDOFF.md`](HANDOFF.md) §2 |
 
 `my_invois` source is present in the repository, but no build or startup entry
-point installs it. The prior site installation recorded in `docs/HANDOFF.md`
+point installs it. The prior site installation recorded in `HANDOFF.md`
 was historical; its fixtures did not materialize, and a clean build does not
 install it. Keep the app quarantined until installation wiring and fixture sync
 are repaired.
@@ -322,7 +322,7 @@ Keep working defaults so a future developer can boot instantly; make production 
 - [x] Remove the absent `custom_manufacturing` and `chat_widget` app entries; delete the
       `chat_widget` protected-app policy.
 - [x] `my_invois`: status is **`written, installer missing, fixtures never synced`**, linked to
-      `docs/HANDOFF.md` §2 and its §3.2 app row.
+      `HANDOFF.md` §2 and its §3.2 app row.
 - [x] `metabase_integration`: status is **`stub (6 files); controllers lost`**.
 - [x] Add a `Quarantined` column so an incomplete app cannot be read as installed.
 

@@ -1,9 +1,9 @@
 # comp_demo architecture
 
-> **Authoritative reference:** this document is the source of truth for the
-> Compose topology, published ports, image versions, app sources, and database
-> durability. Other documentation may give operational summaries, but must not
-> contradict this reference or the Compose configuration.
+> **Numbers live in [FACTS.md](FACTS.md).** That page is the single source of truth for versions,
+> ports, service count, installed apps and launcher-per-platform, because every value there was
+> measured. This document explains the Compose topology and why it is shaped that way; it must not
+> state a number that contradicts FACTS.md or `docker-compose.yml`.
 
 ## Scope and canonical location
 
@@ -66,7 +66,7 @@ hosts, but restarting no longer discards the database.
 | Shopify Admin API | `${SHOPIFY_API_VERSION:-2026-04}`; API version, not app image version |
 
 `versions.env` is the authoritative set of component image tags. The
-`ERPNEXT_BASE` value is the build input; `docs/ASSESSMENT-einvoicing-barcode.md`
+`ERPNEXT_BASE` value is the build input; `docs/archive/ASSESSMENT-einvoicing-barcode.md`
 records a different version from a live environment checked on 2026-11-04.
 Treat that as historical runtime evidence, not the current build pin; verify a
 running bench with `bench version`. Load both env files for direct Compose use:
@@ -212,3 +212,10 @@ the one people read first. Summary: core ERPNext, barcode, item tracking and the
 seeded demo data work with no further steps; planner data endpoints, Shopify,
 ngrok webhooks and Metabase dashboards each need credentials, and `setup.ps1`
 covers the first three.
+
+## Not part of the running stack
+
+| Path | Status |
+|---|---|
+| `lowdefy/` | 19 files, ~89 KB, unreferenced by every launcher and by Compose. It is a Lowdefy prototype kept for reference; nothing in the demo starts it. Decide to delete or move to `docs/archive/` — until then, ignore it. |
+| `sandbox/scripts/_legacy/` | 108 scripts quarantined on 2026-11-17 (proven unreferenced). Kept for one release cycle, then delete. |

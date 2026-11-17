@@ -25,9 +25,9 @@ overrides the matching example.
 To install with a recipe, copy it into the container and pass its path:
 
 ```bash
-docker compose -p erpnext-sandbox cp ./sandbox/recipes/<app>.yaml \
+docker compose -p comp_demo cp ./sandbox/recipes/<app>.yaml \
   bench:/tmp/recipes/<app>.yaml
-docker compose -p erpnext-sandbox exec bench bash -lc \
+docker compose -p comp_demo exec bench bash -lc \
   "/tmp/scripts/install-app.sh <app> <repo_url_or_local_dir> <version> /tmp/recipes/<app>.yaml"
 ```
 

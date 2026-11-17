@@ -211,8 +211,8 @@ Verified: `docker compose … config -q` exit 0 with the LF `versions.env`, and 
 | File | Was | Now |
 |---|---|---|
 | `erpnext-demo-stabilise-modularise.md` | 48 KB plan for a target state never built | `docs/archive/` |
-| `docs/HANDOFF.md` | 4 claims false vs the live stack | `docs/archive/` |
-| `docs/ASSESSMENT-einvoicing-barcode.md` | point-in-time assessment | `docs/archive/` |
+| `docs/archive/HANDOFF.md` | 4 claims false vs the live stack | `docs/archive/` |
+| `docs/archive/ASSESSMENT-einvoicing-barcode.md` | point-in-time assessment | `docs/archive/` |
 
 Root now holds **9** own markdown files, down from 11; `docs/` is 9 (8 after these moves).
 

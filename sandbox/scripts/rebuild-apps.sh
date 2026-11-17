@@ -6,7 +6,7 @@
 # (sandbox/rebuild.sh) does compose down/up + the file copies, then calls this.
 # Run it inside the bench container as the `frappe` user:
 #
-#   docker compose -p erpnext-sandbox exec bench bash -lc "bash /tmp/scripts/rebuild-apps.sh"
+#   docker compose -p comp_demo exec bench bash -lc "bash /tmp/scripts/rebuild-apps.sh"
 #
 # What it does, per app (see APPS below):
 #   1. stage the local source (under /tmp, never straight into apps/)
