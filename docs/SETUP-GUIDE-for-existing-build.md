@@ -2,7 +2,7 @@
 > This document describes the old `erpnext-build.zip` bundle (different folder
 > name, different `.env`). For a `git clone` of this repo, follow
 > [`README.md`](../README.md) section 3 and run `.\up.ps1` from the repo root.
-> The `sandbox/up.ps1` it references belonged to the retired `erpnext-fix`
+> The `up.ps1` it references belonged to the retired `erpnext-fix`
 > project and no longer exists.
 # Adding the missing functions to an existing ERPNext v16 build
 

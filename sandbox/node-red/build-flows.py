@@ -19,7 +19,7 @@ inside a containerised stack. Three classes of problem are rewritten here:
    downstream http request node. Every inventory sync died on a 401. The empty
    value is filled in.
 
-Usage (see sandbox/up.ps1, which calls this):
+Usage (see up.ps1, which calls this):
     python build-flows.py --src <export.json> --out <flows.json> \
         --erpnext-url http://bench:8000 --erpnext-token key:secret \
         --shopify-store <store>.myshopify.com --shopify-version 2026-04 \

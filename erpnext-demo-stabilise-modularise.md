@@ -486,8 +486,8 @@ rm -rf repos/
 ```
 
 - [ ] Sweep the **110 `repos/` references across 36 files** — scripted, then eyeballed:
-      `docker-compose.yml`, `bake/bench.Dockerfile`, `up.ps1`, `sandbox/up.ps1`, `sandbox/rebuild.sh`,
-      `sandbox/scripts/ai-fix-install.sh`, `sandbox/recipes/*.yaml`, all docs, all five agents, the
+      `docker-compose.yml`, `bake/bench.Dockerfile`, `up.ps1`, `up.ps1`, `sandbox/rebuild.sh`,
+      `sandbox/scripts/fix-install.sh`, `sandbox/recipes/*.yaml`, all docs, all five agents, the
       test-sandbox skill, `Customisations.md`.
 - [ ] Delete `sandbox/recipes/<app>.yaml` for the six apps once `registry.yaml` supersedes them; keep the
       recipe schema only for genuinely external apps (it is still useful).

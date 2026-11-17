@@ -30,7 +30,7 @@ You manage ONLY the disposable **comp_demo** stack (default build = `docker-comp
 
 ## Rules
 1. TEST ONLY. Project `comp_demo` only. Never run compose/`down -v`/rebuild against any other project. Never touch files outside this repository.
-2. Build (primary objective): `powershell -File .\up.ps1` (full) or `-SkipProvision` to reuse an existing site. This rig's `sandbox/up.ps1` delegates there. On this host `docker compose up -d` HANGS Ã¢â‚¬â€ `up.ps1` starts containers with `docker compose create` + `docker start`.
+2. Build (primary objective): `powershell -File .\up.ps1` (full) or `-SkipProvision` to reuse an existing site. This rig's `up.ps1` delegates there. On this host `docker compose up -d` HANGS Ã¢â‚¬â€ `up.ps1` starts containers with `docker compose create` + `docker start`.
 3. Stage a feature app into the running bench: `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml cp ./repos/<app> bench:/tmp/<app>` then run the container-side install/migrate/test script.
 4. Verify before handing back: `bench --site frontend version` shows v16, `bench --site frontend list-apps` includes `barcode_shrdc` + `shopify` (and `eu_einvoice`), ping returns 200 at http://localhost:8000. Report what ran + output, not just "no error".
 5. Follow skill `erpnext-test-sandbox` runbook. Keep messages short.

@@ -21,7 +21,7 @@
       6. reads the live ngrok public URL back and writes it into the three
          ERPNext Webhook records, then enables them
       7. brings up the production planner (the `scheduler` compose service) via
-         sandbox/scheduler-up.ps1 - token, demo Work Orders, desk shortcut, verify
+         scheduler-up.ps1 - token, demo Work Orders, desk shortcut, verify
 
 .PARAMETER Fresh
     `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml down -v` first. DESTRUCTIVE: wipes the site DB and volumes.
@@ -33,13 +33,13 @@
     Reuse already-installed apps (skip the app install step).
 
 .PARAMETER SkipScheduler
-    Skip the production planner bring-up (sandbox/scheduler-up.ps1).
+    Skip the production planner bring-up (scheduler-up.ps1).
 
 .EXAMPLE
     # Run from the repository root. There is exactly ONE bring-up script and it
-    # is this file. The old sandbox\up.ps1 belonged to the retired
-    # `erpnext-fix` project, provisioned a DIFFERENT compose project, and has
-    # been deleted - if you still have a copy, do not run it.
+    # is this file. The retired sandbox/up.ps1 belonged to an older
+    # `erpnext-fix` generation, provisioned a DIFFERENT compose project, and was
+    # deleted on 2026-11-17 - if you still have a copy, do not run it.
     powershell -ExecutionPolicy Bypass -File .\up.ps1
     powershell -ExecutionPolicy Bypass -File .\up.ps1 -Fresh
 #>

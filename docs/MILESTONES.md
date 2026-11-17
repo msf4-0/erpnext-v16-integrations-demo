@@ -20,7 +20,7 @@ Everything needed to rebuild and verify the demo lives **inside `F:\ERPNEXT\erpn
 | `sandbox/scripts/` | provisioning, install, seeders, probes and the verification suite staged into the container |
 | `sandbox/recipes/` | per-app install recipes (`barcode_shrdc`, `shopify`, `eu_einvoice`) |
 | `sandbox/node-red/` | flow builder, built `flows.json`, vendored `source-flow.json` export |
-| `sandbox/.env.fix` | planner API key/secret + Shopify token shared with the planner script |
+| `.env` | planner API key/secret + Shopify token shared with the planner script |
 | `repos/barcode-shrdc-v16-fixed` | `barcode_shrdc` app source (durable fork with the v16 fixes) |
 | `repos/shopify-shrdc-v16-fixed` | `shopify` app source (incl. `shopify/auth.py` token minting) |
 | `repos/eu_einvoice` | `eu_einvoice` app source (was still only in ERPNEXT-FIX) |
@@ -77,7 +77,7 @@ tokens, so a single pasted `shpat_...` value can never stay valid.
 |---|---|---|
 | Token minting | new `shopify/auth.py` mints `POST /admin/oauth/access_token` (`grant_type=client_credentials`), caches the token in Redis until 5 min before expiry, clears the "paused" gate on success, and never raises into a save hook | `repos/shopify-shrdc-v16-fixed/shopify/auth.py` |
 | Single choke point | `get_shopify_access()` stamps the live token onto `doc.access_token`/`doc.secret_key` in memory, so every existing handler keeps working; `api.py` now routes its three direct `get_doc` lookups through it | `shopify/utils.py`, `shopify/api.py` |
-| Credentials | `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` in `comp_demo/.env` + `sandbox/.env.fix`, persisted into the site's `site_config.json` by `shopify_sync.py` (args 4/5) | `sandbox/scripts/shopify_sync.py`, `sandbox/scripts/fix-postsetup.sh`, `comp_demo/up.ps1` |
+| Credentials | `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` in `comp_demo/.env` + `.env`, persisted into the site's `site_config.json` by `shopify_sync.py` (args 4/5) | `sandbox/scripts/shopify_sync.py`, `sandbox/scripts/fix-postsetup.sh`, `comp_demo/up.ps1` |
 | Ops | `comp_demo/refresh-shopify-token.ps1` re-mints, rewrites `.env`, re-verifies `/shop.json` and rebuilds the Node-RED flow (the flow bakes the token into its Shopify nodes) | `comp_demo/refresh-shopify-token.ps1`, `sandbox/scripts/shopify-token.py` |
 
 ## Other fixes applied this session
@@ -104,7 +104,7 @@ Job Card(s) updated") and left the rest of the routing behind. The planner now w
 the schedule through the whitelisted Server Script `planner_shift_job_card`
 (child rows via `frappe.db.set_value`), falling back to the validated `PUT` only if
 that endpoint is unavailable. Requires `bench set-config -g server_script_enabled 1`
-— now done by `ai-fix-postsetup.sh`.
+— now done by `fix-postsetup.sh`.
 
 ### 4. `/api/work-orders/timers` was shadowed by `/api/work-orders/:id`
 Express matched the `:id` route first, looked up a Work Order literally named
