@@ -33,7 +33,7 @@ Two intentional fallbacks remain in the scripts Ã¢â‚¬â€ `up.ps1` step
 still try `F:\ERPNEXT\ERPNEXT-FIX\sandbox` **if** the vendored `sandbox/` is absent.
 
 Last verified: **2026-10-26**, live stack on `F:\ERPNEXT\erpnext-build` (project `comp_demo`).
-Full test run: `powershell -File F:\ERPNEXT\erpnext-build\verify-all.ps1` Ã¢â€ â€™ **41 / 41 checks pass**
+Full test run: `powershell -File F:\ERPNEXT\erpnext-build\verify-all.ps1` â†’ **41 / 41 checks pass**
 (log: `comp_demo\verify-all-final.log`). That includes a real-browser DOM check that the
 Job Cards are rendered as draggable cards; the drags themselves are proven by
 `scheduler/ui-tests/ui-drag-matrix.mjs` and `ui-drag-calendar.mjs`.
@@ -59,10 +59,10 @@ Installed apps: `frappe 16.35.0`, `erpnext 16.35.0`, `barcode_shrdc 0.0.1`, `sho
 | M3 | Docker build + stack live | **done** | 6 containers running (bench, db, redis ×2, node-red, scheduler); ping 200; all 5 apps + `Virtual Work Order` / `Barcode Printing` / `Shopify Access` / `E Invoice Settings` present |
 | M4 | Shopify item/supplier/customer edits **and live push** | **done (push now live)** | Item create → Shopify product `15435533484168` (`status=active`); Item edit → Shopify price `27.75` + title updated; Customer create → Shopify customer `31339731255432`; Supplier create+edit with **0** error-log rows; cleanup deletes the product in both systems |
 | M5 | Storefront has the products | **done** | `GET https://4e1075.myshopify.com/` 200 and `/products/planner-assembly-kit` 200; Admin API shows 13 `ACTIVE` products all with `publishedAt` set |
-| M6 | Planner + full build workflow | **done** | 12 WOs Ã‚Â· 24 JCs Ã‚Â· 4 workstations Ã‚Â· 6 submitted BOMs Ã‚Â· 64 `Job Card Scheduled Time` rows; `/api/schedule` returns 12/24/4/1 |
-| M7 | Drag-and-drop production planning | **done** | **API:** WO drag Ã¢â€ â€™ `planned_start_date` +2 days, `modified_by=planner@fix.local`, blocks 4Ã¢â€ â€™4, rows 64Ã¢â€ â€™64; JC drag Ã¢â€ â€™ 3 blocks kept, parent WO carries a real clock time. **Real UI (headless Chrome):** matrix drag of `PO-JOB00002` Ã¢â€ â€™ `PUT Ã¢â‚¬Â¦ {"type":"jobcard","docName":"PO-JOB00002","start":"2026-10-28 14:10:00"} ` Ã¢â€ â€™ 200, toast *"Ã¢Å“â€œ Ã¢â‚¬Â¦ [JC: PO-JOB00002] & parent WO: MFG-WO-2026-00001 rescheduled"*, and all three capacity blocks shifted **together** (170/540/490 min preserved); calendar drag of `PO-JOB00001` Ã¢â€ â€™ 200 through the FullCalendar `eventDrop` path. Both restored. |
-| M8 | Barcode scanning incl. changed barcode/QR values | **done** | CODE128 / CODE39 / EAN13 Ã¢â€ â€™ three distinct PNGs; a changed value Ã¢â€ â€™ different PNG; invalid EAN13 (`123`) **rejected with a message**; QR rendered per item; `/files/*.png` served as `image/png` |
-| M9 | Barcode/QR item tracking | **done** | `scan_barcode` resolves `SHRDC-BRK-0001 Ã¢â€ â€™ PLN-BRACKET` and `SHRDC-KIT-0001 Ã¢â€ â€™ PLN-KIT`, unknown Ã¢â€ â€™ empty; HTTP endpoint 200; Delivery Note `MAT-DN-2026-00001` submitted with `barcode_validation` and `checking_qty == qty`; Stock Entry `MAT-STE-2026-00003` submitted with `scan_stock_entry_barcode`; guest `/item_qr?item_code=PLN-BRACKET` Ã¢â€ â€™ 200 |
+| M6 | Planner + full build workflow | **done** | 12 WOs Â· 24 JCs Â· 4 workstations Â· 6 submitted BOMs Â· 64 `Job Card Scheduled Time` rows; `/api/schedule` returns 12/24/4/1 |
+| M7 | Drag-and-drop production planning | **done** | **API:** WO drag â†’ `planned_start_date` +2 days, `modified_by=planner@fix.local`, blocks 4â†’4, rows 64â†’64; JC drag â†’ 3 blocks kept, parent WO carries a real clock time. **Real UI (headless Chrome):** matrix drag of `PO-JOB00002` â†’ `PUT â€¦ {"type":"jobcard","docName":"PO-JOB00002","start":"2026-10-28 14:10:00"} ` â†’ 200, toast *"âœ“ â€¦ [JC: PO-JOB00002] & parent WO: MFG-WO-2026-00001 rescheduled"*, and all three capacity blocks shifted **together** (170/540/490 min preserved); calendar drag of `PO-JOB00001` â†’ 200 through the FullCalendar `eventDrop` path. Both restored. |
+| M8 | Barcode scanning incl. changed barcode/QR values | **done** | CODE128 / CODE39 / EAN13 â†’ three distinct PNGs; a changed value â†’ different PNG; invalid EAN13 (`123`) **rejected with a message**; QR rendered per item; `/files/*.png` served as `image/png` |
+| M9 | Barcode/QR item tracking | **done** | `scan_barcode` resolves `SHRDC-BRK-0001 â†’ PLN-BRACKET` and `SHRDC-KIT-0001 â†’ PLN-KIT`, unknown â†’ empty; HTTP endpoint 200; Delivery Note `MAT-DN-2026-00001` submitted with `barcode_validation` and `checking_qty == qty`; Stock Entry `MAT-STE-2026-00003` submitted with `scan_stock_entry_barcode`; guest `/item_qr?item_code=PLN-BRACKET` â†’ 200 |
 | M9b | Scanned-quantity rule enforced **server-side** | **done** | a Delivery Note with `barcode_validation`, `qty 2` but `checking_qty 1` is rejected on submit with `ValidationError: Barcode validation failed Ã¢â‚¬Â¦ row 1 (PLN-BRACKET): qty 2.0 vs checked 1.0` Ã¢â‚¬â€ a REST submit can no longer bypass it |
 | M10 | Live local demo + result list | **done** | this document + `verify-all.ps1` |
 | — | E-invoicing (extra) | **done** | EN 16931 invoice → 4 835-byte UN/CEFACT CII XML (`CrossIndustryInvoice`, `en16931`); XRECHNUNG invoice auto-attaches `ACC-SINV-2026-00001.xml` (4 835 B) |
@@ -183,7 +183,7 @@ test suppliers, repairs an out-of-sequence WO — idempotent).
 | Stock reconciliation does not push stock to Shopify | `update_product_inventory.on_submit` is not wired in `hooks.py` (the header bug is fixed) | add a `Stock Ledger Entry` doc_event if push-on-stock is wanted |
 | Malaysia (LHDN) e-invoicing | the substituted app is EU EN 16931 / XRechnung (CII), not MyInvois; the original MY source is 404 | supply the MY app source |
 | Timers tab shows an empty object | `/api/work-orders/timers` now answers 200 but no Work Order has a running timer until someone clicks **Start** in the planner | start a timer in the UI (state is the planner's own `timers.json`) |
-| Anything after `docker compose down` / engine restart | the DB lives on the `db_data` volume, which is durable across restarts and `docker compose down` (only `-v`/`-Wipe` deletes it) | rerun `powershell -File .\up.ps1` (~25Ã¢â‚¬â€œ35 min) |
+| Anything after `docker compose down` / engine restart | the DB lives on the `db_data` volume, which is durable across restarts and `docker compose down` (only `-v`/`-Wipe` deletes it) | rerun `powershell -File .\up.ps1` (~25â€“35 min) |
 
 ### Operational gotchas
 

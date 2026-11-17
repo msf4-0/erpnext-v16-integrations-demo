@@ -103,7 +103,7 @@ All three upstreams are reachable. Cloned to `/tmp/opencode/prov` and diffed aga
 | `eu_einvoice` | `alyf-de/eu_einvoice`, `develop` = `28d18b0` (2026-11-11) | 42 files differ | **Base unknown.** `pyproject.toml` declares `docs_branch = "version-16-hotfix"`, and `__version__ = "16.3.0"`; the diff against `develop` is probably branch skew, not our patches. Must be re-diffed against the matching ref before classifying |
 | `item_tracking` | none recorded (`recipe: ./repos/item_tracking`; `Customisations.md` says "local app") | n/a | First-party, 42 files |
 | `my_invois` | none recorded ("local app") | n/a | First-party, 11 files |
-| `metabase_integration` | `rover96/frappe-metabase` (prose only) | n/a | **6 files** — a re-scaffold after the original code was lost (`PERSISTENCE.md` §4). Not upstream, not complete |
+| `metabase_integration` | `rover96/frappe-metabase` (prose only) | n/a | **6 files** — a re-scaffold after the original code was lost (`docs/ARCHITECTURE.md` (persistence) §4). Not upstream, not complete |
 
 The legacy `custom_manufacturing` and `chat_widget` entries were removed from
 the active app inventory because their source trees are absent. The
@@ -266,7 +266,7 @@ app inventory from §3.2; the canonical project location; image pins from `versi
 Replace every obsolete restart-loss claim with the `db_data` reality, keeping the
 historical note only in `ARCHITECTURE.md` and `bake/README.md` instead of twelve repetitions.
 
-- [x] `AGENTS.md`, `README.md`, `MANIFEST.md`, `PERSISTENCE.md`, `docs/MILESTONES.md` (2 sites),
+- [x] `AGENTS.md`, `README.md`, `MANIFEST.md`, `docs/ARCHITECTURE.md` (persistence), `docs/MILESTONES.md` (2 sites),
       `docs/SETUP-GUIDE-for-existing-build.md`, `shopify-setup/README.md`, `lowdefy/PLAN.md`,
       `.opencode/skills/erpnext-test-sandbox/SKILL.md`, `.opencode/agents/erpnext-test-runner.md`
 - [x] Gate: the requested Markdown durability search returns only `docs/ARCHITECTURE.md` and
@@ -332,7 +332,7 @@ Keep working defaults so a future developer can boot instantly; make production 
       (`Ã¢â‚¬â€` → `—`, `Ã¢â€ â€™` → `→`, `Ãƒâ€”` → `×`, `Ã¢â€°Ë†` → `≈`).
 - [x] Gate: `grep -c 'Ã' AGENTS.md MANIFEST.md docs/MILESTONES.md` → 0.
 
-#### P0.9 Delete or create `APP-SOURCES.md`
+#### P0.9 Delete or create `docs/FACTS.md` (upstream sources)
 
 `sandbox/recipes/README.md` links to it; it does not exist.
 

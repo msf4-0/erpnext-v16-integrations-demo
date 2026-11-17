@@ -60,7 +60,7 @@ docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-co
 
 | Agent | Mode | Purpose |
 | --- | --- | --- |
-| `erpnext-planner` | primary | Question-first ERPNext consultant: runs the 10-phase interview (`question-bank.md`), then Spec + Impact Matrix, waits for "approved" before coding. |
+| `erpnext-planner` | primary | Question-first ERPNext consultant: runs the 10-phase interview (`.opencode/agents/references/question-bank.md`), then Spec + Impact Matrix, waits for "approved" before coding. |
 | `erpnext-test-runner` | subagent | Builds/rebuilds/tears down the comp_demo stack for testing a change. |
 | `module-developer` | primary | Authors new doctypes/features into an app repo under `repos/`, verified on comp_demo. |
 | `module-installer` | primary | Provisions the comp_demo sandbox and installs named custom apps. |

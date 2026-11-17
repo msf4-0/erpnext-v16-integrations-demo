@@ -252,3 +252,53 @@ Quarantined 3 more scripts whose only references were historical: `barcode_test.
 | Launchers pass on CRLF and LF | **partial** — root cause fixed (gitattributes + `\r` strip); the stubbed dry-run harness was never run because no Linux shell was confirmed on this host. |
 | `git status` clean | **met** |
 | P6 structural move | **declined**, as the prompt required |
+
+---
+
+## Round 5 — launcher harness, P5 merges, encoding repair
+
+### Still-open P4/P0 acceptance is now **Verified**
+
+WSL was available after all, so the stubbed dry-run harness finally ran (written to `F:\ERPsessions\dryrun_launchers.sh`,
+stubs only, no repo writes):
+
+```
+=== bash -n syntax check ===
+OK  up-linux.sh
+OK  install-apps-linux.sh
+=== up-linux.sh ===            exit=0
+ERPNext is ready at http://localhost:8000 (site: frontend).
+=== install-apps-linux.sh ===  exit=0
+Custom apps are installed on site 'frontend'.
+=== FRAPPE_SERIES resolved as: 16   (versions.env, LF)
+=== repo dirty after run? ===  (clean)
+```
+
+That exercises the CRLF `FRAPPE_SERIES` path that defect 7 was about. **Launchers pass on both
+endings** — closing the last "partial" in the DoD table.
+
+### P5 merges (root markdown 9 → 7)
+
+| Merged | Into | Links repointed |
+|---|---|---|
+| `APP-SOURCES.md` (463 B, 7 inbound) | `docs/FACTS.md` → new "Upstream sources" section | 8 files incl. relative `./`, `../`, `../../` forms |
+| `PERSISTENCE.md` (3.9 KB, 1 inbound) | `docs/ARCHITECTURE.md` → "Persistence, bind mounts and why app features vanish after a recreate" | 1 |
+| `question-bank.md` (8.2 KB, 3 inbound) | `.opencode/agents/references/` (next to the planner agent) | 4 |
+
+Dangling-path rescan after the moves: **0 unexplained missing paths**.
+
+### Encoding defect (pre-existing, not introduced here)
+
+8 tracked files contained double-encoded UTF-8 (mojibake), verified present in `HEAD` before this
+work. Repaired **line-by-line** where `cp1252 → utf-8` round-tripped cleanly, skipping anything that
+produced U+FFFD: **20 lines across 7 files** (5 agent files, `docs/MILESTONES.md`,
+`scheduler/ui-tests/README.md`). `.opencode/skills/erpnext-test-sandbox/SKILL.md` could not be
+repaired safely and still shows mojibake — a lossy rewrite was deliberately not attempted.
+
+### New finding — repo weight
+
+**847 of 1,609 tracked files are `scheduler/runtime-deps/node_modules`** (52%). This is deliberate:
+the planner image ships its node deps for an offline build, which is why `.gitignore` covers
+`scheduler/frontend/node_modules/` and `scheduler/ui-tests/node_modules/` but not `runtime-deps`.
+**Do not delete it** — it would break the offline planner build. Worth a sentence in the docs rather
+than action.

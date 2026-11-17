@@ -25,7 +25,7 @@ don't have to ask mid-way:
    app's **repo URL** (any git host) or a **local directory** under
    `./repos/`. There is no assumed default org Ã¢â‚¬â€ different users install
    their own apps. If the user names only an app (not a URL), **look it up in
-   `./APP-SOURCES.md`** (the known-app registry) and use the listed source. An
+   `./docs/FACTS.md#upstream-sources`** (the known-app registry) and use the listed source. An
    explicit user URL, or a `repo:`/`source:` in the app's recipe, always wins
    over the registry. If the app is **not** in the registry and the user gave
    no URL, **ask** Ã¢â‚¬â€ never guess a URL or silently fall back to an org
@@ -49,7 +49,7 @@ don't have to ask mid-way:
 
 4. **Automatic port selection (never assume 8000/8001).** A fixed host port
    is NOT a given Ã¢â‚¬â€ other processes may occupy it. Probe the host for a free
-   port starting at **8001** and incrementing (8001, 8002, Ã¢â‚¬Â¦) until one is
+   port starting at **8001** and incrementing (8001, 8002, â€¦) until one is
    free. Set the chosen port as `HOST_PORT` in `sandbox/.env` and run compose
    with `--env-file ./sandbox/.env` Ã¢â‚¬â€ the compose file maps it as
    `${HOST_PORT:-8001}:8000`, so you do NOT edit the compose file itself (the
@@ -76,7 +76,7 @@ don't have to ask mid-way:
    kept under `sandbox/scripts/archive/` and `archive/` for reference only Ã¢â‚¬â€
    do not cite or run them. Before running any `docker compose exec ... bash
    -lc` command, read `docs/WINDOWS-QUOTING.md` for the quoting rules (this is
-   a Windows PowerShell host Ã¢â€ â€™ Linux container workflow). Keep inline
+   a Windows PowerShell host â†’ Linux container workflow). Keep inline
    `bash -lc` to a **single simple command** Ã¢â‚¬â€ multi-command inline bash
    (`for ...; do ...; done`, `$(...)`, nested quotes) is rejected by the
    command parser, so put anything larger in a script file (or use the
@@ -118,8 +118,8 @@ to detect rather than re-hardcoding a new fixed value.
 ## Step 0: Provision the base ERPNext version
 
 1. Check what's running: `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml ps`.
-   - Same version already up Ã¢â€ â€™ skip to Step 1.
-   - Different version running Ã¢â€ â€™ tear down first:
+   - Same version already up â†’ skip to Step 1.
+   - Different version running â†’ tear down first:
      `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml down -v` (the `-v` matters, it
      drops the old DB volume so the new version starts clean).
 2. If no compose file exists yet at `./sandbox/docker-compose.yml`, create
@@ -235,7 +235,7 @@ which ERPNext version the app targets.
 
 `websearch` on the specific error message. Prefer fixes described for the
 same or an adjacent ERPNext version Ã¢â‚¬â€ this org has already hit
-version-specific breakage before (e.g. a `Custom Script` Ã¢â€ â€™ `Client Script`
+version-specific breakage before (e.g. a `Custom Script` â†’ `Client Script`
 rename between versions), so a fix for one version doesn't automatically
 transfer.
 
@@ -276,7 +276,7 @@ relevant topic file under `./install-log/` (the app's file, e.g.
 `install-log/barcode_shrdc.md`) and add a one-line entry to
 `./install-log/index.md`. Use the templates in `./install-log/templates.md`.
 
-If you installed an app whose source was **not already in `./APP-SOURCES.md`**,
+If you installed an app whose source was **not already in `./docs/FACTS.md#upstream-sources`**,
 add a row for it (app name -> online repo URL -> branch -> recipe) using the
 template in that file. That registry is how the next run resolves an app named
 without a URL, so an unrecorded source will be lost.

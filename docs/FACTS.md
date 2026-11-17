@@ -91,3 +91,14 @@ docker ps --format '{{.Names}} {{.Image}}'
 docker exec comp_demo-bench-1 bash -lc "cd /home/frappe/frappe-bench && bench --site frontend version"
 grep -E '^(ERPNEXT_PORT|SCHEDULER_PORT|NODE_RED_PORT|METABASE_PORT|WEBHOOK_SINK_PORT|NGROK_API_PORT)=' .env
 ```
+
+## Upstream sources
+
+Verified upstreams for the apps that have one. `item_tracking`, `metabase_integration`,
+`my_invois` and `scheduler/` are first-party (no upstream).
+
+| App | Verified upstream URL |
+|---|---|
+| `barcode_shrdc` | <https://github.com/msf4-0/ERPNext-Barcode-Integration> |
+| `shopify` | <https://github.com/msf4-0/shopify-ERPnext> |
+| `eu_einvoice` | <https://github.com/alyf-de/eu_einvoice> |

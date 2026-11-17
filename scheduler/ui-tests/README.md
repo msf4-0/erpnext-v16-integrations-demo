@@ -6,7 +6,7 @@ drag-and-drop actually persists Ã¢â‚¬â€ not that a button exists.
 | Script | What it proves |
 |---|---|
 | `ui-diagnostic.mjs` | what the page rendered: selector counts, console errors, a screenshot. Use this first when the UI looks empty. |
-| `ui-drag-matrix.mjs` | a **Job Card** card exists in the Workstation Matrix and dragging it to another day issues `PUT /api/schedule/sync-reschedule {type:"jobcard"}` Ã¢â€ â€™ 2xx |
+| `ui-drag-matrix.mjs` | a **Job Card** card exists in the Workstation Matrix and dragging it to another day issues `PUT /api/schedule/sync-reschedule {type:"jobcard"}` â†’ 2xx |
 | `ui-drag-calendar.mjs` | the same for the **Calendar** view (different handler: FullCalendar `eventDrop`) |
 
 They only read the UI; the drag itself mutates the schedule, so put the demo back

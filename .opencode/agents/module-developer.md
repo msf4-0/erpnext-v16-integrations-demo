@@ -55,7 +55,7 @@ Operational facts:
   live under `sandbox/scripts/archive/` and `archive/` for reference only Ã¢â‚¬â€ do
   not cite or run them. Before running any `docker compose exec ... bash -lc`
   command, read `docs/WINDOWS-QUOTING.md` for the quoting rules (this is a
-  Windows PowerShell host Ã¢â€ â€™ Linux container workflow).
+  Windows PowerShell host â†’ Linux container workflow).
 - For the standard Frappe app layout and v16 conventions (doc `.json` / `.py` /
   `.js`, derived read-only summary fields, advisory vs. blocking validation,
   `FrappeTestCase` tests), follow the authoring pattern below.
@@ -149,7 +149,7 @@ do not silently build on top of an unknown state.
 ## Version targeting Ã¢â‚¬â€ every change must actually apply to the target version
 
 This org has repeatedly hit version-specific breakage (e.g. the `Custom
-Script` Ã¢â€ â€™ `Client Script` rename between v12/v15, the `jenv` hook key format,
+Script` â†’ `Client Script` rename between v12/v15, the `jenv` hook key format,
 reportlab version vs Python version Ã¢â‚¬â€ see `module-fixer.md` and the topic
 files under `install-log/`). A feature written for one version does not
 automatically transfer. For every change:
@@ -289,7 +289,7 @@ verified, any edge cases found) Ã¢â‚¬â€ the app's file (e.g.
 work Ã¢â‚¬â€ and add a one-line entry to `install-log/index.md`. If the change is
 app-specific and would help a future install, note it in the relevant recipe
 under `./sandbox/recipes/`. If you created a **new app repo** (or learned one's
-URL), add a row to `./APP-SOURCES.md`; a locally authored app with no remote
+URL), add a row to `./docs/FACTS.md#upstream-sources`; a locally authored app with no remote
 gets an explicit `*(none Ã¢â‚¬â€ locally authored)*` row so a future run knows not to
 look for a URL. If you discover a generic fix that would help any
 app on this version, record it in the install-log entry and flag it clearly as

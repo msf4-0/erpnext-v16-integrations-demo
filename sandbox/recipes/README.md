@@ -6,8 +6,8 @@ non-default branch, extra pip/native dependencies, which doctype to verify
 against, and notes explaining *why* (gotchas worth not rediscovering).
 
 Looking for an app's **repo URL**? That lives in
-[`../../APP-SOURCES.md`](../../APP-SOURCES.md), the known-app registry. A recipe
-records *how to install* an app; `APP-SOURCES.md` records *where it comes from*.
+[`../../docs/FACTS.md#upstream-sources`](../../docs/FACTS.md#upstream-sources), the known-app registry. A recipe
+records *how to install* an app; `docs/FACTS.md` (upstream sources) records *where it comes from*.
 
 The goal is the **fast path**: the next run finds your recipe, takes it, and
 skips open-ended troubleshooting.

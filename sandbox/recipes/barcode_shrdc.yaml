@@ -6,7 +6,7 @@
 # auto-conversion, and missing-DocType custom_field pruning) are NOT declared
 # here on purpose.
 #
-# Source URL is the live registry entry; see ../APP-SOURCES.md.
+# Source URL is the live registry entry; see ../docs/FACTS.md#upstream-sources.
 # This is the operator's own recipe (overrides examples/barcode_shrdc.yaml).
 
 app: barcode_shrdc
