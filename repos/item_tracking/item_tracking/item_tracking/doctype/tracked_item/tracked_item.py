@@ -25,6 +25,33 @@ class TrackedItem(Document):
             self.serial_no = _next_serial_no()
         self.barcode = cstr(self.tracking_id)
         self.qr_code = _tracked_item_qr_url(self.tracking_id)
+        self._sync_item_media()
+
+
+    def _sync_item_media(self):
+        """Copy the Item's barcode and a rendered Item QR onto this unit.
+
+        The desk shows both next to the unit QR ('Item QR' / 'Item Barcode'),
+        so a scan of either the unit label or the item label resolves the same
+        thing. Values are cached per Item: the QR file is rendered once and all
+        units of that Item share it.
+        """
+        if not self.item_code:
+            return
+        # ERPNext keeps item barcodes in the `Item Barcode` child table, not as
+        # an Item column. Fall back to the item code so the label is never blank.
+        barcode = frappe.db.get_value(
+            "Item Barcode", {"parent": self.item_code, "parenttype": "Item"}, "barcode"
+        )
+        self.item_barcode = cstr(barcode or self.item_code)
+        if self.item_qr_image and self.get_doc_before_save() and \
+                self.get_doc_before_save().item_code == self.item_code:
+            return
+        try:
+            from item_tracking.item_tracking.doctype.tracked_item.raster import render_qr
+            self.item_qr_image = render_qr(cstr(self.item_code))
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), "Tracked Item: item QR render failed")
 
 
 def _next_tracking_id(item_code):

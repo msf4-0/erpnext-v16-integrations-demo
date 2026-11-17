@@ -1,0 +1,81 @@
+name: make-package-public
+
+# Flip the GHCR package visibility to Public, then prove an anonymous pull works.
+#
+# Why a separate workflow: changing an *organization-owned* package's visibility
+# needs a token that belongs to an org owner and carries `write:packages`. The
+# Actions GITHUB_TOKEN cannot do it (it can push, not administer packages).
+#
+# One-time setup (org owner):
+#   1. Create a classic PAT with `write:packages` (and `read:packages`).
+#   2. Repo -> Settings -> Secrets and variables -> Actions -> New secret
+#      GHCR_ADMIN_PAT = <the PAT>
+#   3. Run this workflow (Actions -> make-package-public -> Run workflow).
+#
+# Without the secret, the UI path is:
+#   0. Org owner: https://github.com/organizations/msf4-0/settings/packages
+#      -> enable public package visibility (the package dialog greys out Public
+#      with "Setting is disabled by organization administrators" otherwise)
+#   1. https://github.com/msf4-0?tab=packages -> comp-demo-bench
+#   2. -> Package settings -> Change visibility -> Public
+
+on:
+  workflow_dispatch:
+    inputs:
+      visibility:
+        description: "Target visibility"
+        required: true
+        default: public
+        type: choice
+        options: [public, private]
+
+permissions:
+  contents: read
+
+jobs:
+  set-visibility:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require GHCR_ADMIN_PAT
+        env:
+          PAT: ${{ secrets.GHCR_ADMIN_PAT }}
+        run: |
+          if [ -z "${PAT:-}" ]; then
+            echo "::error::GHCR_ADMIN_PAT is not set. Either add an org-owner classic PAT with write:packages, or have an org owner enable public packages at https://github.com/organizations/msf4-0/settings/packages and flip visibility in the UI."
+            exit 1
+          fi
+
+      - name: PATCH package visibility
+        env:
+          PAT: ${{ secrets.GHCR_ADMIN_PAT }}
+          VISIBILITY: ${{ inputs.visibility }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/resp.json -w '%{http_code}' -X PATCH \
+            -H "Authorization: Bearer $PAT" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -d "{\"visibility\":\"$VISIBILITY\"}" \
+            https://api.github.com/orgs/msf4-0/packages/container/comp-demo-bench)
+          echo "HTTP $code"; cat /tmp/resp.json || true
+          case "$code" in
+            200|204) echo "::notice::comp-demo-bench is now $VISIBILITY" ;;
+            403|404) echo "::error::the PAT cannot administer this package (needs org owner + write:packages)"; exit 1 ;;
+            *) echo "::error::unexpected status $code"; exit 1 ;;
+          esac
+
+      - name: Verify anonymous pull
+        if: inputs.visibility == 'public'
+        run: |
+          docker logout ghcr.io || true
+          if docker manifest inspect ghcr.io/msf4-0/comp-demo-bench:v16 > /tmp/manifest.json 2>/tmp/err.txt; then
+            echo "::notice::anonymous pull works - the fast path is live"
+          else
+            echo "::error::anonymous pull still fails:"; cat /tmp/err.txt; exit 1
+          fi
+
+      - name: Verify a colleague can pull layers
+        if: inputs.visibility == 'public'
+        run: |
+          docker logout ghcr.io || true
+          docker pull --platform linux/amd64 ghcr.io/msf4-0/comp-demo-bench:v16

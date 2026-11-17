@@ -67,7 +67,9 @@ param(
     [switch]$Wipe,
     [switch]$SkipShopify,
     [switch]$ForceFlow,
-    [switch]$Planner
+    [switch]$Planner,
+    [switch]$NonInteractive,
+    [switch]$SkipTunnel
 )
 
 $ErrorActionPreference = 'Stop'
@@ -82,11 +84,11 @@ $EnvPath    = Join-Path $DemoDir '.env'
 $VersionsPath = Join-Path $DemoDir 'versions.env'
 $EnvValidator = Join-Path $DemoDir 'sandbox/scripts/validate-env.py'
 $ComposeFile = Join-Path $DemoDir 'docker-compose.yml'
-$FlowPath   = Join-Path $SandboxDir 'node-red/flows.json'
-$FlowSrc    = Join-Path $SandboxDir 'node-red/source-flow.json'
-$Builder    = Join-Path $SandboxDir 'node-red/build-flows.py'
-$FlowCheck  = Join-Path $SandboxDir 'scripts/check-flow.py'
-$WhScript   = Join-Path $SandboxDir 'scripts/ai-fix-wire-webhooks.sh'
+$FlowPath   = Join-Path $SandboxDir 'node-red\flows.json'
+$FlowSrc    = Join-Path $SandboxDir 'node-red\source-flow.json'
+$Builder    = Join-Path $SandboxDir 'node-red\build-flows.py'
+$FlowCheck  = Join-Path $SandboxDir 'scripts\check-flow.py'
+$WhScript   = Join-Path $SandboxDir 'scripts\fix-wire-webhooks.sh'
 $Project    = 'comp_demo'
 $BenchName  = "$Project-bench-1"
 $NodeRedName = "$Project-node-red-1"
@@ -94,6 +96,7 @@ $MandatoryServices = @('db', 'redis-cache', 'redis-queue', 'bench', 'node-red')
 
 $script:Issues = New-Object System.Collections.Generic.List[string]
 $script:Fixed = New-Object System.Collections.Generic.List[string]
+$script:Optional = New-Object System.Collections.Generic.List[string]
 
 # ---------------------------------------------------------------------------
 # output helpers
@@ -114,6 +117,11 @@ function Write-Warn([string]$m) { Write-Host "  WARN  $m" -ForegroundColor Yello
 function Write-Fail([string]$m) {
     Write-Host "  FAIL  $m" -ForegroundColor Red
     $script:Issues.Add($m)
+}
+# An optional-integration problem: reported, but it must not fail the run.
+function Write-Skip([string]$m) {
+    Write-Host "  SKIP  $m" -ForegroundColor DarkGray
+    $script:Optional.Add($m)
 }
 
 # ---------------------------------------------------------------------------
@@ -200,6 +208,11 @@ function Test-PlaceholderValue([string]$Value) {
 }
 
 function Prompt-ShopifyCredentials([hashtable]$cfg, [string]$EnvPath) {
+    if ($NonInteractive) {
+        Write-Skip 'Shopify not configured (-NonInteractive) - fill SHOPIFY_* in .env later and rerun setup.ps1'
+        return
+    }
+
     # A fresh clone has no .env (git-ignored) and placeholder Shopify values in
     # .env.example. Collect what is missing so a new user never needs the
     # original author's secrets. Every answer is optional (Enter keeps the
@@ -326,8 +339,8 @@ Write-Ok "docker engine $($dockerVer.Output.Trim())"
 
 $py = (Get-Command python -ErrorAction SilentlyContinue)
 if (-not $py) { $py = (Get-Command python3 -ErrorAction SilentlyContinue) }
-if (-not $py) { throw 'python is required to build the Node-RED flow' }
-Write-Ok "python $((& $py.Source --version 2>&1) -replace 'Python ','')"
+if (-not $py) { Write-Skip 'python not found - the Node-RED flow will not be rebuilt (the mounted flow keeps running)' }
+if ($py) { Write-Ok "python $((& $py.Source --version 2>&1) -replace 'Python ','')" }
 
 $cfg = Read-EnvFile $EnvPath
 if (-not (Test-Path $VersionsPath)) { throw "version pin file not found: $VersionsPath" }
@@ -359,14 +372,14 @@ foreach ($k in $wantedPaths.Keys) {
 }
 
 # same for the planner-integration env file
-$PlannerEnv = Join-Path $SandboxDir '.env.ai-fix'
+$PlannerEnv = Join-Path $SandboxDir '.env.fix'
 if (Test-Path $PlannerEnv) {
     $pe = Read-EnvFile $PlannerEnv
     if ($pe['COMPOSE_PROJECT_NAME'] -and $pe['COMPOSE_PROJECT_NAME'] -ne $Project) {
-        if (-not $VerifyOnly) { Set-EnvValue $PlannerEnv 'COMPOSE_PROJECT_NAME' $Project | Out-Null; Write-Change ".env.ai-fix COMPOSE_PROJECT_NAME -> $Project" }
+        if (-not $VerifyOnly) { Set-EnvValue $PlannerEnv 'COMPOSE_PROJECT_NAME' $Project | Out-Null; Write-Change ".env.fix COMPOSE_PROJECT_NAME -> $Project" }
     }
     if ($pe['NODE_RED_SOURCE_FLOW'] -and -not (Test-Path $pe['NODE_RED_SOURCE_FLOW'])) {
-        if (-not $VerifyOnly) { Set-EnvValue $PlannerEnv 'NODE_RED_SOURCE_FLOW' $FlowSrc | Out-Null; Write-Change '.env.ai-fix NODE_RED_SOURCE_FLOW -> this build' }
+        if (-not $VerifyOnly) { Set-EnvValue $PlannerEnv 'NODE_RED_SOURCE_FLOW' $FlowSrc | Out-Null; Write-Change '.env.fix NODE_RED_SOURCE_FLOW -> this build' }
     }
 }
 
@@ -386,7 +399,10 @@ $siteName     = if ($cfg['SITE_NAME'])         { $cfg['SITE_NAME'] }         els
 $shopifyStore = $cfg['SHOPIFY_STORE']
 $shopifyVer   = if ($cfg['SHOPIFY_API_VERSION']) { $cfg['SHOPIFY_API_VERSION'] } else { '2026-04' }
 
+$shopifyConfigured = $shopifyStore -and ($shopifyStore -notmatch '^_*FILL_ME_*$') -and
+                    $cfg['SHOPIFY_CLIENT_ID'] -and $cfg['SHOPIFY_CLIENT_ID'] -notmatch '_*FILL_ME_*$'
 if (-not $shopifyStore) { Write-Fail 'SHOPIFY_STORE missing from .env' }
+elseif (-not $shopifyConfigured) { Write-Skip 'Shopify not configured - the Shopify bridge stays off (core demo unaffected)' }
 if (-not $cfg['SHOPIFY_CLIENT_ID'] -or -not $cfg['SHOPIFY_CLIENT_SECRET']) {
     Write-Warn 'SHOPIFY_CLIENT_ID / SHOPIFY_CLIENT_SECRET missing - the Shopify token cannot be minted'
 }
@@ -397,16 +413,19 @@ if (-not $cfg['SHOPIFY_CLIENT_ID'] -or -not $cfg['SHOPIFY_CLIENT_SECRET']) {
 if ($Full) {
     Write-Step '3/10  full rebuild (delegating to up.ps1)'
     if ($VerifyOnly) { throw '-Full and -VerifyOnly are mutually exclusive' }
-    if ($env:OS -eq 'Windows_NT') {
-        $shellExe = 'powershell.exe'
-        $upArgs = @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $DemoDir 'up.ps1'))
-    } else {
-        $shellExe = 'pwsh'
-        $upArgs = @('-NoProfile', '-File', (Join-Path $DemoDir 'up.ps1'))
+    # A full rebuild may recreate the site (and -Wipe drops the volumes). Take a
+    # host-side backup first, every time, so 'compose down then setup' can never
+    # silently cost another afternoon of BOMs and items.
+    $backupScript = Join-Path $DemoDir 'backup.ps1'
+    if (Test-Path $backupScript) {
+        Write-Info 'backing up the site before the rebuild'
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $backupScript
+        if ($LASTEXITCODE -ne 0) { Write-Warn 'backup failed - continuing, but a wipe will lose data' }
     }
+    $upArgs = @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $DemoDir 'up.ps1'))
     if ($Wipe) { $upArgs += '-Fresh' }
-    Write-Info 'this takes 25-35 minutes and streams up.ps1 output'
-    $rc = Invoke-Native -Exe $shellExe -Arguments $upArgs
+    Write-Info 'this pulls the prebuilt image (~8 min) or builds it (25-40 min) and streams up.ps1 output'
+    $rc = Invoke-Native -Exe 'powershell.exe' -Arguments $upArgs
     if ($rc -ne 0) { Write-Fail "up.ps1 exited $rc" } else { Write-Ok 'up.ps1 completed' }
 }
 
@@ -484,7 +503,7 @@ if ($siteCheck.Code -ne 0 -or -not $siteCheck.Output.Trim()) {
 } else {
     Write-Ok "site '$siteName' present"
     $apps = (Invoke-Bench 'cat /home/frappe/frappe-bench/sites/apps.txt' -Capture).Output
-    foreach ($app in @('frappe', 'erpnext', 'barcode_shrdc', 'shopify', 'eu_einvoice', 'item_tracking')) {
+    foreach ($app in @('frappe', 'erpnext', 'barcode_shrdc', 'shopify', 'eu_einvoice', 'item_tracking', 'metabase_integration', 'my_invois')) {
         if ($apps -match "(?m)^\s*$([regex]::Escape($app))\s*$") { Write-Ok "app $app" } else { Write-Warn "app $app not installed" }
     }
     # frappe's logger needs this; a recreated container loses it
@@ -682,11 +701,19 @@ if ($siteCheck.Code -ne 0 -or -not $siteCheck.Output.Trim()) {
 Write-Step '5b/10  background jobs (scheduler + worker)'
 
 if ($siteCheck.Code -eq 0 -and $siteCheck.Output.Trim()) {
-    $procList = (Invoke-Bench 'ps -eo args' -Capture).Output
+    # The bench image ships no procps, so `ps -eo args` printed
+    # "ps: command not found" and returned an empty list. Every run therefore
+    # believed neither process existed and started another scheduler + worker -
+    # the duplicates accumulated. Read /proc through a bundled script instead.
+    $procScript = Join-Path $SandboxDir 'scripts/bench-procs.sh'
+    Invoke-BenchRoot 'mkdir -p /tmp/scripts' | Out-Null
+    Invoke-Docker -Arguments @('cp', $procScript, "${BenchName}:/tmp/scripts/bench-procs.sh") -Capture | Out-Null
+    Invoke-BenchRoot 'chmod 0755 /tmp/scripts/bench-procs.sh' | Out-Null
+    $procList = (Invoke-Bench 'bash /tmp/scripts/bench-procs.sh' -Capture).Output
 
     foreach ($job in @(
-            @{ Match = 'frappe schedule'; Label = 'bench schedule'; Cmd = 'cd /home/frappe/frappe-bench && setsid nohup bench schedule > /tmp/bench-schedule.log 2>&1 &'; Why = 'no background/cron hook will ever fire' },
-            @{ Match = 'frappe worker'; Label = 'bench worker'; Cmd = 'cd /home/frappe/frappe-bench && setsid nohup bench worker --queue short,default,long >> logs/worker.log 2>&1 &'; Why = 'queued jobs will never execute' }
+            @{ Match = 'schedule'; Label = 'bench schedule'; Cmd = 'cd /home/frappe/frappe-bench && setsid nohup bench schedule > /tmp/bench-schedule.log 2>&1 &'; Why = 'no background/cron hook will ever fire' },
+            @{ Match = 'worker'; Label = 'bench worker'; Cmd = 'cd /home/frappe/frappe-bench && setsid nohup bench worker --queue short,default,long >> logs/worker.log 2>&1 &'; Why = 'queued jobs will never execute' }
         )) {
         if ($procList -match [regex]::Escape($job.Match)) {
             Write-Ok "$($job.Label) running"
@@ -762,9 +789,9 @@ def run(user="Administrator"):
 '@
     $tmp = Join-Path $env:TEMP '_setup_mint.py'
     [System.IO.File]::WriteAllText($tmp, $mintModule, (New-Object System.Text.UTF8Encoding($false)))
-    $dest = '/home/frappe/frappe-bench/apps/barcode_shrdc/barcode_shrdc/_aifix_setup_mint.py'
+    $dest = '/home/frappe/frappe-bench/apps/barcode_shrdc/barcode_shrdc/_fix_setup_mint.py'
     Invoke-Docker -Arguments @('cp', $tmp, "${BenchName}:$dest") -Capture | Out-Null
-    $mintOut = (Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName execute barcode_shrdc._aifix_setup_mint.run" -Capture).Output
+    $mintOut = (Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName execute barcode_shrdc._fix_setup_mint.run" -Capture).Output
     Invoke-Bench "rm -f $dest" -Capture | Out-Null
 
     $m = [regex]::Match($mintOut, 'MARK_TOKEN\s+([0-9A-Za-z]+:[0-9A-Za-z]+)')
@@ -792,7 +819,8 @@ if ($shopifyToken) { $shopifyValid = Test-ShopifyToken $shopifyToken $shopifySto
 if ($SkipShopify -and $shopifyToken) {
     Write-Ok 'kept the existing SHOPIFY_ACCESS_TOKEN (-SkipShopify)'
 } elseif ($VerifyOnly) {
-    if (-not $shopifyToken) { Write-Fail 'SHOPIFY_ACCESS_TOKEN missing' }
+    if (-not $shopifyConfigured) { Write-Skip 'Shopify not configured - nothing to verify' }
+    elseif (-not $shopifyToken) { Write-Fail 'SHOPIFY_ACCESS_TOKEN missing' }
     elseif ($shopifyValid) { Write-Ok 'token valid against the Shopify Admin API' }
     else { Write-Fail 'SHOPIFY_ACCESS_TOKEN is expired or rejected (401)' }
 } elseif ($shopifyValid) {
@@ -849,7 +877,9 @@ if ($VerifyOnly) {
     } catch { Write-Fail 'Node-RED /flows not readable' }
 } else {
     # build first, so a rebuild never leaves the container with an empty flow
-    if ($rebuildFlow) {
+    if ($rebuildFlow -and -not $py) {
+        Write-Skip 'flow rebuild skipped - python is not installed; the mounted flow keeps running'
+    } elseif ($rebuildFlow) {
         if (-not $shopifyToken) { Write-Warn 'no Shopify token - the flow will bake an empty value' }
         & $py.Source $Builder --src $FlowSrc --out $FlowPath `
             --erpnext-url 'http://bench:8000' --erpnext-token $erpToken `
@@ -913,7 +943,9 @@ function Get-PublicUrl {
 }
 
 $publicUrl = Get-PublicUrl
-if (-not $publicUrl -and -not $VerifyOnly) {
+if ($SkipTunnel) {
+    Write-Skip 'ngrok skipped (-SkipTunnel) - the three outbound webhooks stay unwired'
+} elseif (-not $publicUrl -and -not $VerifyOnly) {
     $ngrokExe = (Get-Command ngrok -ErrorAction SilentlyContinue).Source
     if (-not $ngrokExe -and $env:OS -eq 'Windows_NT') {
         $ngrokExe = Get-ChildItem 'C:\Program Files\WindowsApps\ngrok.ngrok_*' -Filter 'ngrok.exe' -ErrorAction SilentlyContinue |
@@ -939,12 +971,14 @@ if (-not $publicUrl -and -not $VerifyOnly) {
         do { Start-Sleep -Seconds 4; $publicUrl = Get-PublicUrl } while ((Get-Date) -lt $deadline -and -not $publicUrl)
         if ($publicUrl) { Write-Change "tunnel started: $publicUrl" }
     } else {
-        Write-Fail 'no ngrok binary found'
+        Write-Skip 'no ngrok binary found - webhooks stay off (core demo unaffected)'
     }
 }
 
 if (-not $publicUrl) {
-    Write-Fail 'no ngrok tunnel - webhooks cannot be pointed anywhere'
+    Write-Skip 'no ngrok tunnel - the three ERPNext webhooks stay off (core demo unaffected)'
+} elseif ($SkipTunnel) {
+    Write-Skip 'webhook wiring skipped (-SkipTunnel)'
 } else {
     Write-Ok "tunnel $publicUrl -> localhost:$nodeRedPort"
 
@@ -985,7 +1019,7 @@ if (-not $publicUrl) {
             }
         }
     } elseif ($needWire) {
-        $tmpScript = '/tmp/scripts/ai-fix-wire-webhooks.sh'
+        $tmpScript = '/tmp/scripts/fix-wire-webhooks.sh'
         Invoke-BenchRoot 'mkdir -p /tmp/scripts' | Out-Null
         Invoke-Docker -Arguments @('cp', $WhScript, "${BenchName}:$tmpScript") -Capture | Out-Null
         Invoke-BenchRoot "chown frappe:frappe $tmpScript" | Out-Null
@@ -1047,8 +1081,10 @@ if ($erpToken) {
 # ---------------------------------------------------------------------------
 Write-Host ''
 Write-Host ('=' * 74) -ForegroundColor $(if ($script:Issues.Count -eq 0) { 'Green' } else { 'Red' })
-if ($script:Issues.Count -eq 0) {
+if ($script:Issues.Count -eq 0 -and $script:Optional.Count -eq 0) {
     Write-Host '  SETUP COMPLETE - all checks pass' -ForegroundColor Green
+} elseif ($script:Issues.Count -eq 0) {
+    Write-Host '  SETUP COMPLETE (core demo) - optional integrations skipped' -ForegroundColor Green
 } else {
     Write-Host "  SETUP INCOMPLETE - $($script:Issues.Count) problem(s)" -ForegroundColor Red
 }
@@ -1068,6 +1104,11 @@ if ($script:Issues.Count -gt 0) {
     Write-Host '  outstanding:'
     $script:Issues | ForEach-Object { Write-Host "    - $_" -ForegroundColor Red }
 }
+if ($script:Optional.Count -gt 0) {
+    Write-Host ''
+    Write-Host '  skipped (optional - the core demo still works):'
+    $script:Optional | ForEach-Object { Write-Host "    - $_" -ForegroundColor DarkGray }
+}
 Write-Host ''
 
 # ---------------------------------------------------------------------------
@@ -1077,7 +1118,7 @@ $launchPlanner = $false
 if (-not $VerifyOnly -and $script:Issues.Count -eq 0) {
     if ($Planner) {
         $launchPlanner = $true
-    } else {
+    } elseif (-not $NonInteractive) {
         $answer = Read-Host 'Launch the erpnext-planner agent to design custom doctypes? [y/N]'
         if ($answer -match '^(y|yes)$') { $launchPlanner = $true }
     }

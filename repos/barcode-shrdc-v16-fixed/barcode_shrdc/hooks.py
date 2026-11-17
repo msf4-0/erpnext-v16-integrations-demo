@@ -19,6 +19,7 @@ app_license = "MIT"
 app_include_js = [
 	"/assets/barcode_shrdc/js/scanner_barcode_patch.js",
 	"/assets/barcode_shrdc/js/barcode_create_links.js",
+	"/assets/barcode_shrdc/js/sales_order_raw_materials.js",
 ]
 
 # include js, css files in header of web template
@@ -159,4 +160,4 @@ jinja = {
 # override_whitelisted_methods ={
 #     "":""
 # }
-# write in events 
+# write in events

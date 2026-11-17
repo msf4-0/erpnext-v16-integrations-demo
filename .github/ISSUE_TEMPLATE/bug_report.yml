@@ -1,0 +1,58 @@
+name: Bug report
+description: Something in the demo does not work
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. For a distribution failure, the first question is
+        always "did the image pull or did it build?"
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: The step that failed, and what you expected instead.
+      placeholder: "start.ps1 reached 'seeding the demo database' and then..."
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Last 30 lines of output
+      render: shell
+    validations:
+      required: true
+  - type: input
+    id: image
+    attributes:
+      label: Bench image
+      description: "`docker image inspect --format '{{index .RepoDigests 0}}' comp_demo-bench:v16`"
+      placeholder: "ghcr.io/msf4-0/comp-demo-bench@sha256:..."
+    validations:
+      required: false
+  - type: dropdown
+    id: pull
+    attributes:
+      label: Did the GHCR pull work?
+      description: "`docker logout ghcr.io; docker manifest inspect ghcr.io/msf4-0/comp-demo-bench:v16`"
+      options:
+        - "Yes - pulled in a few minutes"
+        - "No - unauthorized/denied, so it built locally"
+        - "Not sure"
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Host OS / architecture / Docker version
+      placeholder: "Windows 11, amd64, Docker 29.8.0"
+    validations:
+      required: true
+  - type: textarea
+    id: verify
+    attributes:
+      label: "`setup.ps1 -VerifyOnly` output"
+      render: shell
+    validations:
+      required: false

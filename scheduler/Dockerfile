@@ -4,7 +4,7 @@
 #
 # Two things are prepared ON THE HOST before this image is built, because this
 # host's container write path costs 600-900 ms per small file (measured in
-# sandbox/docker-compose.erpnext-ai-fix.yml) and both toolchains write tens of
+# sandbox/docker-compose.erpnext-fix.yml) and both toolchains write tens of
 # thousands of them. In-image `npm ci` ran >15 minutes without finishing:
 #
 #     npm run build:frontend        # -> frontend/build/

@@ -1,0 +1,29 @@
+{% extends "templates/web.html" %}
+{% block title %}Manufacturing Analytics{% endblock %}
+{% block page_content %}
+<div class="mb-page">
+  <div class="mb-head">
+    <div>
+      <h1>Manufacturing Analytics</h1>
+      <p class="text-muted">Live operational dashboard from Metabase, embedded inside ERPNext.</p>
+    </div>
+    <a class="btn btn-default btn-sm" href="{{ dashboard_url }}" target="_blank" rel="noopener">Open in Metabase</a>
+  </div>
+  {% if dashboard_url %}
+  <div class="mb-frame-wrap">
+    <iframe class="mb-frame" src="{{ dashboard_url }}" title="ERPNext Monitoring dashboard" loading="lazy" allowfullscreen></iframe>
+  </div>
+  <p class="mb-note">Data source: the ERPNext MariaDB database. The dashboard refreshes when the page is reloaded.</p>
+  {% else %}
+  <div class="alert alert-warning">Metabase is not configured yet. Run <code>sandbox/scripts/ensure_metabase.ps1</code>, then reload this page.</div>
+  {% endif %}
+</div>
+<style>
+  .mb-page { max-width: 1500px; margin: 0 auto; padding: 24px 16px 40px; }
+  .mb-head { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+  .mb-head h1 { margin: 0 0 4px; }
+  .mb-frame-wrap { position: relative; width: 100%; height: calc(100vh - 220px); min-height: 620px; margin-top: 18px; border: 1px solid #d9dee5; border-radius: 8px; overflow: hidden; background: #fff; }
+  .mb-frame { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .mb-note { margin-top: 10px; color: #6c7683; font-size: 12px; }
+</style>
+{% endblock %}

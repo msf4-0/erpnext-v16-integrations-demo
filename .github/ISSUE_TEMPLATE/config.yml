@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Distribution / "works on my machine" problem
+    url: https://github.com/msf4-0/erpnext-v16-integrations-demo/blob/main/docs/DISTRIBUTION.md
+    about: Read the acceptance criteria and the private-package fix first.
+  - name: Setup questions
+    url: https://github.com/msf4-0/erpnext-v16-integrations-demo/blob/main/README.md
+    about: README sections 3, 3b and 7 cover the first run and the known gotchas.

@@ -3,7 +3,7 @@
 # One project, one command: ERPNext + barcode/QR (barcode_shrdc) +
 # Shopify <-> ERPNext bridge (Node-RED + ngrok) + the drag-and-drop production
 # planner (scheduler). Nothing is shared with the old `erpnext-sandbox`,
-# `frappe_docker-1` or `erpnext-ai-fix` projects: own name, own volumes, own
+# `frappe_docker-1` or `erpnext-fix` projects: own name, own volumes, own
 # ports.
 #
 #   bench      : ERPNext bench, baked from bake/bench.Dockerfile
@@ -16,7 +16,7 @@
 # and pulling ngrok/ngrok:latest stalls on this machine, so up.ps1 starts the
 # host binary instead and reads the public URL back from its local API.
 #
-# Start with:  powershell -File F:\ERPNEXT\erpnext-build\up.ps1
+# Start with:  powershell -File .\up.ps1   (from this repository root)
 
 name: comp_demo
 
@@ -25,7 +25,12 @@ services:
     # Baked image: frappe + erpnext + barcode_shrdc + shopify + eu_einvoice
     # + render deps are baked INTO the image at build time (bake/bench.Dockerfile),
     # so a fresh clone can reproduce the exact image without re-provisioning.
-    image: comp_demo-bench:v16
+    # `start.ps1` pulls ghcr.io/msf4-0/comp-demo-bench:v16 on a first run and
+    # tags it as comp_demo-bench:v16, so this service starts without a build.
+    # The build: block below is the offline fallback (25-40 min). The image is
+    # private until a maintainer flips the package to Public - see
+    # docs/DISTRIBUTION.md.
+    image: ${BENCH_IMAGE:-comp_demo-bench:v16}
     build:
       context: .
       dockerfile: bake/bench.Dockerfile
@@ -59,6 +64,14 @@ services:
           echo "ERROR: production startup refused; replace:$${DEFAULT_SECRET_KEYS}" >&2
           exit 1
         fi
+        # --- node on PATH -----------------------------------------------------
+        # The frappe image ships node only under ~/.nvm/...; nothing adds it to
+        # PATH. Without this, every `bench build` (and therefore every asset
+        # rebuild) dies with "bin/sh: 1: node: not found". up.ps1 shims PATH for
+        # its own calls, but anything run by hand - or by a colleague following
+        # the troubleshooting guide - hits the failure.
+        NODE_BIN="$$(ls -d /home/frappe/.nvm/versions/node/*/bin 2>/dev/null | tail -1)"
+        [ -n "$$NODE_BIN" ] && export PATH="$$NODE_BIN:$$PATH"
         # --- self-heal the site DB grant on EVERY container start -------------
         # `bench new-site` creates the site's db_user bound to the bench
         # container's IP at that moment (e.g. _3b8...@172.20.0.5). Any
@@ -109,6 +122,22 @@ services:
           [ -d "$$appdir/$$app/public" ] || continue
           ln -sfn "../apps/$$app/$$app/public" "assets/$$app"
         done
+        # --- report any ACTIVE app_include_js that does not resolve ----------
+        # Frappe loads these on every desk page. A 404 makes the desk reload
+        # itself in a loop ("the front-end site keeps restarting"), which looks
+        # like a browser bug and is nearly impossible to guess from the console.
+        # Log it loudly, but never fail: a missing optional asset must not take
+        # the whole site down. Commented-out hooks lines are ignored.
+        for appdir in apps/*/; do
+          app="$$(basename "$$appdir")"
+          hooks="$$appdir/$$app/hooks.py"
+          [ -f "$$hooks" ] || continue
+          grep -v '^[[:space:]]*#' "$$hooks" \
+            | grep -oE '"/assets/[^"]+\.(js|css)"' | tr -d '"' \
+            | while read -r u; do
+                [ -e "sites$$u" ] || echo "asset-check: MISSING $$u  (referenced by $$app/hooks.py - the desk will reload-loop)"
+              done
+        done
         setsid nohup bench schedule > /tmp/bench-schedule.log 2>&1 &
         setsid nohup bench worker --queue short,default,long >> logs/worker.log 2>&1 &
         exec bench serve --port 8000
@@ -127,10 +156,23 @@ services:
       # version the Get Items Barcode button expects. Mount the repo so the
       # serial-number flow exists and survives restarts.
       - ./repos/barcode-shrdc-v16-fixed:/home/frappe/frappe-bench/apps/barcode_shrdc
+      # OPTIONAL Malaysia LHDN / MyInvois layer. Mounted so the source is
+      # present, but NOT installed - installing it alongside the EU eu_einvoice
+      # app would add a second, conflicting e-invoice doctype set. Install it
+      # deliberately with the three commands in docs/ARCHITECTURE.md.
+      - ./repos/my_invois:/home/frappe/frappe-bench/apps/my_invois
     depends_on:
-      - db
-      - redis-cache
-      - redis-queue
+      # A fresh clone has an empty bench_sites volume, so bench would serve
+      # "404 localhost does not exist". `seed` restores the demo DB first, then
+      # exits; bench only starts once that succeeded.
+      seed:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
     environment:
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -148,7 +190,44 @@ services:
       - YARN_NETWORK_CONCURRENCY=1
       - YARN_FETCH_RETRIES=5
       - YARN_FETCH_RETRY_MAXTIMEOUT=120000
+    healthcheck:
+      # TCP, not /api/method/ping: on an empty bench_sites volume there is no
+      # site yet, so an HTTP check would report unhealthy forever and block
+      # `up --wait` on a fresh clone. This answers "is bench listening", which
+      # is what dependent services actually need.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8000'"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 240s
     restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # One-shot seeder: makes `docker compose up` alone yield a WORKING demo site
+  # instead of an empty one. Idempotent: exits immediately when a site exists,
+  # so it costs about two seconds on every later boot.
+  # ---------------------------------------------------------------------------
+  seed:
+    image: ${BENCH_IMAGE:-comp_demo-bench:v16}
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - bench_sites:/home/frappe/frappe-bench/sites
+      - ./seed:/seed:ro
+      # my_invois is not baked into the published image; the seeder needs the
+      # source to run install-app, exactly like the bench service does.
+      - ./repos/my_invois:/home/frappe/frappe-bench/apps/my_invois
+      # The demo-data patch and the generic BOM fixture live in barcode_shrdc.
+      # Mounting it here means `bench migrate` in the seeder runs the current
+      # source, not the older copy baked into the image.
+      - ./repos/barcode-shrdc-v16-fixed:/home/frappe/frappe-bench/apps/barcode_shrdc
+    environment:
+      - SITE_NAME=${SITE_NAME:-frontend}
+      - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+    command: ["bash", "/seed/seed-site.sh"]
 
   db:
     image: ${MARIADB:?Load versions.env before starting Compose}
@@ -171,14 +250,30 @@ services:
       MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-admin}
     volumes:
       - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -p\"$$MARIADB_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
     restart: unless-stopped
 
   redis-cache:
-    image: ${REDIS:?Load versions.env before starting Compose}
+    image: redis:6.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
   redis-queue:
-    image: ${REDIS:?Load versions.env before starting Compose}
+    image: redis:6.2-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
   node-red:
@@ -194,13 +289,20 @@ services:
       - SHOPIFY_STORE=${SHOPIFY_STORE:-4e1075.myshopify.com}
       - SHOPIFY_API_VERSION=${SHOPIFY_API_VERSION:-2026-04}
     depends_on:
-      - bench
+      bench:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:1880/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   scheduler:
     image: comp_demo-scheduler:latest
     build:
-      # vendored inside comp_demo so the project builds without ERPNEXT-AI-FIX
+      # vendored inside comp_demo so the project builds without ERPNEXT-FIX
       context: ./scheduler
       dockerfile: Dockerfile
       args:
@@ -215,7 +317,8 @@ services:
       - PORT=3000
       - NODE_ENV=production
     depends_on:
-      - bench
+      bench:
+        condition: service_started
     restart: unless-stopped
 
   metabase:
@@ -240,10 +343,44 @@ services:
     mem_limit: 3g
     cpus: 2.0
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      # Metabase reads its own metadata schema at boot; the seeder fills it.
+      seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/3000'"]
+      interval: 20s
+      timeout: 5s
+      retries: 15
+      start_period: 120s
+    restart: unless-stopped
+
+  webhook-sink:
+    # Tunnel-free webhook receiver: ERPNext can post Delivery Note / Stock Entry
+    # / Stock Reconciliation webhooks here instead of through ngrok. See
+    # tools/webhook-sink/README.md.
+    image: python:3.12-alpine
+    command: ["python", "/app/server.py"]
+    ports:
+      - "${WEBHOOK_SINK_PORT:-8088}:8088"
+    volumes:
+      - ./tools/webhook-sink:/app:ro
+      - webhook_sink_data:/data
+    environment:
+      SINK_PORT: 8088
+      SINK_DATA: /data/received.jsonl
+      FORWARD_URL: ${FORWARD_URL:-}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8088/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
 
 volumes:
   bench_sites:
   db_data:
   node_red_data:
+  webhook_sink_data:

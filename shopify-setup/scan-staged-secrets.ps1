@@ -4,14 +4,14 @@
 # leftovers, then greps every staged file for them. Any hit is reported and the
 # script exits non-zero, so a leak cannot be committed silently.
 param(
-    [string]$RepoRoot
+    [string]$RepoRoot = (Split-Path $PSScriptRoot -Parent)
 )
 
 if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
 
 $envFiles = @(
     (Join-Path $RepoRoot '.env')
-    (Join-Path $RepoRoot 'sandbox\.env.ai-fix')
+    (Join-Path $RepoRoot 'sandbox\.env.fix')
     (Join-Path $RepoRoot 'shopify-setup\.env')
 )
 

@@ -1,0 +1,44 @@
+name: Feature request
+description: Something the demo should do
+title: "[feat] "
+labels: ["feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What can a colleague not do today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: Include how it should be verified.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - distribution / image
+        - onboarding (Windows)
+        - onboarding (Linux/macOS)
+        - barcode / item tracking
+        - e-invoicing / MyInvois
+        - planner
+        - Shopify
+        - webhooks / ngrok
+        - Metabase
+        - docs
+    validations:
+      required: true
+  - type: checkboxes
+    id: acceptance
+    attributes:
+      label: Definition of done
+      options:
+        - label: Works on a clean clone with no extra manual steps
+        - label: "`setup.ps1 -VerifyOnly` reports it"
+        - label: README capability table updated

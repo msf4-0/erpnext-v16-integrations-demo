@@ -1,15 +1,15 @@
 <#
 .SYNOPSIS
     Bring up the drag-and-drop production planner that sits beside ERPNext in the
-    ERPNEXT-AI-FIX stack, and prove it is wired to the site.
+    ERPNEXT-FIX stack, and prove it is wired to the site.
 
 .DESCRIPTION
     The planner is the operator's standalone Node/Express + React app
     (`scheduler/`), not a bench app. This script:
 
       1. builds + starts the `scheduler` compose service
-      2. mints an API token for the dedicated planner user (planner@ai-fix.local)
-         and writes it into sandbox/.env.ai-fix
+      2. mints an API token for the dedicated planner user (planner@fix.local)
+         and writes it into sandbox/.env.fix
       3. seeds demo manufacturing data (workstations, BOMs, Work Orders, Job Cards)
          when the site has none
       4. adds a "Production Planner" shortcut to the Manufacturing workspace
@@ -43,10 +43,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $DemoDir = $PSScriptRoot
-# comp_demo is self-contained; sandbox/ and scheduler/ live next to this script.
+# Vendored copy on purpose: comp_demo is self-contained (sandbox/ + scheduler/ live
+# next to this script). The old ERPNEXT-FIX path is only a fallback.
 $SandboxDir = Join-Path $DemoDir 'sandbox'
 if (-not (Test-Path (Join-Path $SandboxDir 'scripts'))) {
-    throw "workspace sandbox scripts not found: $SandboxDir"
+    $SandboxDir = Join-Path $PSScriptRoot 'sandbox'
+if (-not (Test-Path $SandboxDir)) { throw "sandbox is missing from this checkout ($SandboxDir) - re-clone the repository" }
 }
 $EnvPath = Join-Path $DemoDir '.env'
 $VersionsPath = Join-Path $DemoDir 'versions.env'
@@ -129,10 +131,10 @@ Write-Info "site=$siteName  erpnext=http://localhost:$erpPort  planner=$plannerU
 Write-Step "1/5  building + starting the planner container"
 if (-not $SkipBuild) {
     # The planner image is COPY-only and costs ~6 min to build. Reuse the image
-    # built for the erpnext-ai-fix stack when it is already local.
+    # built for the erpnext-fix stack when it is already local.
     if (-not (& docker images -q comp_demo-scheduler:latest)) {
-        if (& docker images -q erpnext-ai-fix-scheduler:latest) {
-            & docker tag erpnext-ai-fix-scheduler:latest comp_demo-scheduler:latest | Out-Null
+        if (& docker images -q erpnext-fix-scheduler:latest) {
+            & docker tag erpnext-fix-scheduler:latest comp_demo-scheduler:latest | Out-Null
             Write-Info 'tagged the existing planner image as comp_demo-scheduler:latest (skips a ~6 min build)'
         } else {
             $rc = Invoke-Compose @('build', 'scheduler')
@@ -160,7 +162,7 @@ Write-Step "2/5  ERPNext API token for the planner"
 # bench container, then run with the bench venv python.
 Push-Location $SandboxDir
 try {
-    foreach ($helper in @('ai-fix-scheduler-token.py', 'seed_planner_demo.py', 'ai-fix-planner-workspace.py', 'planner_probe.py', 'planner_capacity_snapshot.py')) {
+    foreach ($helper in @('fix-scheduler-token.py', 'seed_planner_demo.py', 'fix-planner-workspace.py', 'planner_probe.py', 'planner_capacity_snapshot.py')) {
         $src = Join-Path $ScriptsDir $helper
         if (-not (Test-Path $src)) { throw "missing helper script: $src" }
         & docker cp $src "comp_demo-bench-1:/tmp/$helper" | Out-Null
@@ -177,19 +179,19 @@ $secret = $envMap['SCHEDULER_ERPNEXT_API_SECRET']
 function Set-PlannerToken([switch]$Force) {
     $current = Read-EnvFile $EnvPath
     if ($current['SCHEDULER_ERPNEXT_API_KEY'] -and $current['SCHEDULER_ERPNEXT_API_SECRET'] -and -not $Force) {
-        Write-Info 'reusing the token already in .env.ai-fix (use -RotateToken to change it)'
+        Write-Info 'reusing the token already in .env.fix (use -RotateToken to change it)'
         return
     }
     $extra = @()
     if ($Force) { $extra += '--rotate' }
     $out = & docker exec -u frappe -e "SITE_NAME=$siteName" comp_demo-bench-1 `
-        bash -lc "cd /home/frappe/frappe-bench && ./env/bin/python /tmp/ai-fix-scheduler-token.py $($extra -join ' ')" 2>&1
+        bash -lc "cd /home/frappe/frappe-bench && ./env/bin/python /tmp/fix-scheduler-token.py $($extra -join ' ')" 2>&1
     $keyLine = ($out | Select-String -Pattern '^PLANNER_API_KEY=').Line
     $secretLine = ($out | Select-String -Pattern '^PLANNER_API_SECRET=').Line
     if (-not $keyLine -or -not $secretLine) { throw "could not mint an API token:`n$($out -join "`n")" }
     Set-EnvValue $EnvPath 'SCHEDULER_ERPNEXT_API_KEY' ($keyLine -replace '^PLANNER_API_KEY=', '')
     Set-EnvValue $EnvPath 'SCHEDULER_ERPNEXT_API_SECRET' ($secretLine -replace '^PLANNER_API_SECRET=', '')
-    Write-Info 'token minted for planner@ai-fix.local and written to .env.ai-fix'
+    Write-Info 'token minted for planner@fix.local and written to .env.fix'
 }
 
 Set-PlannerToken -Force:$RotateToken
@@ -238,7 +240,7 @@ Start-Scheduler
 # ---------------------------------------------------------------------------
 Write-Step "4/5  Manufacturing workspace shortcut"
 $wsOut = & docker exec -u frappe -e "SITE_NAME=$siteName" comp_demo-bench-1 `
-    bash -lc "cd /home/frappe/frappe-bench && ./env/bin/python /tmp/ai-fix-planner-workspace.py --url $plannerUrl" 2>&1
+    bash -lc "cd /home/frappe/frappe-bench && ./env/bin/python /tmp/fix-planner-workspace.py --url $plannerUrl" 2>&1
 $wsOut | Select-String -Pattern 'MARK|WARN' | ForEach-Object { Write-Info $_.Line }
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,111 @@
+name: publish-image
+
+# Builds the bench image once and publishes it to GHCR, so a colleague's
+# `docker compose up` pulls layers instead of running bake/bench.Dockerfile.
+#
+# Publish a new version:
+#   git tag v16.3 && git push origin v16.3
+# Or run this workflow manually (Actions -> publish-image -> Run workflow).
+#
+# Tags pushed:
+#   ghcr.io/msf4-0/comp-demo-bench:v16          (moving, what compose uses)
+#   ghcr.io/msf4-0/comp-demo-bench:<ref>        (immutable, for pinning)
+#   ghcr.io/msf4-0/comp-demo-bench:<short-sha>  (per commit)
+#
+# Platforms: linux/amd64 by default. Select "linux/amd64,linux/arm64" to publish
+# a multi-arch manifest (experimental - see docs/IMAGE-POLICY.md).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Target platforms"
+        required: true
+        default: linux/amd64
+        type: choice
+        options:
+          - linux/amd64
+          - linux/amd64,linux/arm64
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/msf4-0/comp-demo-bench
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+        if: contains(inputs.platforms, 'arm64')
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: bake/bench.Dockerfile
+          platforms: ${{ inputs.platforms || 'linux/amd64' }}
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:v16
+            ${{ env.IMAGE }}:${{ github.ref_name }}
+            ${{ env.IMAGE }}:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Record the digest
+        run: |
+          digest="${{ steps.build.outputs.digest }}"
+          echo "digest=$digest"
+          {
+            echo "### Published"
+            echo ""
+            echo '```'
+            echo "image:  ${{ env.IMAGE }}"
+            echo "digest: $digest"
+            echo "pin:    BENCH_IMAGE=${{ env.IMAGE }}@$digest"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Measure the compressed image size
+        # Budget is documented in docs/IMAGE-POLICY.md. This is a warning, not a
+        # gate, until a baseline has been reviewed on a few releases.
+        continue-on-error: true
+        run: |
+          chmod +x scripts/image-size.sh
+          ./scripts/image-size.sh "${{ env.IMAGE }}:${{ github.ref_name }}" 3000000000
+
+      - name: Verify the package is pullable without a token
+        # Public packages are pullable anonymously. This turns the one-time
+        # visibility flip into a visible per-release signal instead of a
+        # colleague discovering it as an "unauthorized" pull.
+        continue-on-error: true
+        run: |
+          docker logout ghcr.io
+          if docker manifest inspect "${{ env.IMAGE }}:v16" > /dev/null 2>&1; then
+            echo "::notice::anonymous pull works - the fast path is live"
+          else
+            echo "::warning::anonymous pull FAILED - comp-demo-bench is still private;"
+            echo "::warning::colleagues will rebuild locally (25-40 min). Fix:"
+            echo "::warning::https://github.com/msf4-0?tab=packages -> comp-demo-bench -> Package settings -> Change visibility -> Public"
+            echo "::warning::or run the make-package-public workflow with a GHCR_ADMIN_PAT secret"
+          fi

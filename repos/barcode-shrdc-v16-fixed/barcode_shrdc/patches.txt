@@ -1,2 +1,7 @@
+[pre_model_sync]
+# Patches added in this section will be executed before "bench migrate" starts syncing models.
+
 [post_model_sync]
 barcode_shrdc.patches.v16_0.update_barcode_print_formats
+barcode_shrdc.patches.v16_0.set_default_warehouses
+barcode_shrdc.patches.v16_0.seed_demo_manufacturing

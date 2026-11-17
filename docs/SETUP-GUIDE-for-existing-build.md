@@ -1,3 +1,9 @@
+> **HISTORICAL GUIDE — not the onboarding path for this repository.**
+> This document describes the old `erpnext-build.zip` bundle (different folder
+> name, different `.env`). For a `git clone` of this repo, follow
+> [`README.md`](../README.md) section 3 and run `.\up.ps1` from the repo root.
+> The `sandbox/up.ps1` it references belonged to the retired `erpnext-fix`
+> project and no longer exists.
 # Adding the missing functions to an existing ERPNext v16 build
 
 > Authoritative stack architecture, ports, versions, and database durability:
@@ -28,14 +34,18 @@ Safest option: it comes up on its own ports and never touches your site.
 unzip erpnext-build.zip
 cd erpnext-build
 
-The Node-RED paths in `.env` should be relative to the repository root:
+**The two flow-path lines in `.env` may stay blank** (they self-resolve inside the repo). If you did set them,
+otherwise the Node-RED container mounts nothing:
 
-    FLOWS_PATH=./sandbox/node-red/flows.json
-    NODE_RED_SOURCE_FLOW=./sandbox/node-red/source-flow.json
+    FLOWS_PATH=
+    NODE_RED_SOURCE_FLOW=
+    # Both may stay blank: they resolve to the vendored
+    # sandbox/node-red/*.json inside this repo. Never hard-code a machine path.
+
 cp .env.example .env
-cp sandbox/.env.ai-fix.example sandbox/.env.ai-fix
-#    fill in .env:  DB_ROOT_PASSWORD, SHOPIFY_STORE, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET
-#    (NGROK_AUTHTOKEN optional - it falls back to your ngrok config)
+#    The defaults boot as-is. Optional extras: SHOPIFY_STORE, SHOPIFY_CLIENT_ID,
+#    SHOPIFY_CLIENT_SECRET, NGROK_AUTHTOKEN. Leave them blank to skip those
+#    integrations - a blank value is reported as SKIPPED, not as a failure.
 
 powershell -ExecutionPolicy Bypass -File .\up.ps1          # Windows: full integration setup
 bash ./up-linux.sh                                         # Linux: core ERPNext site
@@ -115,11 +125,11 @@ bench --site <site> clear-cache
 ### B4. A user for the planner (least privilege)
 
 ```bash
-SITE_NAME=<site> ./env/bin/python erpnext-build/sandbox/scripts/ai-fix-scheduler-token.py
+SITE_NAME=<site> ./env/bin/python erpnext-build/sandbox/scripts/fix-scheduler-token.py
 # prints PLANNER_API_KEY=... PLANNER_API_SECRET=...
 ```
 
-It creates `planner@ai-fix.local` with Manufacturing Manager/User + Sales User + Stock User —
+It creates `planner@fix.local` with Manufacturing Manager/User + Sales User + Stock User —
 the planner needs all three (Sales for the forecast tab, Stock for stock lookups).
 
 ### B5. Run the planner
@@ -189,7 +199,7 @@ Point your three ERPNext **Webhook** records at the tunnel (ERPNext → *Webhook
 | Stock Reconciliation · on_submit | `https://<your-tunnel>.ngrok-free.app/stock-recon` |
 
 Set **enabled = 1** and add header `ngrok-skip-browser-warning: 1` in the webhook's headers.
-`erpnext-build/sandbox/scripts/ai-fix-wire-webhooks.sh <public-url>` does the same three records
+`erpnext-build/sandbox/scripts/fix-wire-webhooks.sh <public-url>` does the same three records
 if your bench layout matches ours.
 
 Test through the tunnel, not locally:
@@ -262,7 +272,7 @@ Sales Invoice with einvoice_profile=XRECHNUNG      # .xml attached
 6. **Don't run `up.ps1` against your own site.** It creates its own compose project (`comp_demo`)
    and uses the durability configured for that existing bench; Path B is the integration path.
 7. **Planner API user needs 3 role families** (Manufacturing, Sales, Stock) or the forecast/batch
-   tabs answer 403 — `ai-fix-scheduler-token.py` grants them.
+   tabs answer 403 — `fix-scheduler-token.py` grants them.
 
 ---
 

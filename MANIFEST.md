@@ -34,7 +34,7 @@ powershell -ExecutionPolicy Bypass -File .\verify-all.ps1   # 41 checks, ~5 min
 | `docker-compose.yml` | the 7 services; planner build context is `./scheduler` |
 | `.env` | ports, site name, DB root password, Shopify store + client credentials, planner port |
 | `versions.env` | component image tags and ERPNext series |
-| `sandbox\.env.ai-fix` | planner integration user's API key/secret (+ Shopify token for the planner script) |
+| `sandbox\.env.fix` | planner integration user's API key/secret (+ Shopify token for the planner script) |
 
 Plus the Docker images, which are not files in the folder. Their external tags
 are pinned in `versions.env`; `comp_demo-bench:v16` and
@@ -112,7 +112,7 @@ Shopify client id/secret from it.
 
 ## Secrets in this folder
 
-`.env` and `sandbox\.env.ai-fix` hold the real values: DB root password, Shopify
+`.env` and `sandbox\.env.fix` hold the real values: DB root password, Shopify
 **client id/secret** and access token, ERPNext API token, planner API key/secret. Treat
 the folder as sensitive; rotate the Shopify client secret if you hand the bundle to
 someone else.

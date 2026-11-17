@@ -1,0 +1,22 @@
+{% extends "templates/web.html" %}
+{% block title %}Tracked Item{% endblock %}
+{% block page_content %}
+<div style="max-width:560px;margin:2rem auto;font-family:inherit;">
+  {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+  {% elif found %}
+    <div class="card">
+      <div class="card-body">
+        <h4>{{ item_name }}</h4>
+        <hr>
+        <p><b>Unique ID:</b> {{ tracking_id }}</p>
+        <p><b>Current Location:</b> {{ current_warehouse or current_status or "Unknown" }}</p>
+        {% if not current_warehouse %}
+          <p class="text-muted">Outside warehouse — status: {{ current_status or "—" }}</p>
+        {% endif %}
+        <a class="btn btn-primary" href="{{ site }}/desk{{ route }}">Open Tracked Item</a>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -23,7 +23,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Dest,
+    [string]$Dest = (Join-Path (Split-Path $PSScriptRoot -Parent) 'comp_demo-dist'),
     [switch]$SkipVerify
 )
 

@@ -12,6 +12,8 @@
   "qr_code",
   "section_break_qr",
   "qr_barcode_preview",
+  "item_barcode",
+  "item_qr_image",
   "current_warehouse",
   "current_status",
   "last_transaction",
@@ -21,57 +23,57 @@
  ],
  "fields": [
   {
+   "bold": 1,
    "fieldname": "tracking_id",
    "fieldtype": "Data",
-   "label": "Tracking ID",
-   "unique": 1,
-   "reqd": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "bold": 1
+   "label": "Tracking ID",
+   "reqd": 1,
+   "unique": 1
   },
   {
+   "description": "Unique physical serial number, assigned automatically on status transition.",
    "fieldname": "serial_no",
    "fieldtype": "Data",
-   "label": "Serial No",
-   "unique": 1,
-   "read_only": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "description": "Unique physical serial number, assigned automatically on status transition."
+   "label": "Serial No",
+   "read_only": 1,
+   "unique": 1
   },
   {
    "fieldname": "item_code",
    "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Item Code",
    "options": "Item",
-   "reqd": 1,
-   "in_list_view": 1,
-   "in_standard_filter": 1
+   "reqd": 1
   },
   {
+   "fetch_from": "item_code.item_name",
    "fieldname": "item_name",
    "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "Item Name",
-   "fetch_from": "item_code.item_name",
-   "read_only": 1,
-   "in_list_view": 1
+   "read_only": 1
   },
   {
+   "description": "Linear barcode value (= Tracking ID). Generated automatically.",
    "fieldname": "barcode",
    "fieldtype": "Data",
-   "label": "Barcode",
-   "unique": 1,
-   "read_only": 1,
    "in_list_view": 1,
-   "description": "Linear barcode value (= Tracking ID). Generated automatically."
+   "label": "Barcode",
+   "read_only": 1,
+   "unique": 1
   },
   {
+   "description": "URL the QR code encodes. Rendered on demand for labels/print.",
    "fieldname": "qr_code",
    "fieldtype": "Data",
    "label": "QR Code",
-   "read_only": 1,
-   "description": "URL the QR code encodes. Rendered on demand for labels/print."
+   "read_only": 1
   },
   {
    "fieldname": "section_break_qr",
@@ -84,21 +86,36 @@
    "label": "QR Code & Barcode"
   },
   {
+   "description": "Barcode of the linked Item, copied on save.",
+   "fieldname": "item_barcode",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Item Barcode",
+   "read_only": 1
+  },
+  {
+   "description": "QR code of the linked Item, rendered on save.",
+   "fieldname": "item_qr_image",
+   "fieldtype": "Attach Image",
+   "label": "Item QR Image",
+   "read_only": 1
+  },
+  {
+   "description": "Updated automatically on stock transaction submit/cancel.",
    "fieldname": "current_warehouse",
    "fieldtype": "Link",
+   "in_list_view": 1,
    "label": "Current Warehouse",
    "options": "Warehouse",
-   "in_list_view": 1,
-   "read_only": 1,
-   "description": "Updated automatically on stock transaction submit/cancel."
+   "read_only": 1
   },
   {
    "fieldname": "current_status",
    "fieldtype": "Select",
+   "in_list_view": 1,
    "label": "Current Status",
    "options": "In Stock\nIn Transit\nDispatched\nDelivered\nConsumed",
-   "read_only": 1,
-   "in_list_view": 1
+   "read_only": 1
   },
   {
    "fieldname": "last_transaction",

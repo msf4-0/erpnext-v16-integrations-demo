@@ -6,6 +6,8 @@
 ## Project layout — self-contained
 
 The rebuild and verification files live in the repository root (~36 MB / 1.5k files).
+Everything needed to rebuild and verify the demo lives **inside `F:\ERPNEXT\erpnext-build`**
+(~36 MB / 1.5k files). Nothing is read from `ERPNEXT-FIX` any more.
 
 | Path | What it is |
 |---|---|
@@ -18,17 +20,20 @@ The rebuild and verification files live in the repository root (~36 MB / 1.5k fi
 | `sandbox/scripts/` | provisioning, install, seeders, probes and the verification suite staged into the container |
 | `sandbox/recipes/` | per-app install recipes (`barcode_shrdc`, `shopify`, `eu_einvoice`) |
 | `sandbox/node-red/` | flow builder, built `flows.json`, vendored `source-flow.json` export |
-| `sandbox/.env.ai-fix` | planner API key/secret + Shopify token shared with the planner script |
+| `sandbox/.env.fix` | planner API key/secret + Shopify token shared with the planner script |
 | `repos/barcode-shrdc-v16-fixed` | `barcode_shrdc` app source (durable fork with the v16 fixes) |
 | `repos/shopify-shrdc-v16-fixed` | `shopify` app source (incl. `shopify/auth.py` token minting) |
-| `repos/eu_einvoice` | vendored `eu_einvoice` app source |
+| `repos/eu_einvoice` | `eu_einvoice` app source (was still only in ERPNEXT-FIX) |
 | `scheduler/` | the production planner: `server.js`, `frontend/` + prebuilt `frontend/build`, `runtime-deps/node_modules`, `ui-tests/` |
 | `docs/` | this file + `WINDOWS-QUOTING.md` |
 
 Host prerequisites (not project files): Docker Desktop, the `ngrok` binary + authtoken,
 Node/npm (only to rebuild the planner frontend), Python (only for the Node-RED flow builder).
-Last verified on a **Windows host**: **2026-10-26**, live stack from this repository
-(project `comp_demo`). Full test run: `powershell -File .\verify-all.ps1` → **41 / 41 checks pass**
+Two intentional fallbacks remain in the scripts Ã¢â‚¬â€ `up.ps1` step 0 and `scheduler-up.ps1`
+still try `F:\ERPNEXT\ERPNEXT-FIX\sandbox` **if** the vendored `sandbox/` is absent.
+
+Last verified: **2026-10-26**, live stack on `F:\ERPNEXT\erpnext-build` (project `comp_demo`).
+Full test run: `powershell -File F:\ERPNEXT\erpnext-build\verify-all.ps1` Ã¢â€ â€™ **41 / 41 checks pass**
 (log: `comp_demo\verify-all-final.log`). That includes a real-browser DOM check that the
 Job Cards are rendered as draggable cards; the drags themselves are proven by
 `scheduler/ui-tests/ui-drag-matrix.mjs` and `ui-drag-calendar.mjs`.
@@ -54,11 +59,11 @@ Installed apps: `frappe 16.53.0`, `erpnext 16.52.1`, `barcode_shrdc 0.0.1`, `sho
 | M3 | Docker build + stack live | **done** | 6 containers running (bench, db, redis ×2, node-red, scheduler); ping 200; all 5 apps + `Virtual Work Order` / `Barcode Printing` / `Shopify Access` / `E Invoice Settings` present |
 | M4 | Shopify item/supplier/customer edits **and live push** | **done (push now live)** | Item create → Shopify product `15435533484168` (`status=active`); Item edit → Shopify price `27.75` + title updated; Customer create → Shopify customer `31339731255432`; Supplier create+edit with **0** error-log rows; cleanup deletes the product in both systems |
 | M5 | Storefront has the products | **done** | `GET https://4e1075.myshopify.com/` 200 and `/products/planner-assembly-kit` 200; Admin API shows 13 `ACTIVE` products all with `publishedAt` set |
-| M6 | Planner + full build workflow | **done** | 12 WOs · 24 JCs · 4 workstations · 6 submitted BOMs · 64 `Job Card Scheduled Time` rows; `/api/schedule` returns 12/24/4/1 |
-| M7 | Drag-and-drop production planning | **done** | **API:** WO drag → `planned_start_date` +2 days, `modified_by=planner@ai-fix.local`, blocks 4→4, rows 64→64; JC drag → 3 blocks kept, parent WO carries a real clock time. **Real UI (headless Chrome):** matrix drag of `PO-JOB00002` → `PUT … {"type":"jobcard","docName":"PO-JOB00002","start":"2026-10-28 14:10:00"} ` → 200, toast *"✓ … [JC: PO-JOB00002] & parent WO: MFG-WO-2026-00001 rescheduled"*, and all three capacity blocks shifted **together** (170/540/490 min preserved); calendar drag of `PO-JOB00001` → 200 through the FullCalendar `eventDrop` path. Both restored. |
-| M8 | Barcode scanning incl. changed barcode/QR values | **done** | CODE128 / CODE39 / EAN13 → three distinct PNGs; a changed value → different PNG; invalid EAN13 (`123`) **rejected with a message**; QR rendered per item; `/files/*.png` served as `image/png` |
-| M9 | Barcode/QR item tracking | **done** | `scan_barcode` resolves `SHRDC-BRK-0001 → PLN-BRACKET` and `SHRDC-KIT-0001 → PLN-KIT`, unknown → empty; HTTP endpoint 200; Delivery Note `MAT-DN-2026-00001` submitted with `barcode_validation` and `checking_qty == qty`; Stock Entry `MAT-STE-2026-00003` submitted with `scan_stock_entry_barcode`; guest `/item_qr?item_code=PLN-BRACKET` → 200 |
-| M9b | Scanned-quantity rule enforced **server-side** | **done** | a Delivery Note with `barcode_validation`, `qty 2` but `checking_qty 1` is rejected on submit with `ValidationError: Barcode validation failed … row 1 (PLN-BRACKET): qty 2.0 vs checked 1.0` — a REST submit can no longer bypass it |
+| M6 | Planner + full build workflow | **done** | 12 WOs Ã‚Â· 24 JCs Ã‚Â· 4 workstations Ã‚Â· 6 submitted BOMs Ã‚Â· 64 `Job Card Scheduled Time` rows; `/api/schedule` returns 12/24/4/1 |
+| M7 | Drag-and-drop production planning | **done** | **API:** WO drag Ã¢â€ â€™ `planned_start_date` +2 days, `modified_by=planner@fix.local`, blocks 4Ã¢â€ â€™4, rows 64Ã¢â€ â€™64; JC drag Ã¢â€ â€™ 3 blocks kept, parent WO carries a real clock time. **Real UI (headless Chrome):** matrix drag of `PO-JOB00002` Ã¢â€ â€™ `PUT Ã¢â‚¬Â¦ {"type":"jobcard","docName":"PO-JOB00002","start":"2026-10-28 14:10:00"} ` Ã¢â€ â€™ 200, toast *"Ã¢Å“â€œ Ã¢â‚¬Â¦ [JC: PO-JOB00002] & parent WO: MFG-WO-2026-00001 rescheduled"*, and all three capacity blocks shifted **together** (170/540/490 min preserved); calendar drag of `PO-JOB00001` Ã¢â€ â€™ 200 through the FullCalendar `eventDrop` path. Both restored. |
+| M8 | Barcode scanning incl. changed barcode/QR values | **done** | CODE128 / CODE39 / EAN13 Ã¢â€ â€™ three distinct PNGs; a changed value Ã¢â€ â€™ different PNG; invalid EAN13 (`123`) **rejected with a message**; QR rendered per item; `/files/*.png` served as `image/png` |
+| M9 | Barcode/QR item tracking | **done** | `scan_barcode` resolves `SHRDC-BRK-0001 Ã¢â€ â€™ PLN-BRACKET` and `SHRDC-KIT-0001 Ã¢â€ â€™ PLN-KIT`, unknown Ã¢â€ â€™ empty; HTTP endpoint 200; Delivery Note `MAT-DN-2026-00001` submitted with `barcode_validation` and `checking_qty == qty`; Stock Entry `MAT-STE-2026-00003` submitted with `scan_stock_entry_barcode`; guest `/item_qr?item_code=PLN-BRACKET` Ã¢â€ â€™ 200 |
+| M9b | Scanned-quantity rule enforced **server-side** | **done** | a Delivery Note with `barcode_validation`, `qty 2` but `checking_qty 1` is rejected on submit with `ValidationError: Barcode validation failed Ã¢â‚¬Â¦ row 1 (PLN-BRACKET): qty 2.0 vs checked 1.0` Ã¢â‚¬â€ a REST submit can no longer bypass it |
 | M10 | Live local demo + result list | **done** | this document + `verify-all.ps1` |
 | — | E-invoicing (extra) | **done** | EN 16931 invoice → 4 835-byte UN/CEFACT CII XML (`CrossIndustryInvoice`, `en16931`); XRECHNUNG invoice auto-attaches `ACC-SINV-2026-00001.xml` (4 835 B) |
 
@@ -72,7 +77,7 @@ tokens, so a single pasted `shpat_...` value can never stay valid.
 |---|---|---|
 | Token minting | new `shopify/auth.py` mints `POST /admin/oauth/access_token` (`grant_type=client_credentials`), caches the token in Redis until 5 min before expiry, clears the "paused" gate on success, and never raises into a save hook | `repos/shopify-shrdc-v16-fixed/shopify/auth.py` |
 | Single choke point | `get_shopify_access()` stamps the live token onto `doc.access_token`/`doc.secret_key` in memory, so every existing handler keeps working; `api.py` now routes its three direct `get_doc` lookups through it | `shopify/utils.py`, `shopify/api.py` |
-| Credentials | `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` in `comp_demo/.env` + `sandbox/.env.ai-fix`, persisted into the site's `site_config.json` by `shopify_sync.py` (args 4/5) | `sandbox/scripts/shopify_sync.py`, `sandbox/scripts/ai-fix-postsetup.sh`, `comp_demo/up.ps1` |
+| Credentials | `SHOPIFY_CLIENT_ID` / `SHOPIFY_CLIENT_SECRET` in `comp_demo/.env` + `sandbox/.env.fix`, persisted into the site's `site_config.json` by `shopify_sync.py` (args 4/5) | `sandbox/scripts/shopify_sync.py`, `sandbox/scripts/fix-postsetup.sh`, `comp_demo/up.ps1` |
 | Ops | `comp_demo/refresh-shopify-token.ps1` re-mints, rewrites `.env`, re-verifies `/shop.json` and rebuilds the Node-RED flow (the flow bakes the token into its Shopify nodes) | `comp_demo/refresh-shopify-token.ps1`, `sandbox/scripts/shopify-token.py` |
 
 ## Other fixes applied this session
@@ -106,7 +111,7 @@ Express matched the `:id` route first, looked up a Work Order literally named
 "timers" and answered 500. Route-order guard added in `scheduler/server.js`.
 
 ### 5. Sales Forecast tab answered 403
-The planner user only held Manufacturing roles. `ai-fix-scheduler-token.py` now also
+The planner user only held Manufacturing roles. `fix-scheduler-token.py` now also
 grants **Sales User** + **Stock User**.
 
 ### 6. EAN13 printed a different code instead of failing
@@ -178,7 +183,7 @@ test suppliers, repairs an out-of-sequence WO — idempotent).
 | Stock reconciliation does not push stock to Shopify | `update_product_inventory.on_submit` is not wired in `hooks.py` (the header bug is fixed) | add a `Stock Ledger Entry` doc_event if push-on-stock is wanted |
 | Malaysia (LHDN) e-invoicing | the substituted app is EU EN 16931 / XRechnung (CII), not MyInvois; the original MY source is 404 | supply the MY app source |
 | Timers tab shows an empty object | `/api/work-orders/timers` now answers 200 but no Work Order has a running timer until someone clicks **Start** in the planner | start a timer in the UI (state is the planner's own `timers.json`) |
-| Database missing after `docker compose down` / engine restart | the `db_data` named volume was removed or the wrong Compose project/site is in use | check the active volume and site; `docker compose down -v` intentionally deletes the data |
+| Anything after `docker compose down` / engine restart | the DB lives on the `db_data` volume, which is durable across restarts and `docker compose down` (only `-v`/`-Wipe` deletes it) | rerun `powershell -File .\up.ps1` (~25Ã¢â‚¬â€œ35 min) |
 
 ### Operational gotchas
 

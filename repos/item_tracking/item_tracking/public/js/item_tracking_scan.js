@@ -1,4 +1,4 @@
-/* Individual Item Tracking — scan popup + Stock Entry wiring.
+﻿/* Individual Item Tracking â€” scan popup + Stock Entry wiring.
  * Loaded app-wide via app_include_js so the popup is available on any page. */
 frappe.provide('item_tracking');
 
@@ -61,7 +61,7 @@ item_tracking.show_popup = function (data) {
 	}
 	const loc = data.current_warehouse || data.current_status || __('Unknown');
 	const transit = data.in_transit
-		? '<span class="text-muted">(' + __('{0} — outside warehouse', [data.current_status]) + ')</span>'
+		? '<span class="text-muted">(' + __('{0} â€” outside warehouse', [data.current_status]) + ')</span>'
 		: '';
 	const serial = data.serial_no
 		? '<p><b>' + __('Serial No') + ':</b> ' + frappe.utils.escape_html(data.serial_no) + '</p>'
@@ -101,13 +101,13 @@ item_tracking.scan = function () {
 };
 
 /* Lazily load jsQR as a QR fallback for browsers without native BarcodeDetector
- * (Safari/Firefox). Loaded on demand — only when the camera scanner starts and no
- * native detector exists — so it never weighs down ordinary pages. */
+ * (Safari/Firefox). Loaded on demand â€” only when the camera scanner starts and no
+ * native detector exists â€” so it never weighs down ordinary pages. */
 item_tracking._load_jsqr = function () {
 	if (window.jsQR || item_tracking._jsqr_requested) { return; }
 	item_tracking._jsqr_requested = true;
 	const s = document.createElement('script');
-	s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+	s.src = '/assets/item_tracking/js/vendor/jsQR.js';
 	s.async = true;
 	document.head.appendChild(s);
 };
@@ -230,7 +230,7 @@ item_tracking.scan_camera = function () {
 };
 
 /* Stock Entry integration: resolve scan, add item row + tracked_items row,
- * reject duplicates. Location is NOT changed here — only on submit. */
+ * reject duplicates. Location is NOT changed here â€” only on submit. */
 item_tracking.scan_into_stock_entry = function (frm) {
 	frappe.prompt(
 		[{ fieldname: 'code', fieldtype: 'Data', label: __('Scan or enter Tracking ID / Barcode'), reqd: 1 }],
@@ -287,7 +287,7 @@ item_tracking.scan_into_stock_entry = function (frm) {
 };
 
 /* Global hot-path: expose a Desk "Scan Item" shortcut (Shift+I).
- * Registered unconditionally — `frappe.ui.keys` is part of the core desk bundle,
+ * Registered unconditionally â€” `frappe.ui.keys` is part of the core desk bundle,
  * so it is always present when app_include_js runs. (A previous `if
  * (frappe.ui.toolbar)` guard referenced a symbol that does not exist in Frappe
  * v16, so the shortcut never registered.) */

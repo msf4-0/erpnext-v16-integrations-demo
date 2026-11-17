@@ -17,7 +17,7 @@
 
         $script = (Resolve-Path .\refresh-shopify-token.ps1).Path
         schtasks /create /tn "comp_demo shopify token" /sc daily /st 08:00 `
-            /tr "powershell -ExecutionPolicy Bypass -File `"$script`""
+            /tr "powershell -ExecutionPolicy Bypass -File <repo>\refresh-shopify-token.ps1"
 
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\refresh-shopify-token.ps1
@@ -107,7 +107,7 @@ if (-not $SkipErpNext) {
 if (-not $SkipNodeRed) {
     $flowSrc = $cfg['NODE_RED_SOURCE_FLOW']
     if (-not $flowSrc -or -not (Test-Path $flowSrc)) {
-        $fallback = Join-Path $SandboxDir 'node-red\source-flow.json'
+        $fallback = (Join-Path $PSScriptRoot 'sandbox\node-red\source-flow.json')
         if (Test-Path $fallback) { $flowSrc = $fallback }
     }
     $builder = Join-Path $SandboxDir 'node-red\build-flows.py'

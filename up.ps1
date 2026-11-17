@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    ERPNEXT-AI-FIX - one-shot bring-up of a self-contained ERPNext stack with a
+    ERPNEXT-FIX - one-shot bring-up of a self-contained ERPNext stack with a
     working barcode scanner and a working Shopify <-> ERPNext bridge.
 
 .DESCRIPTION
@@ -9,7 +9,7 @@
     ERPNext Webhook records pointed at a dead tunnel URL.
 
     This script:
-      1. starts its OWN compose project (`erpnext-ai-fix`): bench + db + redis
+      1. starts its OWN compose project (`erpnext-fix`): bench + db + redis
          + node-red + ngrok, on its own ports and volumes
       2. provisions an ERPNext v16 site
       3. installs barcode_shrdc (from the downloaded source, with the v16 fix
@@ -36,8 +36,12 @@
     Skip the production planner bring-up (sandbox/scheduler-up.ps1).
 
 .EXAMPLE
-    pwsh -File .\sandbox\up.ps1
-    pwsh -File .\sandbox\up.ps1 -Fresh
+    # Run from the repository root. There is exactly ONE bring-up script and it
+    # is this file. The old sandbox\up.ps1 belonged to the retired
+    # `erpnext-fix` project, provisioned a DIFFERENT compose project, and has
+    # been deleted - if you still have a copy, do not run it.
+    powershell -ExecutionPolicy Bypass -File .\up.ps1
+    powershell -ExecutionPolicy Bypass -File .\up.ps1 -Fresh
 #>
 [CmdletBinding()]
 param(
@@ -52,8 +56,10 @@ $ProgressPreference = 'SilentlyContinue'
 $script:RunStart = Get-Date
 
 $DemoDir = $PSScriptRoot
-# SELF-CONTAINED: everything this script stages (sandbox scripts, recipes, the
-# Node-RED flow, app sources under repos/, and the planner) lives in this repo.
+# SELF-CONTAINED BY DEFAULT: everything this script stages (sandbox scripts,
+# recipes, the Node-RED flow, the app sources under repos/, and the planner) lives
+# inside comp_demo. The step-0 guard below falls back to ERPNEXT-FIX only if the
+# vendored sandbox is missing, so an in-flight run keeps working.
 $SandboxDir = Join-Path $DemoDir 'sandbox'
 $RootDir = $DemoDir
 $ComposeFile = Join-Path $DemoDir 'docker-compose.yml'
@@ -81,6 +87,17 @@ function Write-Step([string]$Message) {
 function Write-Info([string]$Message) { Write-Host "  $Message" }
 function Write-Warn([string]$Message) { Write-Host "  WARN: $Message" -ForegroundColor Yellow }
 function Write-Fail([string]$Message) { Write-Host "  FAIL: $Message" -ForegroundColor Red }
+
+# Required-step bookkeeping. A WARN means "an optional integration is
+# unavailable"; a FAIL means "a feature this repo advertises will not work".
+# The script must never print a green banner over a failure - printing one over
+# a half-installed stack is exactly how a broken setup got reported as a
+# successful one.
+$script:Failures = New-Object System.Collections.Generic.List[string]
+function Add-Failure([string]$Name, [string]$Detail) {
+    $script:Failures.Add("${Name}: $Detail")
+    Write-Fail "$Name - $Detail"
+}
 
 function Read-EnvFile([string]$Path) {
     $table = @{}
@@ -196,7 +213,10 @@ if (-not (Test-Path $EnvPath)) {
 # Self-containment guard (must run after the helpers exist so it can warn).
 $vendored = Test-Path (Join-Path $SandboxDir 'scripts')
 if (-not $vendored) {
-    throw "workspace sandbox scripts not found: $SandboxDir"
+    # There used to be a fallback to another project folder here. That folder
+    # exists on exactly one machine, so on every other clone the script silently
+    # ran against a DIFFERENT project's scripts. Fail loudly instead.
+    throw "sandbox\scripts is missing from this checkout ($SandboxDir). The repository is incomplete - re-clone it. There is no fallback to another folder."
 }
 $reposDir = Join-Path $RootDir 'repos'
 if (-not (Test-Path $reposDir)) { throw "no repos/ under $RootDir - the app sources are missing" }
@@ -253,8 +273,8 @@ $env:NGROK_URL_FLAG = if ($cfg['NGROK_PUBLIC_URL']) { '--url=' + $cfg['NGROK_PUB
 $env:ERPNEXT_API_TOKEN = $erpToken
 if ($cfg['NGROK_PUBLIC_URL']) { Write-Info "pinning the tunnel to $($cfg['NGROK_PUBLIC_URL'])" }
 
-# Self-heal the Node-RED flow paths. A fresh clone may have stale absolute paths;
-# a bind-mount
+# Self-heal the Node-RED flow paths. The .env.example ships stale absolute paths
+# (absolute author paths) that do not exist on a fresh clone; a bind-mount
 # to a missing source makes `docker compose create` fail, which is the "could not
 # build the image" error a fresh machine sees. Force both paths to resolve inside
 # THIS project, whatever its clone location. Process env wins over --env-file for
@@ -306,6 +326,13 @@ if (-not (Test-Path $flowsPath)) {
 Write-Step '3/11  starting the stack'
 if ($Fresh) {
     Write-Warn 'DESTRUCTIVE: removing existing volumes (the site DB will be lost)'
+    $backupScript = Join-Path $RootDir 'backup.ps1'
+    if (Test-Path $backupScript) {
+        Write-Info 'backing up the site before removing the volumes'
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $backupScript
+        if ($LASTEXITCODE -ne 0) { throw 'backup failed - refusing to delete the volumes' }
+    }
+    $env:ALLOW_SITE_RECREATE = '1'
     Invoke-Compose @('down', '-v', '--remove-orphans') | Out-Null
 } elseif ($SkipProvision) {
     # The `down` below removes the bench container, and with it the whole bench
@@ -319,19 +346,24 @@ if ($Fresh) {
     # and make the next `up` fail with a name conflict. Volumes are preserved.
     Invoke-Compose @('down', '--remove-orphans') | Out-Null
 }
-if ($script:IsWindowsHost) {
-    # On the Windows Docker Desktop host used for this demo, `compose up -d`
-    # hangs in the CLI hook layer; create + docker start avoids that host issue.
-    if ((Invoke-Compose @('create')) -ne 0) { throw 'docker compose create failed' }
-    $demoServices = @('db', 'redis-cache', 'redis-queue', 'bench', 'node-red', 'metabase')
-    $demoNames = $demoServices | ForEach-Object { "$Project-$_-1" }
-    if ((Invoke-Native -Exe 'docker' -Arguments (@('start') + $demoNames)) -ne 0) {
-        throw 'docker start failed for the demo stack'
-    }
-    Write-Info ('containers started: ' + ($demoNames -join ', '))
-} else {
-    if ((Invoke-Compose @('up', '-d')) -ne 0) { throw 'docker compose up failed' }
-    Write-Info 'containers started with docker compose up -d'
+# Pull the published image before compose create. Without this, compose builds
+# the 3 GB bench image whenever its tag is missing - the 25-40 minute stall.
+$pullScript = Join-Path $RootDir 'pull-bench.ps1'
+if (Test-Path $pullScript) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $pullScript
+    if ($LASTEXITCODE -eq 2) { Write-Warn 'continuing with a local build' }
+}
+if ((Invoke-Compose @('create')) -ne 0) { throw 'docker compose create failed' }
+
+# WHY NOT `docker compose up -d`: on this host `up` HANGS with the containers
+# left in the `Created` state (Docker Desktop attaches agent hooks to the compose
+# up subcommand; it affects the standalone docker-compose.exe shim too). `create`
+# returns fine, and `docker start` on the created containers takes ~15 s, so we
+# split the two - measured, not guessed.
+$demoServices = @('db', 'redis-cache', 'redis-queue', 'bench', 'node-red', 'metabase')
+$demoNames = $demoServices | ForEach-Object { "$Project-$_-1" }
+if ((Invoke-Native -Exe 'docker' -Arguments (@('start') + $demoNames)) -ne 0) {
+    throw 'docker start failed for the demo stack'
 }
 
 $deadline = (Get-Date).AddSeconds(180)
@@ -452,8 +484,10 @@ Write-Info 'barcode render dependencies prepared (cairo + reportlab + rlPyCairo)
 # ---------------------------------------------------------------------------
 if (-not $SkipInstall) {
     Write-Step '7/11  installing barcode_shrdc + shopify (long step)'
-    if ((Invoke-Bench 'bash /tmp/scripts/ai-fix-install.sh') -ne 0) {
-        Write-Warn 'the app install reported errors - review the output above'
+    if ((Invoke-Bench 'bash /tmp/scripts/fix-install.sh') -ne 0) {
+        Add-Failure 'apps' 'fix-install.sh failed - barcode_shrdc / shopify are NOT installed'
+    } else {
+        Write-Info 'barcode_shrdc + shopify installed'
     }
     # 7b. e-invoicing - best-effort, never blocks the build.
     if (Test-Path $einvoiceSrc) {
@@ -469,7 +503,7 @@ if (-not $SkipInstall) {
     if (Test-Path $trackingSrc) {
         Write-Step '7b-2/11 installing item_tracking (individual item tracking)'
         if ((Invoke-Bench 'bash /tmp/scripts/install-app.sh item_tracking /tmp/repos/item_tracking 16 /tmp/recipes/item_tracking.yaml') -ne 0) {
-            Write-Warn 'item_tracking install reported errors - Tracked Item labels will be unavailable'
+            Add-Failure 'item_tracking' 'install failed - Shift+I scanner and per-unit labels will not work'
         } else {
             Write-Info 'item_tracking (individual item tracking) installed'
         }
@@ -623,7 +657,7 @@ if (-not (Test-Path $barcodeFixed) -and (Test-Path $barcodeMaster)) {
 # ---------------------------------------------------------------------------
 Write-Step '8/11  Shopify post-setup (master data + product/order sync)'
 if ($shopifyToken) {
-    if ((Invoke-Bench "bash /tmp/scripts/ai-fix-postsetup.sh $shopifyToken $shopifyStore $shopifyVersion $shopifyClientId $shopifyClientSecret") -ne 0) {
+    if ((Invoke-Bench "bash /tmp/scripts/fix-postsetup.sh $shopifyToken $shopifyStore $shopifyVersion $shopifyClientId $shopifyClientSecret") -ne 0) {
         Write-Warn 'Shopify post-setup reported errors - review the output above'
     }
 } else {
@@ -640,7 +674,7 @@ if ($shopifyToken) {
 if (-not $SkipInstall) {
     Write-Step '8b/11  demo master data (suppliers, stock entry types, barcode scan, demo docs)'
     if ((Invoke-Bench 'cd /home/frappe/frappe-bench && SITE_NAME=frontend ./env/bin/python /tmp/scripts/seed-demo-masters.py') -ne 0) {
-        Write-Warn 'demo master data seeding reported errors - review the output above'
+        Add-Failure 'seed-masters' 'demo master data seeding failed - demo documents will be incomplete'
     } else {
         Write-Info 'demo master data seeded (supplier groups, stock entry types, barcode scanning, demo docs)'
     }
@@ -689,7 +723,7 @@ if (-not $SkipScheduler) {
 if (-not $SkipInstall) {
     Write-Step '9b/11  planner schema (Virtual Work Order doctype + demo batch group)'
     if ((Invoke-Bench 'cd /home/frappe/frappe-bench && SITE_NAME=frontend ./env/bin/python /tmp/scripts/seed-vwo-doctype.py') -ne 0) {
-        Write-Warn 'Virtual Work Order seeding reported errors - planner batch groups may be unavailable'
+        Add-Failure 'virtual-work-order' 'Virtual Work Order seeding failed - planner Batch/Timers tabs will be empty'
     } else {
         Write-Info 'Virtual Work Order doctype + demo batch group ready'
         # `Virtual Work Order` is created here, after step 8c granted the demo
@@ -708,8 +742,9 @@ Write-Step '10/11  building the Node-RED flow'
 
 $flowSrc = $cfg['NODE_RED_SOURCE_FLOW']
 if (-not $flowSrc -or -not (Test-Path $flowSrc)) {
-    # vendored next to the flow builder; use the copy inside this workspace
-    $fallback = Join-Path $SandboxDir 'node-red/source-flow.json'
+    # vendored next to the flow builder (the old external flow export file
+    # is outside the project and would break a copy of comp_demo)
+    $fallback = Join-Path $SandboxDir 'node-red\source-flow.json'
     if (Test-Path $fallback) { $flowSrc = $fallback }
 }
 if (-not $flowSrc -or -not (Test-Path $flowSrc)) {
@@ -795,7 +830,7 @@ while ((Get-Date) -lt $deadline) {
 
 if ($publicUrl) {
     Write-Info "tunnel: $publicUrl -> localhost:$nodeRedPort"
-    if ((Invoke-Bench "bash /tmp/scripts/ai-fix-wire-webhooks.sh $publicUrl") -ne 0) {
+    if ((Invoke-Bench "bash /tmp/scripts/fix-wire-webhooks.sh $publicUrl") -ne 0) {
         Write-Warn 'webhook wiring failed'
     }
 } else {
@@ -812,6 +847,7 @@ if (Wait-Url "$erpUrl/api/method/ping" 150) {
     Write-Info "ERPNext  : UP  ($erpUrl)"
 } else {
     Write-Fail "ERPNext  : NOT responding ($erpUrl)"
+    $script:Failures.Add("erpnext: not responding at $erpUrl")
 }
 
 $nodeRedOk = $false
@@ -844,7 +880,7 @@ if ($publicUrl) {
 
 Write-Host ''
 Write-Host ('=' * 72) -ForegroundColor Green
-Write-Host '  ERPNEXT-AI-FIX is up' -ForegroundColor Green
+Write-Host '  ERPNEXT-FIX is up' -ForegroundColor Green
 Write-Host ('=' * 72) -ForegroundColor Green
 Write-Host "  ERPNext        : $erpUrl" -ForegroundColor Green
 Write-Host '  Login          : Administrator / admin' -ForegroundColor Green
@@ -857,3 +893,47 @@ Write-Host '  Barcode scanner: ERPNext -> Barcode Printing'
 Write-Host '  Shopify bridge : webhooks -> tunnel -> Node-RED -> Shopify Admin API'
 Write-Host '  Production plan: Manufacturing workspace -> "Production Planner"'
 Write-Host ''
+
+# ---------------------------------------------------------------------------
+# feature assertions
+# ---------------------------------------------------------------------------
+# A 200 on /login proves only that the web server is up. An app whose
+# app_include_js 404s still serves a 200 HTML shell, and a missing doctype still
+# looks like "the page is just empty". These check the actual features the
+# repo advertises, and each failure is fatal.
+function Test-Feature([string]$Name, [string]$Url, [hashtable]$Headers = @{}) {
+    $code = 'ERR'
+    try {
+        $r = Invoke-WebRequest -Uri $Url -Headers $Headers -UseBasicParsing -TimeoutSec 25
+        $code = [int]$r.StatusCode
+    } catch {
+        if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
+    }
+    if ($code -eq 200) { Write-Info ("feature  : {0,-26} OK" -f $Name) }
+    else { Add-Failure $Name ("expected 200, got $code - $Url") }
+}
+
+$authHeaders = @{ Authorization = "token $erpToken" }
+Test-Feature 'barcode app'   "$erpUrl/api/resource/Barcode%20Printing"   $authHeaders
+Test-Feature 'barcode page'  "$erpUrl/item_qr?item_code=PLN-BRACKET"
+Test-Feature 'item tracking' "$erpUrl/assets/item_tracking/js/item_tracking_scan.js"
+Test-Feature 'e-invoicing'   "$erpUrl/api/resource/E%20Invoice%20Import"  $authHeaders
+Test-Feature 'barcode scan js' "$erpUrl/assets/barcode_shrdc/js/scanner_barcode_patch.js"
+Test-Feature 'barcode link js' "$erpUrl/assets/barcode_shrdc/js/barcode_create_links.js"
+# ---------------------------------------------------------------------------
+# exit contract
+# ---------------------------------------------------------------------------
+# 0 = every required step produced the feature it advertises.
+# 1 = the containers may be running, but at least one advertised feature is not
+#     installed. setup.ps1, CI and colleagues can rely on this.
+if ($script:Failures.Count -gt 0) {
+    Write-Host ('=' * 72) -ForegroundColor Red
+    Write-Host ("  SETUP INCOMPLETE - $($script:Failures.Count) required step(s) failed") -ForegroundColor Red
+    foreach ($f in $script:Failures) { Write-Host "   - $f" -ForegroundColor Red }
+    Write-Host '  The containers are up, but the features above will not work.' -ForegroundColor Red
+    Write-Host '  Re-run the failing part:  .\up.ps1 -SkipProvision -SkipInstall' -ForegroundColor Red
+    Write-Host ('=' * 72) -ForegroundColor Red
+    exit 1
+}
+Write-Host '  All required steps verified - setup complete.' -ForegroundColor Green
+exit 0
