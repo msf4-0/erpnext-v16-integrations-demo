@@ -598,7 +598,7 @@ sites (`events.py:91`, `tracked_item.py:169`) exist only to reach `barcode_shrdc
 
 #### P4.2 Move the Metabase page home
 
-- [ ] `apps/first_party/item_tracking/www/metabase_dashboard.{py,html}` →
+- [ ] `apps/first_party/item_tracking/www/metabase.{py,html}` →
       `metabase_integration/www/` (restore its controllers from `rover96/frappe-metabase` if pins allow).
 - [ ] Fix the route references and `Customisations.md` row 24.
 - [ ] If the restore is out of reach, **delete the page and record it as dropped** — a page whose

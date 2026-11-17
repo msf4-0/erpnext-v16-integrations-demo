@@ -48,7 +48,7 @@ Job Cards are rendered as draggable cards; the drags themselves are proven by
 | ngrok tunnel | <https://scoreless-barcode-length.ngrok-free.dev> | → `localhost:1880`, agent API on **:4040** |
 | Shopify storefront | <https://4e1075.myshopify.com> | SHRDC, MYR, 13 products published |
 
-Installed apps: `frappe 16.53.0`, `erpnext 16.52.1`, `barcode_shrdc 0.0.1`, `shopify 0.0.1`, `eu_einvoice 16.3.0`.
+Installed apps: `frappe 16.35.0`, `erpnext 16.35.0`, `barcode_shrdc 0.0.1`, `shopify 0.0.1`, `eu_einvoice 16.3.0`.
 
 ## Milestones
 

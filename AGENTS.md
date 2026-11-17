@@ -47,7 +47,7 @@ docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-co
 | Metabase | http://localhost:3005 | `admin@demo.local` / `DemoPass2026!` |
 | Production planner | http://localhost:3001 | drag-and-drop scheduling; user `planner@fix.local` |
 | Node-RED (Shopify bridge) | http://localhost:1880 | flow: `../ERPNEXT-FIX/sandbox/node-red/flows.json` |
-| ngrok API | http://localhost:4041 | host ngrok binary (no container) |
+| ngrok API | http://localhost:4040 | host ngrok binary (no container) |
 
 ## Features in the build
 

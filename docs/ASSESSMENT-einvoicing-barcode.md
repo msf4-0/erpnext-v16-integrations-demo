@@ -13,7 +13,7 @@
 
 | Fact | Value |
 |---|---|
-| Stack | ERPNext `16.53.0` / Frappe `16.54.0`, MariaDB 11.8 (`db_data` volume) |
+| Stack | ERPNext `16.35.0` / Frappe `16.35.0`, MariaDB 11.8 (`db_data` volume) |
 | Installed apps | `frappe`, `erpnext`, `barcode_shrdc 0.0.1`, `shopify 0.0.1`, `eu_einvoice 16.3.0`, **`item_tracking 0.0.1`** |
 | Containers up | bench (8000), scheduler (3001), node-red (1880), db, redis ×2 — all Up |
 | App sources | `repos/{barcode-shrdc-v16-fixed, shopify-shrdc-v16-fixed, eu_einvoice, item_tracking}` |
