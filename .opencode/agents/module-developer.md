@@ -23,16 +23,16 @@ compose project (provisioned by `module-installer`).
 - Canonical command shape (`-T` is optional and harmless Ã¢â‚¬â€ opencode's shell has
   no TTY, but `docker compose exec` here works without it):
   ```bash
-  docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec -T bench bash -lc "cd /home/frappe/frappe-bench && <bench command>"
+  docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml exec -T bench bash -lc "cd /home/frappe/frappe-bench && <bench command>"
   ```
-- Reachable from your granted `bash` pattern `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml *`,
+- Reachable from your granted `bash` pattern `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml *`,
   plus read-only `docker ps` / `docker images`, plus read-only `git` in the
   app repos. If something seems to require touching anything outside that
   project, stop and report it instead of working around the restriction.
 
 Operational facts:
 
-- Check the running project/ports first: `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ps`.
+- Check the running project/ports first: `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml ps`.
 - **Files you author are NOT auto-synced.** Copy each changed file in
   individually with `docker compose cp` (a dir-copy will NOT refresh an
   existing file, silently defeating the change). Copy nested files in order.
@@ -54,8 +54,8 @@ Operational facts:
   before re-diagnosing something already solved. Superseded one-off scripts
   live under `sandbox/scripts/archive/` and `archive/` for reference only Ã¢â‚¬â€ do
   not cite or run them. Before running any `docker compose exec ... bash -lc`
-  command, read `docs/WINDOWS-QUOTING.md` for the quoting rules (this is a
-  Windows PowerShell host Ã¢â€ â€™ Linux container workflow).
+  command, read `docs/INSTALL.md#quoting-shell-commands-on-windows` for the quoting rules (this is a
+  Windows PowerShell host â†’ Linux container workflow).
 - For the standard Frappe app layout and v16 conventions (doc `.json` / `.py` /
   `.js`, derived read-only summary fields, advisory vs. blocking validation,
   `FrappeTestCase` tests), follow the authoring pattern below.
@@ -149,7 +149,7 @@ do not silently build on top of an unknown state.
 ## Version targeting Ã¢â‚¬â€ every change must actually apply to the target version
 
 This org has repeatedly hit version-specific breakage (e.g. the `Custom
-Script` Ã¢â€ â€™ `Client Script` rename between v12/v15, the `jenv` hook key format,
+Script` â†’ `Client Script` rename between v12/v15, the `jenv` hook key format,
 reportlab version vs Python version Ã¢â‚¬â€ see `module-fixer.md` and the topic
 files under `install-log/`). A feature written for one version does not
 automatically transfer. For every change:
@@ -197,7 +197,7 @@ ABORTS the wizard, and `app_license` must be the LOWERCASE SPDX id (`mit`, not
 `MIT`). Run it via the canonical exec shape, piping all seven answers:
 
 ```bash
-docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec -T bench bash -lc "cd /home/frappe/frappe-bench && printf '%s\n' \
+docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml exec -T bench bash -lc "cd /home/frappe/frappe-bench && printf '%s\n' \
   '<Title>' '<Description>' '<Publisher>' '<Email>' 'mit' 'N' 'version-16' \
   | bench new-app <app_name>"
 ```
@@ -206,7 +206,7 @@ docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ex
   is ephemeral Ã¢â‚¬â€ copy the canonical tree out into an app repo under `./repos/`
   (or author directly there) as the source of truth. Use the trailing `/.` form
   when copying out so it merges rather than nests (see
-  `docs/WINDOWS-QUOTING.md` rule 10).
+  `docs/INSTALL.md#quoting-shell-commands-on-windows` rule 10).
 - `bench new-app` runs `git init` with branch `version-16` and **no remote**;
   keep it local (do not add a remote or push) unless the user asks.
 
@@ -289,7 +289,7 @@ verified, any edge cases found) Ã¢â‚¬â€ the app's file (e.g.
 work Ã¢â‚¬â€ and add a one-line entry to `install-log/index.md`. If the change is
 app-specific and would help a future install, note it in the relevant recipe
 under `./sandbox/recipes/`. If you created a **new app repo** (or learned one's
-URL), add a row to `./APP-SOURCES.md`; a locally authored app with no remote
+URL), add a row to `./docs/FACTS.md#upstream-sources`; a locally authored app with no remote
 gets an explicit `*(none Ã¢â‚¬â€ locally authored)*` row so a future run knows not to
 look for a URL. If you discover a generic fix that would help any
 app on this version, record it in the install-log entry and flag it clearly as

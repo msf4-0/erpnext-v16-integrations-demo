@@ -1,15 +1,20 @@
 # Baking comp_demo into proper container images
 
+> Authoritative current architecture and database durability:
+> [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). The tmpfs references
+> below are historical and describe an earlier configuration.
+
 The current setup keeps three things OUT of a durable image:
 
 | What | Where today | Lost on… |
 | --- | --- | --- |
-| frappe + erpnext + apps + venv + render deps | bench container **writable layer** (installed at runtime by `up.ps1`) | `docker compose down` + recreate |
-| site DB (900 tables) | `db` container **tmpfs** (`/var/lib/mysql`) | any stop / Docker restart |
+| frappe + erpnext + apps + venv + render deps | bench container **writable layer** (installed at runtime by `setup/up`) | `docker compose down` + recreate |
+| site DB (900 tables) | `db_data` named volume mounted at `/var/lib/mysql` | explicit volume deletion or storage loss |
 | staged scripts/repos | `/tmp/...` in the container | every run |
 
-Only `bench_sites` (the site files, NOT the DB) is a named volume. The goal is
-to move all of the above into images built ahead of time.
+The database and site files use separate named volumes (`db_data` and
+`bench_sites`). The remaining sections describe the image-baking history and
+options; the database strategy in use is Track 2b.
 
 ## Fresh clone — the default path
 
@@ -21,8 +26,8 @@ fresh `git clone` reproduces the exact `comp_demo-bench:v16` image straight from
 git clone https://github.com/msf4-0/erpnext-v16-integrations-demo.git
 cd erpnext-v16-integrations-demo
 copy .env.example .env        # fill in Shopify / DB secrets
-docker compose build bench    # builds comp_demo-bench:v16 from bake/bench.Dockerfile
-docker compose up -d          # starts bench, db, redis, node-red, scheduler
+docker compose --env-file .env --env-file versions.env build bench
+docker compose --env-file .env --env-file versions.env up -d
 ```
 
 > The image bakes the **code** (frappe + erpnext v16 + barcode_shrdc + shopify +
@@ -33,20 +38,22 @@ docker compose up -d          # starts bench, db, redis, node-red, scheduler
 ## Track 1 — bake the CODE (safe, high value)
 
 `bench.Dockerfile` builds `comp_demo-bench:v16` with everything installed at
-build time. `up.ps1` then skips provision + app-install (steps 5–7) and only
+build time. `setup/up` then skips provision + app-install (steps 5–7) and only
 creates/start the stack, dropping a full build from ~25–35 min to ~1–2 min.
 
 ```powershell
-docker build -f bake/bench.Dockerfile -t comp_demo-bench:v16 .
+docker compose --env-file .env --env-file versions.env build bench
 ```
 
 Then point `docker-compose.yml` `bench.image:` at `comp_demo-bench:v16`.
 
 ## Track 2 — bake the DATA/DB (harder; pick a strategy)
 
-The DB is tmpfs because this host's container-storage write path is pathological
-for MariaDB (in-container fsync ~600–900 ms; a named volume took >300 s for 100
-CREATE TABLEs). Baking does NOT remove that. Two options, each a trade-off:
+An earlier setup used tmpfs because this host's container-storage write path was
+measured to be pathological for MariaDB (in-container fsync ~600–900 ms; a
+named volume took >300 s for 100 CREATE TABLEs). The current setup uses the
+`db_data` named volume; initial population pays the write cost. The following
+options record the historical trade-offs:
 
 ### 2a — snapshot → tmpfs (fast boot, still ephemeral)
 Bake a **tarball of the already-provisioned datadir** into the image, extract to
@@ -78,5 +85,5 @@ to a non-scanned NTFS path).
    single session) and can never be baked into the image.
 6. **Keep the `compose up` workaround** (`create` + `docker start`) — `up` hangs
    on this host regardless of the image change.
-7. **Pin tags** (`frappe/erpnext:v16.35.0`, not `:latest`) or the bake is not
-   reproducible.
+7. Keep component image tags pinned in `versions.env`; floating tags prevent a
+   reproducible build.

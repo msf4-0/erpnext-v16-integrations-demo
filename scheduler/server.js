@@ -455,6 +455,69 @@ app.get('/api/boms', async (req, res) => {
 });
 
 // Create a new Work Order
+// ── Robust document submit ──────────────────────────────────────────────────
+// `frappe.client.submit` compares the `modified` timestamp of the doc you hand
+// it against the stored one and raises TimestampMismatchError (HTTP 417) the
+// moment anything touched the document in between. REST writes back-fill
+// required_items / operations, so that race is the normal case, not the edge.
+// Every "Work Order created" then silently stayed Draft and ERPNext produced
+// zero Job Cards. The REST status transition below always acts on the freshest
+// stored document, so use it as the primary path.
+async function submitDocument(doctype, name, { retries = 2 } = {}) {
+  const path = `/${encodeURIComponent(doctype)}/${encodeURIComponent(name)}`;
+  let lastErr = null;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const resp = await erpnextAPI.put(path, { docstatus: 1 });
+      const doc = resp && resp.data && resp.data.data;
+      if (doc && doc.docstatus === 1) return doc;
+      lastErr = new Error(`${doctype} ${name} did not reach docstatus 1`);
+    } catch (err) {
+      lastErr = err;
+      const msg = parseERPNextError(err);
+
+      // Already submitted (e.g. a retry after a timeout) is success.
+      try {
+        const fresh = await erpnextAPI.get(path);
+        if (fresh.data && fresh.data.data && fresh.data.data.docstatus === 1) {
+          return fresh.data.data;
+        }
+      } catch (_) { /* fall through to retry */ }
+
+      if (/already been submitted|cancelled|docstatus/i.test(msg) && attempt >= retries) break;
+    }
+    if (attempt < retries) {
+      await new Promise(r => setTimeout(r, 250 * (attempt + 1)));
+    }
+  }
+  throw lastErr || new Error(`Could not submit ${doctype} ${name}`);
+}
+
+// ERPNext derives Job Card.status from `time_logs` (JobCard.set_status()), so a
+// direct write to `status` is overwritten on the next save. A *closed* log means
+// Completed, an *open* log (to_time = null) means Work In Progress. When a timer
+// is ended we must close the open log we created at start, otherwise the submit
+// fails validation.
+function closeOpenTimeLogs(logs, endStr, durationMins, completedQty) {
+  return (Array.isArray(logs) ? logs : []).map(l => {
+    if (l.from_time && !l.to_time) {
+      return {
+        from_time: l.from_time,
+        to_time: endStr,
+        time_in_mins: Math.max(1, durationMins),
+        completed_qty: completedQty
+      };
+    }
+    return {
+      from_time: l.from_time,
+      to_time: l.to_time,
+      time_in_mins: l.time_in_mins,
+      completed_qty: l.completed_qty
+    };
+  });
+}
+
 app.post('/api/work-orders', async (req, res) => {
   try {
     const {
@@ -561,17 +624,40 @@ app.post('/api/work-orders', async (req, res) => {
     const newWO = response.data.data;
 
     // Auto-submit the Work Order so it doesn't stay as Draft.
-    // Use frappe.client.submit (the real submit flow) instead of flipping the
-    // read-only `docstatus` field directly — the direct PUT is silently ignored
-    // on modern Frappe/ERPNext, which leaves the WO as Draft and generates no
-    // Job Cards or child Work Orders (the "sub orders" from the BOM).
+    // NOTE: `frappe.client.submit` is NOT used here. ERPNext v15/16 compares the
+    // `modified` timestamp of the doc you pass against the stored one and raises
+    // TimestampMismatchError (HTTP 417) as soon as anything touched the document
+    // between our POST and the RPC — which is exactly what the required_items /
+    // operations back-fill does. The failure used to be caught and downgraded to
+    // a console.warn, so the UI reported success while the WO stayed Draft and
+    // ERPNext generated zero Job Cards. `submitDocument` uses the REST status
+    // transition (PUT {docstatus: 1}) which always acts on the freshest doc.
     try {
-      await erpnextMethodAPI.post('/frappe.client.submit', { doctype: 'Work Order', name: newWO.name });
+      const submittedWO = await submitDocument('Work Order', newWO.name);
       newWO.docstatus = 1;
-      newWO.status = 'Not Started';
+      newWO.status = submittedWO.status || 'Not Started';
+      console.log(`✅ Submitted Work Order ${newWO.name} (docstatus 1, status ${newWO.status})`);
     } catch (submitErr) {
-      console.warn(`Could not auto-submit Work Order ${newWO.name}:`, submitErr.message);
+      const reason = parseERPNextError(submitErr);
+      console.error(`❌ Could not auto-submit Work Order ${newWO.name}: ${reason}`);
+      return res.status(502).json({
+        success: false,
+        error: `Work Order ${newWO.name} was created in ERPNext but could NOT be submitted: ${reason}`,
+        data: newWO
+      });
     }
+
+    // A submitted Work Order with no operations can never create Job Cards,
+    // which is the single most common reason the planner looks "empty".
+    try {
+      const woCheck = (await erpnextAPI.get(`/Work Order/${newWO.name}`)).data.data;
+      if (!Array.isArray(woCheck.operations) || woCheck.operations.length === 0) {
+        console.warn(
+          `⚠️  Work Order ${newWO.name} has no operations — ERPNext will create 0 Job Cards. ` +
+          `BOM ${bom_no} must define operations (BOM "with_operations") before planning.`
+        );
+      }
+    } catch (_) { /* advisory only */ }
 
     // Save the intended workstation in the in-memory map so the matrix can
     // place this WO in the correct row
@@ -809,17 +895,18 @@ const performManufactureEntry = async (woId, qty, elapsedSeconds) => {
         const fromStr = `${startTime.getFullYear()}-${pad(startTime.getMonth() + 1)}-${pad(startTime.getDate())} ${pad(startTime.getHours())}:${pad(startTime.getMinutes())}:${pad(startTime.getSeconds())}`;
         const toStr = `${endTime.getFullYear()}-${pad(endTime.getMonth() + 1)}-${pad(endTime.getDate())} ${pad(endTime.getHours())}:${pad(endTime.getMinutes())}:${pad(endTime.getSeconds())}`;
 
-        // Step A: Add time log
+        // Step A: close any running timer, then make sure a completion log exists
+        const closedLogs = closeOpenTimeLogs(existingLogs, toStr, durationMins, targetQty);
+        const alreadyClosedAtEnd = closedLogs.some(l => l.to_time === toStr);
         await erpnextAPI.put(`/Job Card/${jc.name}`, {
-          time_logs: [
-            ...existingLogs,
-            {
-              from_time: fromStr,
-              to_time: toStr,
-              time_in_mins: durationMins,
-              completed_qty: targetQty
-            }
-          ]
+          time_logs: alreadyClosedAtEnd
+            ? closedLogs
+            : [...closedLogs, {
+                from_time: fromStr,
+                to_time: toStr,
+                time_in_mins: durationMins,
+                completed_qty: targetQty
+              }]
         });
 
         // Step B: Submit Job Card
@@ -1337,6 +1424,44 @@ app.post('/api/work-orders/:id/cancel', async (req, res) => {
 app.post('/api/job-cards/:id/start', async (req, res) => {
   const jcId = req.params.id;
   try {
+    // ── Pre-flight against ERPNext ───────────────────────────────────────────
+    // ERPNext refuses every write against a cancelled document, and it will not
+    // move a Job Card to "Work In Progress" while its Work Order is cancelled.
+    // Those rejections used to be downgraded to a console.warn while the timer
+    // kept running in memory — the UI reported "started" and nothing changed.
+    let parentWorkOrder = null;
+    try {
+      const jcPre = (await erpnextAPI.get(`/Job Card/${encodeURIComponent(jcId)}`)).data.data;
+      parentWorkOrder = (jcPre && jcPre.work_order) || null;
+
+      if (jcPre.docstatus === 2) {
+        return res.status(409).json({
+          success: false,
+          error: `Job Card ${jcId} is Cancelled in ERPNext (docstatus 2) — it cannot be started.`
+        });
+      }
+
+      if (parentWorkOrder) {
+        const woPre = (await erpnextAPI.get(`/Work Order/${encodeURIComponent(parentWorkOrder)}`)).data.data;
+        if (woPre.docstatus === 2) {
+          return res.status(409).json({
+            success: false,
+            error: `Work Order ${parentWorkOrder} is Cancelled in ERPNext (docstatus 2). ` +
+                   `Reopen or re-create it before starting Job Card ${jcId}.`
+          });
+        }
+        if (woPre.docstatus === 0) {
+          await submitDocument('Work Order', parentWorkOrder);
+          console.log(`Submitted Draft Work Order ${parentWorkOrder} before starting ${jcId}`);
+        }
+      }
+    } catch (preErr) {
+      return res.status(502).json({
+        success: false,
+        error: `ERPNext pre-flight check failed for Job Card ${jcId}: ${parseERPNextError(preErr)}`
+      });
+    }
+
     const now = Date.now();
     const nowIso = new Date().toISOString();
     const timers = loadTimers();
@@ -1356,36 +1481,57 @@ app.post('/api/job-cards/:id/start', async (req, res) => {
     saveTimers(timers);
     console.log(`⏱ Started timer for Job Card ${jcId}`);
 
-    // Update Job Card status to 'Work In Progress' in ERPNext
-    let parentWorkOrder = null;
+    // Push the status to ERPNext; if ERPNext refuses, roll the timer back so the
+    // UI can never report a job as running when the record was not updated.
     try {
       const pad = n => String(n).padStart(2, '0');
       const d = new Date();
       const startStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
-      // Fetch Job Card to get parent work_order
-      const jcResp = await erpnextAPI.get(`/Job Card/${jcId}`);
-      const jcData = jcResp.data.data;
-      parentWorkOrder = jcData ? jcData.work_order : null;
+      // Start the ERPNext timer the way ERPNext itself does: open a time log.
+      // Writing `status` directly is pointless — validate() recomputes it from
+      // time_logs, which is why the card stayed "Open" while the app said
+      // "Work In Progress".
+      const jcNow = (await erpnextAPI.get(`/Job Card/${encodeURIComponent(jcId)}`)).data.data;
+      const logsNow = Array.isArray(jcNow.time_logs) ? jcNow.time_logs : [];
+      const hasOpenLog = logsNow.some(l => l.from_time && !l.to_time);
 
-      await erpnextMethodAPI.post('/frappe.client.set_value', {
-        doctype: 'Job Card',
-        name: jcId,
-        fieldname: 'status',
-        value: 'Work In Progress'
-      });
-      try {
-        await erpnextMethodAPI.post('/frappe.client.set_value', {
-          doctype: 'Job Card',
-          name: jcId,
-          fieldname: 'actual_start_date',
-          value: startStr
+      if (!hasOpenLog) {
+        await erpnextAPI.put(`/Job Card/${encodeURIComponent(jcId)}`, {
+          actual_start_date: startStr,
+          time_logs: [
+            ...logsNow.map(l => ({
+              from_time: l.from_time,
+              to_time: l.to_time,
+              time_in_mins: l.time_in_mins,
+              completed_qty: l.completed_qty
+            })),
+            { from_time: startStr, to_time: null, completed_qty: 0 }
+          ]
         });
-      } catch (e) {}
+      } else {
+        await erpnextAPI.put(`/Job Card/${encodeURIComponent(jcId)}`, { actual_start_date: startStr });
+      }
 
-      console.log(`Set Job Card ${jcId} status to 'Work In Progress' in ERPNext`);
+      const jcAfter = (await erpnextAPI.get(`/Job Card/${encodeURIComponent(jcId)}`)).data.data;
+      console.log(`Job Card ${jcId} in ERPNext: status="${jcAfter.status}" actual_start=${jcAfter.actual_start_date}`);
+      if (jcAfter.status !== 'Work In Progress') {
+        console.warn(`⚠️  ERPNext still reports Job Card ${jcId} as "${jcAfter.status}" after start.`);
+      }
     } catch (erpErr) {
-      console.warn(`Could not update ERPNext status for Job Card ${jcId}:`, parseERPNextError(erpErr));
+      const reason = parseERPNextError(erpErr);
+      console.error(`Could not update ERPNext status for Job Card ${jcId}: ${reason}`);
+      const t = loadTimers();
+      if (t[jcId]) {
+        t[jcId].status = 'idle';
+        t[jcId].lastIntervalStart = null;
+        t[jcId].error = reason;
+        saveTimers(t);
+      }
+      return res.status(502).json({
+        success: false,
+        error: `ERPNext could not start Job Card ${jcId}: ${reason}`
+      });
     }
 
     // ── Auto-start parent Work Order if it has one and isn't already running/completed ──
@@ -1541,17 +1687,18 @@ app.post('/api/job-cards/:id/finish', async (req, res) => {
         const existingLogs = Array.isArray(jcData.time_logs) ? jcData.time_logs : [];
         const completedQty = jcData.for_quantity || 1;
 
-        // Step A: Add time log
+        // Step A: close the running timer (if any), then ensure a completion log
+        const closedLogs = closeOpenTimeLogs(existingLogs, endStr, durationMins, completedQty);
+        const alreadyClosedAtEnd = closedLogs.some(l => l.to_time === endStr);
         await erpnextAPI.put(`/Job Card/${jcId}`, {
-          time_logs: [
-            ...existingLogs,
-            {
-              from_time: endStr,
-              to_time: endStr,
-              time_in_mins: durationMins,
-              completed_qty: completedQty
-            }
-          ]
+          time_logs: alreadyClosedAtEnd
+            ? closedLogs
+            : [...closedLogs, {
+                from_time: endStr,
+                to_time: endStr,
+                time_in_mins: durationMins,
+                completed_qty: completedQty
+              }]
         });
 
         // Step B: Submit Job Card
@@ -1757,7 +1904,7 @@ const mapStatusToVWO = (st) => {
 
       // Auto-submit the Virtual Work Order so it doesn't stay as Draft
       try {
-        await erpnextMethodAPI.post('/frappe.client.submit', { doctype: 'Virtual Work Order', name: batchGroupId });
+        await submitDocument('Virtual Work Order', batchGroupId);
       } catch (submitErr) {
         console.warn(`Could not auto-submit Virtual Work Order ${batchGroupId}:`, submitErr.message);
       }

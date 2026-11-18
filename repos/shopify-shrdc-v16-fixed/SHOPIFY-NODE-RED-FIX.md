@@ -38,7 +38,7 @@
 
 ## Runtime state on the v16 stack
 
-Stack: `frappe_docker-1`, compose file `F:\ERPNEXT\frappe_docker-1\pwd.yml`,
+Stack: legacy `frappe_docker-1`, compose file `pwd.yml`,
 site `frontend`, ERPNext `16.35.0`.
 
 The patched fork is installed at
@@ -139,7 +139,7 @@ it; otherwise remove it.
 
 ## Verification
 
-Run these from `F:\ERPNEXT\frappe_docker-1`:
+Run these from the legacy `frappe_docker-1` stack directory:
 
 ```powershell
 docker compose -p frappe_docker-1 -f pwd.yml exec -T backend `

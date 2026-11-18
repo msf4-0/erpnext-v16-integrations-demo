@@ -55,23 +55,46 @@ mkdir -p logs
 mkdir -p frontend/logs
 mkdir -p sites/assets
 mkdir -p sites
-if [ ! -f sites/common_site_config.json ]; then
-    echo "seed: writing sites/common_site_config.json"
-    cat > sites/common_site_config.json <<JSON
-{
-  "db_host": "db",
-  "db_port": 3306,
-  "redis_cache": "redis://redis-cache:6379",
-  "redis_queue": "redis://redis-queue:6379",
-  "redis_socketio": "redis://redis-queue:6379",
-  "socketio_port": 9000
-}
-JSON
-fi
 if [ ! -f sites/apps.txt ]; then
     echo "seed: writing sites/apps.txt"
     printf 'frappe\nerpnext\nbarcode_shrdc\nshopify\neu_einvoice\nitem_tracking\nmetabase_integration\nmy_invois\n' > sites/apps.txt
 fi
+
+# --- db/redis endpoints in the GLOBAL config ---------------------------------
+# The base image ships a sites/common_site_config.json containing only
+# `default_site`, and Docker copies image content into a fresh named volume.
+# The old guard ("write it only if the file is missing") therefore never fired
+# on a clean clone, so every bench command in this container resolved
+# db_host=localhost:3306 / redis://localhost:6379 and `bench migrate` aborted
+# with "Service redis_cache is not running" - while the site itself kept serving
+# without cache/queue. Merge the keys unconditionally instead of skipping.
+echo "seed: ensuring db/redis keys in sites/common_site_config.json"
+/home/frappe/frappe-bench/env/bin/python - <<'PY'
+import json
+import os
+
+path = "/home/frappe/frappe-bench/sites/common_site_config.json"
+cfg = {}
+if os.path.exists(path):
+    try:
+        with open(path) as handle:
+            cfg = json.load(handle) or {}
+    except Exception:  # noqa: BLE001
+        cfg = {}
+cfg.update(
+    {
+        "db_host": "db",
+        "db_port": 3306,
+        "redis_cache": "redis://redis-cache:6379",
+        "redis_queue": "redis://redis-queue:6379",
+        "redis_socketio": "redis://redis-queue:6379",
+        "socketio_port": 9000,
+    }
+)
+with open(path, "w") as handle:
+    json.dump(cfg, handle, indent=1)
+print("seed: common_site_config ->", ", ".join(sorted(cfg)))
+PY
 
 # --- case 2: create the site record, then restore over it -------------------
 # new-site is needed even though the dump contains everything: it creates the
@@ -106,29 +129,23 @@ bench --site "${SITE}" migrate --skip-search-index || true
 bench --site "${SITE}" clear-cache
 bench --site "${SITE}" clear-website-cache || true
 
-# --- my_invois: install when the dump predates it ---------------------------
-# The site dump was taken before my_invois existed, so restoring it does not
-# install the app. Register it, put it on the venv path, and install it once.
-# Guarded: a failure here must not abort the seed (core demo stays usable).
-if ! grep -qx 'my_invois' sites/apps.txt 2>/dev/null; then
-    echo "seed: registering my_invois in sites/apps.txt"
-    # apps.txt is often written without a trailing newline, and `echo x >> file`
-    # would then glue the name onto the last line. e2e caught exactly that:
-    # ModuleNotFoundError: No module named 'erpnextmy_invois'.
-    if [ -s sites/apps.txt ] && [ -n "$(tail -c 1 sites/apps.txt)" ]; then
-        echo >> sites/apps.txt
-    fi
-    echo 'my_invois' >> sites/apps.txt
+# --- all eight apps: install whatever the dump predates ---------------------
+# The dump was taken at some earlier point in the demo's life, so it does not
+# carry every app that is now in the image (historically it lacked my_invois;
+# item_tracking / metabase_integration were mounted and installed by hand).
+# Rather than special-casing one app per restore, run the SAME canonical
+# installer the bench image ships. It is idempotent, ordered, and fails loudly
+# if an app cannot be installed - a silently half-installed site is the bug
+# this whole package exists to remove.
+#   SKIP_APPS="my_invois" opts a conflicting LHDN layer out for one site.
+echo "seed: installing all apps (idempotent; the dump covers most of them)"
+INSTALLER=/usr/local/bin/install-all-apps.sh
+if [ ! -x "${INSTALLER}" ]; then
+    echo "seed: ERROR - ${INSTALLER} is missing from the bench image." >&2
+    echo "      The image is older than P7; rebuild with: docker compose build bench" >&2
+    exit 1
 fi
-if ! bench --site "${SITE}" list-apps 2>/dev/null | awk '{print $1}' | grep -qx 'my_invois'; then
-    echo "seed: installing my_invois (LHDN MyInvois)"
-    SP=$(dirname "$(find /home/frappe/frappe-bench/env -name 'frappe.pth' -print -quit)")
-    printf '/home/frappe/frappe-bench/apps/my_invois\n' > "${SP}/my_invois.pth"
-    bench --site "${SITE}" install-app my_invois \
-        || echo "seed: WARN my_invois install failed - e-invoicing stays unavailable"
-    bench --site "${SITE}" migrate --skip-search-index || true
-    bench --site "${SITE}" clear-cache || true
-fi
+SITE_NAME="${SITE}" bash "${INSTALLER}"
 
 # Re-assert a host-agnostic grant: the restored dump's user was created bound to
 # some old container IP, which is the classic post-restore 1045 failure.

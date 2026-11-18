@@ -7,7 +7,7 @@
 # depends on it, so it's normally present — worth a quick `python3 -c
 # "import yaml"` check if this ever errors oddly on a new base image).
 #
-# Usage: install-app.sh <app_name> <repo_url_or_local_dir> <erpnext_version> [recipe_yaml]
+# Usage: install-app.sh <app_name> <repo_url_or_local_dir|@mounted> <erpnext_version> [recipe_yaml]
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -97,7 +97,21 @@ register_app_by_hand() {
 # only in a local fork has no remote to fetch. Copy the directory to
 # apps/<APP> and register it by hand (exactly what get-app would do minus
 # the clone), then pip-install requirements.txt as get-app normally would.
-if [ -d "$REPO" ]; then
+if [ "$REPO" = "@mounted" ]; then
+  if [ ! -d "apps/$APP" ]; then
+    echo "ERROR: mounted app source apps/$APP is missing"
+    exit 1
+  fi
+  echo "-- Reusing the app source already mounted at apps/$APP --"
+  register_app_by_hand || exit 1
+  if [ -f "apps/$APP/requirements.txt" ]; then
+    source env/bin/activate
+    if ! pip install -r "apps/$APP/requirements.txt"; then
+      echo "WARN: dependency installation reported an error for $APP; continuing with the bench install"
+    fi
+    deactivate
+  fi
+elif [ -d "$REPO" ]; then
   echo "-- Local source directory detected ($REPO); bypassing bench get-app --"
   # Ownership-aware, verified placement. The old inline `rm -rf; cp -r` nested
   # the tree when the destination held root-owned files (a `docker compose cp`

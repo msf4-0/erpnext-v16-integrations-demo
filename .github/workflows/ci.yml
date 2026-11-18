@@ -57,7 +57,7 @@ jobs:
       - name: The retired sandbox/up.ps1 must not come back
         run: |
           if [ -e sandbox/up.ps1 ]; then
-            echo "::error::sandbox/up.ps1 belongs to the retired erpnext-fix project"
+            echo "::error::sandbox/up.ps1 belonged to the retired erpnext-fix project (removed 2026-11-17)"
             exit 1
           fi
 

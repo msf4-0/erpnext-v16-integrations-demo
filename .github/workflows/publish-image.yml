@@ -13,7 +13,7 @@ name: publish-image
 #   ghcr.io/msf4-0/comp-demo-bench:<short-sha>  (per commit)
 #
 # Platforms: linux/amd64 by default. Select "linux/amd64,linux/arm64" to publish
-# a multi-arch manifest (experimental - see docs/IMAGE-POLICY.md).
+# a multi-arch manifest (experimental - see docs/DISTRIBUTION.md#image-policy).
 
 on:
   push:
@@ -87,7 +87,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Measure the compressed image size
-        # Budget is documented in docs/IMAGE-POLICY.md. This is a warning, not a
+        # Budget is documented in docs/DISTRIBUTION.md#image-policy. This is a warning, not a
         # gate, until a baseline has been reviewed on a few releases.
         continue-on-error: true
         run: |

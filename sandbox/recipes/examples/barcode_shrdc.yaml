@@ -15,8 +15,8 @@ repo: https://github.com/msf4-0/ERPNext-Barcode-Integration
 # mid-file). If you maintain a fixed fork, point `repo:` at it or add a
 # per-version `source:` (a local directory under ./repos/) — install-app.sh
 # accepts a directory as its <repo> argument and copies+registers it by hand:
-#   docker compose -p erpnext-sandbox cp ./repos/<your-fork> bench:/tmp/<your-fork>
-#   docker compose -p erpnext-sandbox exec bench bash -lc \
+#   docker compose -p comp_demo cp ./repos/<your-fork> bench:/tmp/<your-fork>
+#   docker compose -p comp_demo exec bench bash -lc \
 #     "/tmp/scripts/install-app.sh barcode_shrdc /tmp/<your-fork> 15 /tmp/recipes/barcode_shrdc.yaml"
 # The v12/v16 entries below apply to upstream master.
 

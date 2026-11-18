@@ -9,7 +9,7 @@
 #   2. shopify        — the v16-fixed fork.
 #   3. an ERPNext API token for Administrator (consumed by the Node-RED flow).
 #
-# Inputs staged by sandbox/up.ps1 into the container:
+# Inputs staged by up.ps1 into the container:
 #   /tmp/scripts/   this workspace's sandbox/scripts/*
 #   /tmp/recipes/   sandbox/recipes/*
 #   /tmp/repos/     the app sources

@@ -20,7 +20,7 @@ component, a reproduction, and whether credentials or data are exposed.
 - The demo ships default logins (`Administrator`/`admin`,
   `demo@compdemo.local`/`demo`) and a default MariaDB root password in
   `.env.example`. Intended for a local demo only.
-- `setup.ps1` mints an ERPNext API key/secret and writes it to `.env`, which is
+- `setup/setup` mints an ERPNext API key/secret and writes it to `.env`, which is
   git-ignored.
 - ngrok exposes the local bench publicly while it runs. Stop the tunnel when you
   are done; the URL changes on each start unless `NGROK_PUBLIC_URL` is pinned.

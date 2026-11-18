@@ -5,9 +5,9 @@
 # the service container is recreated) — run that check separately as
 # root BEFORE this script, which should run as the normal bench user:
 #
-#   docker compose -p erpnext-sandbox exec -u root bench bash -lc \
+#   docker compose -p comp_demo exec -u root bench bash -lc \
 #     "which redis-server || (apt-get update -qq && apt-get install -y -qq redis-server)"
-#   docker compose -p erpnext-sandbox exec bench bash -lc \
+#   docker compose -p comp_demo exec bench bash -lc \
 #     "/tmp/scripts/provision-base.sh <version>"
 #
 # Usage: provision-base.sh <erpnext_version>   e.g. provision-base.sh 16
@@ -19,6 +19,7 @@ source "$SCRIPT_DIR/lib/common.sh"
 VERSION="${1:?Usage: provision-base.sh <erpnext_version>}"
 BRANCH="version-$VERSION"
 DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD:-admin}"
+ERPNEXT_ADMIN_PASSWORD="${ERPNEXT_ADMIN_PASSWORD:-admin}"
 
 echo "== Provisioning ERPNext v$VERSION base =="
 
@@ -61,7 +62,7 @@ cd /home/frappe || exit 1
 if [ -d "$BENCH_DIR" ] && [ "$(stat -c '%U' "$BENCH_DIR")" != "frappe" ]; then
   echo "ERROR: $BENCH_DIR is owned by '$(stat -c '%U' "$BENCH_DIR")', not 'frappe'."
   echo "A fresh volume mount is root-owned. Run this as root first:"
-  echo "  docker compose -p erpnext-sandbox exec -u root bench bash -lc \"chown -R frappe:frappe $BENCH_DIR\""
+  echo "  docker compose -p comp_demo exec -u root bench bash -lc \"chown -R frappe:frappe $BENCH_DIR\""
   exit 1
 fi
 
@@ -196,7 +197,7 @@ if [ -f "$SITE_DIR/site_config.json" ] \
   echo "-- site $SITE_NAME already exists with erpnext installed - reusing it --"
   echo "   (rebuild from scratch with: up.ps1 -Fresh, or setup.ps1 -Full -Wipe)"
 else
-  if ! bench new-site "$SITE_NAME" --admin-password admin \
+  if ! bench new-site "$SITE_NAME" --admin-password "$ERPNEXT_ADMIN_PASSWORD" \
         "$ROOT_PW_FLAG" "$DB_ROOT_PASSWORD" "$ROOT_USER_FLAG" root --install-app erpnext; then
     echo "-- new-site failed (likely partial DB setup from a prior attempt) --"
     # `new-site --force` DROPS the existing site database. Doing that silently

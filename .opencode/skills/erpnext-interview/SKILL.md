@@ -1,9 +1,9 @@
 ---
 name: erpnext-interview
-description: Runs the question-first ERPNext/Frappe requirements interview (question-bank.md phases 0-10). Use when a new ERPNext customization, report, dashboard, or DocType request needs requirements gathered before a spec is written.
+description: Runs the question-first ERPNext/Frappe requirements interview (`.opencode/agents/references/question-bank.md` phases 0-10). Use when a new ERPNext customization, report, dashboard, or DocType request needs requirements gathered before a spec is written.
 ---
 
-# erpnext-interview skill — runs the Interview Protocol using question-bank.md
+# erpnext-interview skill — runs the Interview Protocol using `.opencode/agents/references/question-bank.md`
 
 ## What this skill is for (plain English)
 This is the "ask before you build" skill. Factory workflows have details a

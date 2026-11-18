@@ -1,5 +1,8 @@
 # Shopify → ERPNext via Node-RED — setup
 
+> Authoritative stack architecture, ports, versions, and database durability:
+> [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md).
+
 Automates the parts of the integration that are mechanical, and tells you exactly
 which parts are not automatable.
 
@@ -36,6 +39,8 @@ Day-to-day, the script is safe to re-run at any time; unchanged steps report
 `[SKIP]`. Schedule it if your tokens are short-lived:
 
 ```powershell
+# Run from the repository root.
+$script = (Resolve-Path .\shopify-setup\setup-shopify-erpnext.ps1).Path
 schtasks /create /tn "shopify-erpnext setup" /sc daily /st 07:00 ^
   /tr "pwsh -NoProfile -File <repo>\shopify-setup\setup-shopify-erpnext.ps1"
 ```
@@ -157,8 +162,8 @@ filter that matched nothing).
 
 1. **Install Docker Desktop + ERPNext.** The script assumes an ERPNext v16 site is
    already reachable at `ERP_URL`. For this build that is the `comp_demo` stack
-   (`<repo>`) — bring it up with `setup.cmd` there, or run
-   the full `up.ps1`. The upstream reference is the `msf4-0/ERPNext-ECommerce-Shopify`
+   (`<repo>`) — bring it up with `setup/setup` there, or run
+   the full `setup/up`. The upstream reference is the `msf4-0/ERPNext-ECommerce-Shopify`
    repo; cloning and installing that is outside this script.
 2. **Create the Shopify Dev Dashboard app.** Shopify admin → Settings → Apps →
    Develop apps → create app → configure Admin API scopes → copy the **client id**
@@ -175,9 +180,9 @@ filter that matched nothing).
 6. **Shopify webhook registration** (optional, inbound direction). This script
    configures ERPNext → Node-RED. Pointing Shopify's own webhooks at
    `https://<domain>/shopify-order` is a Shopify-admin action.
-7. **Accept that the ERPNext site DB is tmpfs.** In this build a container stop
-   wipes the site, which also wipes `Shopify Access` and the three webhooks —
-   re-running this script after `setup.cmd` restores them.
+7. The ERPNext site DB is stored in the `db_data` named volume and survives
+   container and Docker restarts. `docker compose down -v` deletes it, including
+   the `Shopify Access` records and webhooks.
 
 ## Caveats handled in code
 

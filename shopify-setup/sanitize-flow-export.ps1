@@ -11,6 +11,10 @@ param(
     [string]$Path = (Join-Path (Split-Path $PSScriptRoot -Parent) 'sandbox\node-red\source-flow.json')
 )
 
+if (-not $Path) {
+    $Path = Join-Path (Split-Path -Parent $PSScriptRoot) 'sandbox\node-red\source-flow.json'
+}
+
 $raw = Get-Content -LiteralPath $Path -Raw
 $before = @($raw | ConvertFrom-Json)
 

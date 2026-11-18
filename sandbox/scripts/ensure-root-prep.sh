@@ -13,9 +13,9 @@
 #
 # Run as root, e.g.:
 #
-#   docker compose -p erpnext-sandbox cp ./sandbox/scripts/ensure-root-prep.sh \
+#   docker compose -p comp_demo cp ./sandbox/scripts/ensure-root-prep.sh \
 #     bench:/tmp/scripts/ensure-root-prep.sh
-#   docker compose -p erpnext-sandbox exec -u root bench bash -lc \
+#   docker compose -p comp_demo exec -u root bench bash -lc \
 #     "chmod +x /tmp/scripts/ensure-root-prep.sh && /tmp/scripts/ensure-root-prep.sh"
 #
 # Idempotent: safe to re-run on an already-prepared bench.

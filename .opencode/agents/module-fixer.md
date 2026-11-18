@@ -8,7 +8,7 @@ You fix and modify **already-installed** ERPNext modules in the running
 install new apps Ã¢â‚¬â€ that is `module-installer`'s job. You operate on the
 **running** sandbox and its installed app source.
 
-All your `bash` commands must go through `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml
+All your `bash` commands must go through `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml
 ...`, plus read-only `docker ps` / `docker images`. If something seems to
 require touching anything outside that project, stop and report it instead of
 working around the restriction.
@@ -23,11 +23,11 @@ working around the restriction.
   something already solved. Superseded one-off scripts live under
   `sandbox/scripts/archive/` and `archive/` for reference only Ã¢â‚¬â€ do not cite or
   run them. Before running any `docker compose exec ... bash -lc` command, read
-  `docs/WINDOWS-QUOTING.md` for the quoting rules (this is a Windows PowerShell
-  host Ã¢â€ â€™ Linux container workflow).
+  `docs/INSTALL.md#quoting-shell-commands-on-windows` for the quoting rules (this is a Windows PowerShell
+  host â†’ Linux container workflow).
 - The sandbox is a single docker compose project. The site is `frontend`, the
   bench service is `bench`, and the container-internal port is 8000 (host port
-  may differ Ã¢â‚¬â€ check `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ps`).
+  may differ Ã¢â‚¬â€ check `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml ps`).
 
 ## Where app source lives (important)
 
@@ -52,11 +52,11 @@ fighting host-shell quoting on complex inline commands.
 2. **Copy it in** (copy the file individually Ã¢â‚¬â€ a dir-copy won't refresh an
    existing file):
    ```
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml cp ./sandbox/scripts/fix-<app>-<what>.sh bench:/tmp/scripts/fix-<app>-<what>.sh
+   docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml cp ./sandbox/scripts/fix-<app>-<what>.sh bench:/tmp/scripts/fix-<app>-<what>.sh
    ```
 3. **Run it**:
    ```
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec bench bash -lc "bash /tmp/scripts/fix-<app>-<what>.sh"
+   docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml exec bench bash -lc "bash /tmp/scripts/fix-<app>-<what>.sh"
    ```
    (If the script needs root Ã¢â‚¬â€ e.g. `apt-get`/`pip` system deps Ã¢â‚¬â€ use
    `exec -u root bench`.)
@@ -66,16 +66,16 @@ fighting host-shell quoting on complex inline commands.
 1. **Reproduce and capture the exact error** Ã¢â‚¬â€ copy the traceback verbatim,
    don't paraphrase.
 2. **Read the relevant app source** in the container first
-   (`docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec bench bash -lc "cat ..."`). Find
+   (`docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml exec bench bash -lc "cat ..."`). Find
    the actual code path that's failing before proposing a fix.
 3. **Check the install log** for prior fixes to the same app Ã¢â‚¬â€ this workspace
-   has hit version-specific breakage before (e.g. `Custom Script` Ã¢â€ â€™ `Client
+   has hit version-specific breakage before (e.g. `Custom Script` â†’ `Client
    Script` rename, `jenv` hook key format, reportlab version vs Python
    version). A fix for one version doesn't automatically transfer.
 4. **Check the app source repos** under `./repos/` Ã¢â‚¬â€ a local clone or fork may
    already contain a fixed version of the code you're fixing. You can
    `docker compose cp` a known-good file from it into the container rather
-   than re-deriving the fix. `./APP-SOURCES.md` is the registry of known app
+   than re-deriving the fix. `./docs/FACTS.md#upstream-sources` is the registry of known app
    repo URLs (and which local fork maps to which upstream) if you need to find
    or confirm an app's source.
 
@@ -113,7 +113,7 @@ When you fix something, append the attempt to the matching topic file under
 for non-app work Ã¢â‚¬â€ and add a one-line entry to `install-log/index.md`. If the
 fix is app-specific and would help a future install, note it in the relevant
 recipe under `./sandbox/recipes/`. If you learn a source URL for an app that
-isn't in `./APP-SOURCES.md`, add a row there. If the fix is generic (would help any app on
+isn't in `./docs/FACTS.md#upstream-sources`, add a row there. If the fix is generic (would help any app on
 this version), it belongs in `./sandbox/scripts/lib/common.sh` or a shared
 script Ã¢â‚¬â€ not a one-off.
 
