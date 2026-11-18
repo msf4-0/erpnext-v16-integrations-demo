@@ -930,10 +930,13 @@ Write-Host ''
 # app_include_js 404s still serves a 200 HTML shell, and a missing doctype still
 # looks like "the page is just empty". These check the actual features the
 # repo advertises, and each failure is fatal.
-function Test-Feature([string]$Name, [string]$Url, [hashtable]$Headers = @{}) {
+function Test-Feature([string]$Name, [string]$Url, [hashtable]$Headers = @{}, [switch]$UseSession) {
     $code = 'ERR'
     try {
-        $r = Invoke-WebRequest -Uri $Url -Headers $Headers -UseBasicParsing -TimeoutSec 25
+        $params = @{ Uri = $Url; UseBasicParsing = $true; TimeoutSec = 25 }
+        if ($UseSession -and $script:probeSession) { $params.WebSession = $script:probeSession }
+        elseif ($Headers.Count -gt 0) { $params.Headers = $Headers }
+        $r = Invoke-WebRequest @params
         $code = [int]$r.StatusCode
     } catch {
         if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
@@ -942,11 +945,29 @@ function Test-Feature([string]$Name, [string]$Url, [hashtable]$Headers = @{}) {
     else { Add-Failure $Name ("expected 200, got $code - $Url") }
 }
 
+# Authenticate the feature probes with a real login.
+# These used to rely on $erpToken, which is minted earlier and can be stale or
+# absent on a rebuilt site: a 401 was then reported as "barcode app broken" even
+# though the doctype was installed and reachable (P8 isolated run). The QR page
+# check sent no credentials at all and could only ever get 403 for a Guest.
+# A logged-in session is exactly the auth the desk uses, so it is the honest probe.
+$script:probeSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+try {
+    $loginBody = @{ usr = 'Administrator'; pwd = $erpAdminPassword } | ConvertTo-Json
+    $loginResp = Invoke-WebRequest -Uri "$erpUrl/api/method/login" -Method POST `
+        -Body $loginBody -ContentType 'application/json' `
+        -WebSession $script:probeSession -UseBasicParsing -TimeoutSec 25
+    if ($loginResp.StatusCode -eq 200) { Write-Info 'feature  : authenticated probe session (Administrator)' }
+    else { Write-Warn "probe login returned $($loginResp.StatusCode) - feature probes may report 401/403" }
+} catch {
+    Write-Warn "probe login failed ($($_.Exception.Message.Split([Environment]::NewLine)[0])) - feature probes may report 401/403"
+}
+
 $authHeaders = @{ Authorization = "token $erpToken" }
-Test-Feature 'barcode app'   "$erpUrl/api/resource/Barcode%20Printing"   $authHeaders
-Test-Feature 'barcode page'  "$erpUrl/item_qr?item_code=PLN-BRACKET"
+Test-Feature 'barcode app'   "$erpUrl/api/resource/Barcode%20Printing"   @{} -UseSession
+Test-Feature 'barcode page'  "$erpUrl/item_qr?item_code=PLN-BRACKET"     @{} -UseSession
 Test-Feature 'item tracking' "$erpUrl/assets/item_tracking/js/item_tracking_scan.js"
-Test-Feature 'e-invoicing'   "$erpUrl/api/resource/E%20Invoice%20Import"  $authHeaders
+Test-Feature 'e-invoicing'   "$erpUrl/api/resource/E%20Invoice%20Import" @{} -UseSession
 Test-Feature 'barcode scan js' "$erpUrl/assets/barcode_shrdc/js/scanner_barcode_patch.js"
 Test-Feature 'barcode link js' "$erpUrl/assets/barcode_shrdc/js/barcode_create_links.js"
 # ---------------------------------------------------------------------------
