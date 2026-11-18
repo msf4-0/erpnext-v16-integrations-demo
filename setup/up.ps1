@@ -366,7 +366,11 @@ if ((Invoke-Compose @('create')) -ne 0) { throw 'docker compose create failed' }
 # up subcommand; it affects the standalone docker-compose.exe shim too). `create`
 # returns fine, and `docker start` on the created containers takes ~15 s, so we
 # split the two - measured, not guessed.
-$demoServices = @('db', 'redis-cache', 'redis-queue', 'bench', 'node-red', 'metabase')
+# webhook-sink must be in this list: docker-compose.yml publishes it on
+# WEBHOOK_SINK_PORT and the docs advertise http://localhost:8088/healthz, but it
+# was omitted here, so a launcher-built stack left it in `Created` and the
+# endpoint never answered (found in the P8 isolated run).
+$demoServices = @('db', 'redis-cache', 'redis-queue', 'bench', 'node-red', 'metabase', 'webhook-sink')
 $demoNames = $demoServices | ForEach-Object { "$Project-$_-1" }
 if ((Invoke-Native -Exe 'docker' -Arguments (@('start') + $demoNames)) -ne 0) {
     throw 'docker start failed for the demo stack'
