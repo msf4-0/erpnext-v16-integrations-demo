@@ -38,8 +38,8 @@ On Linux, use the native Bash launcher for a core ERPNext site:
 
 ```bash
 cp .env.example .env       # if missing; edit the passwords
-./up-linux.sh              # provision core ERPNext
-./install-apps-linux.sh    # install barcode, Shopify, e-invoicing, item tracking
+./setup/$2              # provision core ERPNext
+./setup/$2    # install barcode, Shopify, e-invoicing, item tracking
 ```
 
 The app installer uses the repo's mounted app sources and installation helpers.
@@ -61,10 +61,10 @@ flags.
 ### 3a. Fresh clone — one command
 
 > **Clean machine with only Docker installed?** Read [`docs/DEPLOY.md`](docs/DEPLOY.md) instead.
-> It is the P7 guide: clone → `cp .env.example .env` → fill passwords → `./up-linux.sh`, and it
+> It is the P7 guide: clone → `cp .env.example .env` → fill passwords → `./setup/$2`, and it
 > explains what is built automatically, how to verify all **eight** apps
 > (`./sandbox/scripts/verify-deployment.sh`), and what to do when a build fails.
-> On Linux/macOS `./up-linux.sh` now builds the self-contained bench image *and* installs every
+> On Linux/macOS `./setup/$2` now builds the self-contained bench image *and* installs every
 > app, so no second installer step is needed.
 
 ```powershell
@@ -180,8 +180,8 @@ powershell -ExecutionPolicy Bypass -File .\setup\up
 On Linux:
 
 ```bash
-bash ./up-linux.sh
-bash ./install-apps-linux.sh
+bash ./setup/$2
+bash ./setup/$2
 ```
 
 The first command provisions core ERPNext; the second installs the custom apps.
@@ -193,8 +193,8 @@ Every other session:
 powershell -ExecutionPolicy Bypass -File .\setup\setup
 ```
 
-On Linux, rerun `bash ./up-linux.sh` to start/reuse the core site, and
-`bash ./install-apps-linux.sh` to ensure the custom apps are installed.
+On Linux, rerun `bash ./setup/$2` to start/reuse the core site, and
+`bash ./setup/$2` to ensure the custom apps are installed.
 
 Expected end state for the full PowerShell workflow: ERPNext, Planner, and Node-RED are up, and the webhooks respond locally and through the tunnel. The Linux launcher verifies only the core ERPNext site.
 

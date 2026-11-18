@@ -52,7 +52,7 @@ base for the bench image; change it only deliberately.
 ## 4. The setup command
 
 ```bash
-./up-linux.sh
+./setup/$2
 ```
 
 That is the whole deployment. In order, it:
@@ -84,7 +84,7 @@ seconds: the site already exists, so `seed` and the installer both exit early.
 
 | Workflow | Command | What it does |
 |---|---|---|
-| **Restore demo data** (default) | `./up-linux.sh` or `docker compose up -d` | restores `seed/frontend-database.sql.gz`, then installs any app the dump predates |
+| **Restore demo data** (default) | `./setup/$2` or `docker compose up -d` | restores `seed/frontend-database.sql.gz`, then installs any app the dump predates |
 | **From-scratch site** | `docker compose exec bench bash /tmp/comp-demo-bootstrap/provision-base.sh 16` | `bench new-site` + installs every app, **no demo data** |
 
 Running both against the same `bench_sites` volume is not needed and not
@@ -151,7 +151,7 @@ replacing the bench image with one built on another machine.
 ## 9. Opting an app out
 
 ```bash
-SKIP_APPS="my_invois" ./up-linux.sh
+SKIP_APPS="my_invois" ./setup/$2
 ```
 
 `my_invois` (Malaysia LHDN/MyInvois) and `eu_einvoice` install overlapping

@@ -22,8 +22,8 @@ On Linux, use the native Bash core-site launcher (no PowerShell required):
 
 ```bash
 cp .env.example .env   # if missing; set passwords before sharing the site
-bash ./up-linux.sh
-bash ./install-apps-linux.sh
+bash ./setup/$2
+bash ./setup/$2
 ```
 
 The first command provisions core ERPNext; the second installs barcode, Shopify,

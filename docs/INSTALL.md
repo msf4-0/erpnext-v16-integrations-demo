@@ -51,8 +51,8 @@ cp .env.example .env
 #    integrations - a blank value is reported as SKIPPED, not as a failure.
 
 powershell -ExecutionPolicy Bypass -File .\setup\up          # Windows: full integration setup
-bash ./up-linux.sh                                         # Linux: core ERPNext site
-bash ./install-apps-linux.sh                               # Linux: install custom apps
+bash ./setup/$2                                         # Linux: core ERPNext site
+bash ./setup/$2                               # Linux: install custom apps
 ```
 
 The Linux commands install the custom apps but do not configure the planner,
