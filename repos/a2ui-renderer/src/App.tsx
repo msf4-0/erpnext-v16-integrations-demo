@@ -32,10 +32,15 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
         body: JSON.stringify({ prompt: userMessage, company }),
       });
 
-      const data = await response.json();
-      const reply = data.message?.reply || 'Received response from backend orchestrator.';
+      const json = await response.json();
+      const result = json.message || json;
       
-      setMessages(prev => [...prev, { sender: 'assistant', text: reply }]);
+      let replyText = result.reply || 'Received response from backend orchestrator.';
+      if (result.data) {
+        replyText += `\n${JSON.stringify(result.data, null, 2)}`;
+      }
+      
+      setMessages(prev => [...prev, { sender: 'assistant', text: replyText }]);
     } catch (err) {
       setMessages(prev => [...prev, { sender: 'assistant', text: 'Error communicating with backend bridge.' }]);
     } finally {
@@ -49,7 +54,7 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
       <p><strong>Logged in User:</strong> {user} | <strong>Active Company:</strong> {company}</p>
       
       <div style={{ marginTop: '20px', border: '1px solid #dee2e6', borderRadius: '8px', padding: '16px', background: '#fff', minHeight: '300px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-        <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', maxHeight: '400px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', maxHeight: '400px', whiteSpace: 'pre-wrap' }}>
           {messages.map((msg, idx) => (
             <div key={idx} style={{ margin: '8px 0', padding: '10px 14px', borderRadius: '6px', background: msg.sender === 'user' ? '#e9ecef' : '#f1f3f5' }}>
               <strong>{msg.sender === 'user' ? 'You' : 'DSH Assistant'}:</strong> {msg.text}
