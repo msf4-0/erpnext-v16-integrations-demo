@@ -10,10 +10,10 @@
 # Runs INSIDE the bench container, from anywhere (it cd's to the bench root).
 #
 # What it guarantees:
-#   * all eight apps end up in `bench --site <site> list-apps`
+#   * all eight apps end up installed on the site
 #   * correct dependency order (frappe -> erpnext -> barcode_shrdc -> shopify
 #     -> eu_einvoice -> item_tracking -> metabase_integration -> my_invois)
-#   * no app is installed twice (list-apps is checked first; re-runs are cheap)
+#   * no app is installed twice (the DB is checked first; re-runs are cheap)
 #   * a missing app source or a failed install FAILS LOUDLY (exit 1) instead of
 #     being skipped, unless ALLOW_PARTIAL=1 is set explicitly
 #   * restarts are free: with a complete site it prints the list and exits 0
@@ -52,21 +52,19 @@ if [ -z "${SP:-}" ] || [ ! -d "$SP" ]; then
     exit 1
 fi
 
-# Two different sources of truth:
-#   - `bench list-apps`  -> apps registered in sites/apps.txt (what the CLI sees)
-#   - frappe.get_installed_apps() -> rows in `tabInstalled Application` (the DB)
-# On a restored demo dump the DB can hold apps that apps.txt has never heard of,
-# and an app installed during this run may not appear in list-apps until the next
-# bench process reads apps.txt. An app counts as installed only if the DB says
-# so, so the DB answer is what decides.
+# ---------------------------------------------------------------------------
+# SOURCE OF TRUTH = the database.
+#
+# `bench list-apps` is NOT reliable here: on this bench it reports only
+# frappe/erpnext for a site that has all eight apps installed (reproduced on a
+# restored demo dump), while `frappe.get_installed_apps()` returns the truth
+# from `tabInstalled Application`. Deciding from list-apps made the installer
+# re-install already-present apps and then, when list-apps still lagged, abort
+# the seed with a bogus "finished INCOMPLETE".
+# ---------------------------------------------------------------------------
 db_apps() {
     bench --site "$SITE" execute frappe.get_installed_apps 2>/dev/null \
         | tr -d "[]'\"" | tr ',' '\n' | tr -d ' ' | sed '/^$/d'
-}
-
-is_installed() {
-    printf '%s\n' "$installed_list" | grep -qE "^$1([[:space:]]|$)" && return 0
-    db_apps | grep -qx "$1"
 }
 
 register_in_apps_txt() {
@@ -80,21 +78,21 @@ register_in_apps_txt() {
     done
 }
 
-# ---------------------------------------------------------------------------
-# RECONCILE apps.txt BEFORE reading the installed set.
-#
-# `bench list-apps` only iterates the apps listed in sites/apps.txt, and a site
-# restored from the demo dump has every app in the DATABASE while apps.txt still
-# holds just frappe/erpnext (the image's copy). Reading list-apps first therefore
-# reported 6 apps as missing, the installer called `bench install-app` on apps
-# that were already installed, and the run ended with a spurious
-# "install-all-apps finished INCOMPLETE" on a perfectly good site.
-# Register every app that has source in the image first, then read the list.
-# ---------------------------------------------------------------------------
+is_installed() { printf '%s\n' "${db_list:-}" | grep -qx "$1"; }
+
+# Register every app that has source in the image, so sites/apps.txt (which
+# drives `bench version`, asset builds and `bench serve`) matches what is about
+# to be installed, then read the authoritative installed set.
 for app in $APPS; do
     [ -d "apps/$app" ] && register_in_apps_txt "$app"
 done
-installed_list="$(bench --site "$SITE" list-apps 2>/dev/null || true)"
+
+db_list="$(db_apps)"
+if [ -z "$db_list" ]; then
+    echo "ERROR: 'frappe.get_installed_apps' returned nothing - the site is not usable." >&2
+    exit 1
+fi
+echo "-- installed before this run: $(printf '%s ' $db_list)"
 
 skipped=""
 failed=""
@@ -105,11 +103,6 @@ for app in $APPS; do
         *" $app "*) echo "-- skip: $app (in SKIP_APPS)"; skipped="$skipped $app"; continue ;;
     esac
     if is_installed "$app"; then
-        # apps.txt is bench-level (it drives `bench version`, asset builds and
-        # `bench serve`), and a site restored from a dump can have an app
-        # installed in the DB while apps.txt only lists frappe/erpnext. Keep the
-        # two in sync on every run, not just when installing.
-        register_in_apps_txt "$app"
         echo "-- present: $app"
         continue
     fi
@@ -121,14 +114,13 @@ for app in $APPS; do
         continue
     fi
     echo "-- installing: $app"
-    register_in_apps_txt "$app"
     printf '%s\n' "$BENCH_DIR/apps/$app" > "$SP/$app.pth"
     if bench --site "$SITE" install-app "$app"; then
         to_install="$to_install $app"
-        # refresh so later iterations see the new state
-        installed_list="$(bench --site "$SITE" list-apps 2>/dev/null || true)"
+        db_list="$(db_apps)"
         if ! is_installed "$app"; then
-            echo "ERROR: 'bench install-app $app' returned success but the app is not listed." >&2
+            echo "ERROR: 'bench install-app $app' reported success but the app is not in" >&2
+            echo "       tabInstalled Application. Registration did not take effect." >&2
             failed="$failed $app"
         fi
     else
@@ -152,23 +144,28 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Verification: every app that was meant to be installed must be listed AND
-# importable in the bench venv (import is what load_doctype_module does).
+# Verification: every app that was meant to be installed must be in the DB, be
+# listed by the bench, and import in the bench venv (import is what
+# load_doctype_module does on every request).
 # ---------------------------------------------------------------------------
 echo "== verification =="
-final_list="$(bench --site "$SITE" list-apps 2>/dev/null || true)"
-printf '%s\n' "$final_list"
+db_list="$(db_apps)"
+echo "-- installed (db): $(printf '%s ' $db_list)"
+echo "-- list-apps:"
+bench --site "$SITE" list-apps 2>&1 | sed 's/^/   /'
+
 for app in $APPS; do
     case " $SKIP_APPS " in *" $app "*) continue ;; esac
-    printf '%s\n' "$final_list" | grep -qE "^$app([[:space:]]|$)" || {
+    is_installed "$app" || {
         echo "ERROR: $app is NOT installed on $SITE" >&2
         failed="$failed $app"
     }
 done
 
-# import check runs against the same interpreter the bench uses
 if ! env/bin/python - "$APPS" "$SKIP_APPS" <<'PY'
-import importlib, sys
+import importlib
+import sys
+
 apps = sys.argv[1].split()
 skip = sys.argv[2].split()
 bad = []
