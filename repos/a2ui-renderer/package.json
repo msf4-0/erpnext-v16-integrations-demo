@@ -1,0 +1,17 @@
+{
+  "name": "@shrdc/a2ui-renderer",
+  "version": "1.0.0",
+  "private": true,
+  "main": "dist/index.global.js",
+  "scripts": {
+    "build": "tsup"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}
