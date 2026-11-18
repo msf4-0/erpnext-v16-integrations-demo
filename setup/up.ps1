@@ -392,7 +392,10 @@ Write-Step '4/11  root prep inside the bench container'
 # Windows filesystem (venv + node_modules = ~200k files) and it is pointless
 # when the tree already belongs to frappe, which is the normal case for the
 # baked image. Only fix ownership when the bench root is actually wrong.
-Invoke-BenchRoot 'if [ "$(stat -c %U /home/frappe/frappe-bench)" = frappe ]; then echo bench already frappe-owned; else chown -R frappe:frappe /home/frappe/frappe-bench; fi; echo chown-done' | Out-Null
+# No quotes and no `$( )` here on purpose: PowerShell's native argument
+# marshalling splits an argument that embeds double quotes, and bash then dies
+# with "unexpected EOF while looking for matching `)'" (seen on every run).
+Invoke-BenchRoot 'stat -c %U /home/frappe/frappe-bench | grep -qx frappe || chown -R frappe:frappe /home/frappe/frappe-bench; echo chown-done' | Out-Null
 Invoke-BenchRoot 'which redis-server >/dev/null 2>&1 || apt-get install -y -qq redis-server; echo redis-ok' | Out-Null
 
 # ---------------------------------------------------------------------------

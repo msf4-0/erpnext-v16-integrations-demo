@@ -21,7 +21,7 @@ either run it whole or graft the pieces into your own site.
 | Drag-and-drop production planner (Work Orders **and** Job Cards) | `scheduler/` |
 | Shopify bridge (ERPNext → Shopify push, 24 h tokens self-minted) | `repos/shopify-shrdc-v16-fixed/` |
 | Barcode / QR printing + scanning + item tracking | `repos/barcode-shrdc-v16-fixed/` |
-| EU e-invoicing (EN 16931 CII XML, XRECHNUNG auto-attach) | `repos/eu_einvoice/` |
+| EU e-invoicing (EN 16931 CII XML, XRECHNUNG auto-attach) | `repos//` |
 | Node-RED flow + builder, ngrok wiring, seeders, probes | `sandbox/` |
 
 **Check the version first.** Everything here is built for **ERPNext v16** (`bench version` →
@@ -79,7 +79,7 @@ Below, `<site>` is your site name (`bench --site <site> ...`) and `<bench>` is y
 ```bash
 cp -r erpnext-build/repos/barcode-shrdc-v16-fixed   /tmp/barcode_shrdc
 cp -r erpnext-build/repos/shopify-shrdc-v16-fixed   /tmp/shopify
-cp -r erpnext-build/repos/eu_einvoice               /tmp/eu_einvoice
+cp -r erpnext-build/repos/               /tmp/
 ```
 
 #### B2. Install them
@@ -88,10 +88,10 @@ cp -r erpnext-build/repos/eu_einvoice               /tmp/eu_einvoice
 cd <bench>
 bench get-app /tmp/barcode_shrdc
 bench get-app /tmp/shopify
-bench get-app /tmp/eu_einvoice
+bench get-app /tmp/
 bench --site <site> install-app barcode_shrdc
 bench --site <site> install-app shopify
-bench --site <site> install-app eu_einvoice
+bench --site <site> install-app 
 bench --site <site> migrate
 bench --site <site> list-apps          # expect all three installed
 bench restart                          # or: bench --site <site> clear-cache
@@ -216,7 +216,7 @@ webhooks each time (or use a reserved domain).
 
 #### B8. E-invoicing
 
-`eu_einvoice` adds `E Invoice Settings` (singleton) and an `einvoice_profile` field on Sales
+`` adds `E Invoice Settings` (singleton) and an `einvoice_profile` field on Sales
 Invoice.
 
 1. Fill company address, tax ID and the seller contact details — the CII XML needs them.

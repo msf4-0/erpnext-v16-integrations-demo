@@ -19,7 +19,7 @@ Checks:
 | 0-1 | clone succeeds; `.env.example` boots after only port/project edits |
 | 2-3 | compose create; db healthy; seeder exits 0 (it fails if the restore is empty) |
 | 5-6 | `/api/method/ping` 200; desk, both barcode scripts and the item-tracking script return 200 |
-| 7 | barcode_shrdc, shopify, eu_einvoice, item_tracking installed; planner health |
+| 7 | barcode_shrdc, shopify, item_tracking installed; planner health |
 
 Run it before tagging a release, and after any change to `docker-compose.yml`,
 `seed/`, or the `bench` startup block. It takes ~9 minutes because it exercises

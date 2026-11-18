@@ -84,12 +84,57 @@ That is the whole deployment. In order, it:
 Expected app list (order of installation):
 
 ```
-frappe  erpnext  barcode_shrdc  shopify  eu_einvoice
+frappe  erpnext  barcode_shrdc  shopify
 item_tracking  metabase_integration  my_invois
 ```
 
+`eu_einvoice` (EU e-invoicing) is **not** part of the default build. The demo's
+e-invoicing story is Malaysia LHDN / MyInvois via `my_invois`. The EU source is
+still vendored under `repos/eu_einvoice` for reference; it is not copied into the
+image and not installed.
+
+### What the demo data is
+
+A deliberately small go-kart dataset, created by
+`sandbox/scripts/seed-gokart-demo.py` (and baked into
+`seed/frontend-database.sql.gz`, which is what a normal clone restores):
+
+| Item | Rate (selling) | Notes |
+|---|---|---|
+| `GO-KART` | 4500 | assembled go-kart, has a BOM |
+| `FRM-001` Frame | 1800 | **serial-tracked**, `FRM-001-0001…0068` |
+| `WHL-001` Wheel | 220 | 4 per kart |
+| `STR-001` Steering Wheel | 310 | 1 per kart |
+| `SEAT-001` Seat | 260 | 1 per kart |
+
+The BOM is `GO-KART = 1 × Frame + 4 × Wheel + 1 × Steering Wheel + 1 × Seat`.
+Standard Selling prices exist for all five items; Standard Buying prices exist
+for the parts.
+
 First run takes roughly 20–40 minutes (image build dominates). Later starts take
 seconds: the site already exists, so `seed` and the installer both exit early.
+
+### Where the bench image comes from
+
+**A local build is the default and the supported path.** The bench image is not
+published to a public registry: the GHCR package is private to the company, so a
+clone on someone else's machine cannot pull it.
+
+`setup/pull-bench.ps1` therefore does not invent a remote: with no
+`BENCH_IMAGE` namespaced ref, no `BENCH_PULL_GHCR=1` and no `BENCH_BUNDLE_URL`
+it reports that a build is required and exits, and the stack builds
+`bake/bench.Dockerfile` locally (25–40 min, once).
+
+If you *do* have somewhere to host the ~3 GB image (an internal registry, an SMB
+share, a `docker save` tarball), two opt-ins exist:
+
+```bash
+BENCH_IMAGE=registry.internal/comp-demo-bench:v16   # a ref Docker can already pull
+BENCH_PULL_GHCR=1                                   # try the company GHCR anyway
+BENCH_BUNDLE_URL=https://internal/comp-demo-bench-v16-amd64.tar.gz
+```
+
+Nothing in the default flow depends on any of them.
 
 ### The two first-time workflows — do not mix them
 
@@ -111,14 +156,14 @@ a **new Compose project name and volumes** (never `down -v` on a live stack).
 * Metabase: <http://localhost:3005>
 * Webhook sink: <http://localhost:8088/healthz>
 
-## 6. Verify the eight apps
+## 6. Verify the seven apps
 
 ```bash
 ./sandbox/scripts/verify-deployment.sh
 ```
 
 Read-only, seven checks: Compose config, bench/db containers, `bench version`,
-all eight apps installed exactly once **as recorded in the database**
+all seven apps installed exactly once **as recorded in the database**
 (`frappe.get_installed_apps` / `tabInstalled Application`), every app module
 importable, `/api/method/ping` answering, and no `hooks.py`-referenced asset
 missing.
@@ -181,13 +226,13 @@ replacing the bench image with one built on another machine.
 SKIP_APPS="my_invois" bash ./setup/up-linux.sh
 ```
 
-`my_invois` (Malaysia LHDN/MyInvois) and `eu_einvoice` install overlapping
+`my_invois` (Malaysia LHDN/MyInvois) and `` install overlapping
 e-invoice concern areas. **Both stay enabled by default** — decided on 2026-11-18
 after reading their hooks, not by guesswork:
 
 * `my_invois` registers **no** `doc_events`. It ships Custom Fields and a Sales
   Invoice Client Script via `fixtures`, so it adds UI actions only.
-* `eu_einvoice` hooks `Sales Invoice.validate` and `on_submit`. `validate_doc`
+* `` hooks `Sales Invoice.validate` and `on_submit`. `validate_doc`
   uses `frappe.msgprint` (warnings, never `frappe.throw`), so it cannot block a
   save. `attach_xml_on_submit` returns immediately unless
   `einvoice_profile == "XRECHNUNG"`, and swallows every error it can raise.

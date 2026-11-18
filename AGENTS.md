@@ -52,7 +52,7 @@ docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-co
 ## Features in the build
 
 - **Barcode / QR item tracking** — `barcode_shrdc` (v16-fixed, source in `repos/barcode-shrdc-v16-fixed`), `Barcode Printing` doctype; server-side rasterisation deps pre-installed.
-- **E-invoicing** — `eu_einvoice` (alyf-de, version-16 branch).
+- **E-invoicing** — `` (alyf-de, version-16 branch).
 - **Drag-and-drop production planning** — the `scheduler` service + `seed_planner_demo.py` demo data (Work Orders ↔ Job Cards).
 - **Shopify ↔ ERPNext** — `shopify` app + Node-RED flow + ngrok webhooks; store `SHOPIFY_STORE` in `.env`.
 

@@ -11,7 +11,7 @@
 A self-contained ERPNext v16 demo (Docker project `comp_demo`, site `frontend`) with:
 
 - Barcode / QR item tracking (`barcode_shrdc`)
-- E-invoicing (`eu_einvoice`)
+- E-invoicing (``)
 - Drag-and-drop production planner (the `scheduler` service)
 - Shopify ↔ ERPNext bridge (`shopify` app + Node-RED flow + ngrok webhooks)
 
@@ -141,7 +141,7 @@ Be precise about this before promising a colleague "everything works".
 | Shopify ↔ ERPNext bridge | ❌ skipped (no store/token) | fill `SHOPIFY_*` in `.env`, then `.\setup\setup` |
 | ngrok tunnel + the 3 ERPNext webhooks | ❌ skipped (no tunnel) | install + `ngrok config add-authtoken`, then `.\setup\setup` |
 | Metabase + "ERPNext Monitoring" dashboard | ✅ works – the seeder restores the `metabase` schema alongside the site, including the admin, the `ERPNext` data source and the 4-card dashboard. It is embedded inside ERPNext at **http://localhost:8000/metabase** and linked from Manufacturing → Manufacturing Analytics. | log in at :3005 with `METABASE_ADMIN_EMAIL` / `METABASE_ADMIN_PASSWORD` from `.env` |
-| E-invoicing (`eu_einvoice`) | ⚠️ installed, but EU EN 16931 only – a Malaysian SST invoice will not validate | add an EU VAT template, or install `my_invois` (see `docs/ARCHITECTURE.md`) |
+| E-invoicing (``) | ⚠️ installed, but EU EN 16931 only – a Malaysian SST invoice will not validate | add an EU VAT template, or install `my_invois` (see `docs/ARCHITECTURE.md`) |
 | `my_invois` (LHDN / MyInvois) | ✅ **installed** (`my_invois 0.0.1`) — source is at `repos/my_invois`, bind-mounted into the bench container. Submit-only layer; no fixtures synced | use as-is, or extend it; see `docs/ARCHITECTURE.md` |
 
 So: **core ERPNext, barcode, item tracking and the demo data are hands-off.**
@@ -311,7 +311,7 @@ Pass criteria: drafts never move stock, every submit moves it by the scanned qua
 
 ### E-invoicing
 
-The app is `eu_einvoice`. The build confirmed it is installed and that E Invoice Import answers an authenticated REST request with status 200, plus a demo Sales Invoice `ACC-SINV-2026-00001`.
+The app is ``. The build confirmed it is installed and that E Invoice Import answers an authenticated REST request with status 200, plus a demo Sales Invoice `ACC-SINV-2026-00001`.
 
 1. **Check the demo Sales Invoice** at `/app/sales-invoice/ACC-SINV-2026-00001` — it has customer, items, taxes and totals.
 2. **Confirm the import doctype loads** at `/app/e-invoice-import`.
@@ -444,7 +444,7 @@ containers until those passwords are changed.
 
 | If this happens | Likely cause | What to check |
 |---|---|---|
-| E Invoice Import is not found | App not installed | `docker exec comp_demo-bench-1 bash -lc "cd /home/frappe/frappe-bench && bench --site frontend list-apps"` → look for `eu_einvoice` |
+| E Invoice Import is not found | App not installed | `docker exec comp_demo-bench-1 bash -lc "cd /home/frappe/frappe-bench && bench --site frontend list-apps"` → look for `` |
 | Import cannot read the file | Not a valid XRechnung / ZUGFeRD file | Try a different sample or validate the file first |
 | REST call returns 401 | API token in `.env` is stale | Run `setup/setup` to rotate it |
 | Doctype/records are gone | Wrong site or deleted volume | Check Compose volumes and the configured site before reprovisioning |
@@ -463,7 +463,7 @@ setup/make-bundle           clean portable copy + zip + sha256, self-verified
 sandbox/                  provisioning scripts, installers, seeders, probes, recipes, node-red flow builder
 seed/                     demo DB dump (1.3 MB) + the seed service that restores it on a fresh volume
 tests/                    verify-clean-clone.ps1 - disposable clone -> seed -> assert -> teardown
-repos/                    app sources: barcode-shrdc-v16-fixed, shopify-shrdc-v16-fixed, eu_einvoice
+repos/                    app sources: barcode-shrdc-v16-fixed, shopify-shrdc-v16-fixed, 
 scheduler/                the planner: server.js, prebuilt frontend/build, runtime-deps, ui-tests
 .opencode/                opencode agents + skills (erpnext-planner, module-*, erpnext-test-runner)
 docs/                     guides + MILESTONES.md (status, fixes, known gaps)

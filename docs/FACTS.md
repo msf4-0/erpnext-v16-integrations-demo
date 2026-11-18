@@ -53,7 +53,7 @@ the two. Regenerate with the commands in the last section.
 | erpnext | 16.35.0 | image |
 | barcode_shrdc | 0.0.2 | bind mount (`repos/barcode-shrdc-v16-fixed`) |
 | shopify | 0.0.1 | image (`bake/bench.Dockerfile`) |
-| eu_einvoice | 16.3.0 | image (`bake/bench.Dockerfile`) |
+|  | 16.3.0 | image (`bake/bench.Dockerfile`) |
 | item_tracking | 0.0.2 | bind mount |
 | metabase_integration | 0.0.1 | bind mount |
 | **my_invois** | **0.0.1** | **bind mount, and installed** |
@@ -101,4 +101,4 @@ Verified upstreams for the apps that have one. `item_tracking`, `metabase_integr
 |---|---|
 | `barcode_shrdc` | <https://github.com/msf4-0/ERPNext-Barcode-Integration> |
 | `shopify` | <https://github.com/msf4-0/shopify-ERPnext> |
-| `eu_einvoice` | <https://github.com/alyf-de/eu_einvoice> |
+| `` | <https://github.com/alyf-de/> |

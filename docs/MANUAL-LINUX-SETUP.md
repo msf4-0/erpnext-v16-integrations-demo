@@ -145,7 +145,7 @@ with the password baked into the dump (the demo default is `admin`;
 site that `bench new-site` makes *before* the restore overwrites auth).
 
 `list-apps` should show `frappe`, `erpnext`, `barcode_shrdc`, `shopify`,
-`eu_einvoice`, `item_tracking`, `metabase_integration`, `my_invois`. The dump
+``, `item_tracking`, `metabase_integration`, `my_invois`. The dump
 already predates only `my_invois`, which the seeder installs itself.
 
 ### Install an app only if it is missing
@@ -170,7 +170,7 @@ $COMPOSE exec bench bash -lc 'cd /home/frappe/frappe-bench && \
 
 Bind-mounted sources: `barcode_shrdc`, `item_tracking`, `metabase_integration`,
 `my_invois` (paths in `docker-compose.yml` lines 146â€“163). `shopify` and
-`eu_einvoice` are baked into the image.
+`` are baked into the image.
 
 ### Rebuild front-end assets (only if you changed app code)
 

@@ -72,7 +72,7 @@ Treat that as historical runtime evidence, not the current build pin; verify a
 running bench with `bench version`. Load both env files for direct Compose use:
 `docker compose --env-file .env --env-file versions.env ...`.
 
-The bench image includes the `barcode_shrdc`, `shopify`, and `eu_einvoice`
+The bench image includes the `barcode_shrdc`, `shopify`, and ``
 sources copied from `repos/` by `bake/bench.Dockerfile`. The Compose file also
 bind-mounts `repos/item_tracking`, `repos/metabase_integration`, and
 `repos/barcode-shrdc-v16-fixed` into the bench container. App source may change
@@ -96,7 +96,7 @@ Compose project: `comp_demo` · site: `frontend` · host ports: 8000 (ERPNext),
 | Service | Image | Role | Depends on |
 |---|---|---|---|
 | `seed` | same image as `bench` | one-shot: restores `seed/frontend-database.sql.gz` into an empty volume, then exits 0. No-op (~2 s) when a site already exists | db (healthy); `bench` waits for it to complete |
-| `bench` | `comp_demo-bench:v16` (built from `bake/bench.Dockerfile`) | ERPNext v16 + frappe + barcode_shrdc + shopify + eu_einvoice + render deps | db, redis-cache, redis-queue (healthy) |
+| `bench` | `comp_demo-bench:v16` (built from `bake/bench.Dockerfile`) | ERPNext v16 + frappe + barcode_shrdc + shopify +  + render deps | db, redis-cache, redis-queue (healthy) |
 | `db` | `mariadb:11.8` | site DB **and** Metabase metadata | – |
 | `redis-cache` | `redis:6.2-alpine` | frappe cache | – |
 | `redis-queue` | `redis:6.2-alpine` | background jobs | – |
@@ -116,7 +116,7 @@ by `setup/up` / `setup/setup`, and it is the one moving part that is not a conta
 | Site files, `site_config.json`, `apps.txt`, private/public files | `bench_sites` | named volume |
 | Node-RED flows | `node_red_data` | named volume |
 | `item_tracking`, `metabase_integration`, `barcode_shrdc` source | `./repos/*` on the host | bind mount |
-| frappe, erpnext, shopify, eu_einvoice, venv, pip packages, redis-server | inside the image | image layer |
+| frappe, erpnext, shopify, venv, pip packages, redis-server | inside the image | image layer |
 | `*.pth`, `/assets/<app>` symlinks, DB grant | container layer | **rebuilt on every start** by the `bench` `command:` |
 | Planner timers (`timers.json`) | `scheduler` container layer | **no volume** |
 | ngrok tunnel + webhook URLs | host process + `Webhook` records in the DB | **not durable** |
@@ -171,11 +171,11 @@ still returns a 200 HTML shell.
 
 ## Optional: Malaysia LHDN / MyInvois (`repos/my_invois`)
 
-`eu_einvoice` implements the **EU** EN 16931 / XRechnung standard. `my_invois`
+`` implements the **EU** EN 16931 / XRechnung standard. `my_invois`
 is the Malaysian layer (TIN/BRN/SST custom fields, e-invoice status lifecycle,
 explicitly gated submission - never a side effect of saving).
 
-It is **mounted but not installed**: installing it next to `eu_einvoice` adds a
+It is **mounted but not installed**: installing it next to `` adds a
 second e-invoice doctype set and the two standards do not share a profile model.
 Pick one per site.
 
