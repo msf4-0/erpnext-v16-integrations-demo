@@ -71,6 +71,22 @@ register_in_apps_txt() {
     done
 }
 
+# ---------------------------------------------------------------------------
+# RECONCILE apps.txt BEFORE reading the installed set.
+#
+# `bench list-apps` only iterates the apps listed in sites/apps.txt, and a site
+# restored from the demo dump has every app in the DATABASE while apps.txt still
+# holds just frappe/erpnext (the image's copy). Reading list-apps first therefore
+# reported 6 apps as missing, the installer called `bench install-app` on apps
+# that were already installed, and the run ended with a spurious
+# "install-all-apps finished INCOMPLETE" on a perfectly good site.
+# Register every app that has source in the image first, then read the list.
+# ---------------------------------------------------------------------------
+for app in $APPS; do
+    [ -d "apps/$app" ] && register_in_apps_txt "$app"
+done
+installed_list="$(bench --site "$SITE" list-apps 2>/dev/null || true)"
+
 skipped=""
 failed=""
 to_install=""
