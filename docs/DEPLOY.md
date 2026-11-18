@@ -1,13 +1,14 @@
 # Clean-machine deployment (P7)
 
-Everything below assumes **only Docker** is installed. No existing images, no
-containers, no database volume, no manually copied app folders, and no files
-from the original developer's machine are required.
+Everything below assumes only **Docker, Git, bash, curl and a working Python
+3.9+** are installed. No existing images, no containers, no database volume, no
+manually copied app folders, and no files from the original developer's machine
+are required.
 
-The repository ships all eight applications' source (they are git-tracked under
-`repos/`, 324 files). The bench image bakes them in at build time, and one
-image-baked installer puts them on the site. There is no second, competing
-installation path.
+The repository ships the five custom applications' source (git-tracked under
+`repos/`). The bench image bakes them in at build time on top of the pinned
+`frappe/erpnext` base, and one image-baked installer puts them on the site. There
+is no second, competing installation path.
 
 ---
 
@@ -17,12 +18,26 @@ installation path.
 |---|---|---|
 | Docker Engine + Compose v2 | Compose `2.20+`, Engine `24+` | `docker compose version` |
 | Git | any | `git --version` |
-| Disk | ~20 GB free (image + volumes) | — |
+| bash | 4+ recommended (macOS 3.2 works) | `bash --version` |
+| curl | any | `curl --version` |
+| Python 3 | **3.9+**, a *working* interpreter on PATH | `python3 --version` |
+| Disk | ~25 GB free (build cache + image + volumes) | — |
 | RAM | 8 GB recommended (Metabase is capped at 3 GB) | — |
+| CPU architecture | **x86_64 (linux/amd64)** | `docker version --format '{{.Server.Arch}}'` |
+
+The bench image is built for x86_64. Apple Silicon and ARM hosts are **not
+tested**: the pinned `frappe/erpnext` base may not publish an arm64 build, and
+the app dependencies are installed at build time.
+
+On Windows, `python3` is often the Microsoft Store *App Execution Alias*: it sits
+on PATH but fails when executed (or opens the Store), so a naive check passes and
+the launcher dies later. `up-linux.sh` probes by executing (`python3 -c …`, then
+`python`) and stops with a clear message. Install Python from
+<https://python.org> if you see that error.
 
 Linux/macOS: use `bash`, not `sh`. Windows: use **Git Bash** or WSL for the
-`.sh` scripts, or the PowerShell launchers (`setup/up`) — the Docker artefacts are
-identical either way.
+`.sh` scripts, or the PowerShell launchers `setup/up.ps1` / `setup/start.ps1` —
+the Docker artefacts are identical either way.
 
 Ports used by default: `8000` (ERPNext), `1880` (Node-RED), `3001` (planner),
 `3005` (Metabase), `8088` (webhook sink). Change them in `.env` before starting.

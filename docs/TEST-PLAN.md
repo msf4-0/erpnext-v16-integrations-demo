@@ -33,10 +33,23 @@ its own Compose project, with its own volumes, ports and image tag.
 | Docker Engine | 24+ | `docker version --format '{{.Server.Version}}'` |
 | Docker Compose | 2.20+ | `docker compose version` |
 | Git | any | `git --version` |
-| bash | 4+ (Git Bash on Windows) | `bash --version` |
+| bash | 4+ (Git Bash on Windows; macOS 3.2 works) | `bash --version` |
+| curl | any | `curl --version` |
+| Python 3 | **3.9+**, a *working* interpreter on PATH | `python3 --version` |
+| CPU architecture | **x86_64 (linux/amd64)** | `docker version --format '{{.Server.Arch}}'` |
 | Free disk | ~25 GB | image ~3 GB + build layers + volumes |
 | RAM | 8 GB (Metabase is capped at 3 GB) | — |
 | Network | to `github.com`, `pypi.org`, Docker Hub | first build only |
+
+Two of these are easy to get wrong on a "normal" machine:
+
+* **Windows `python3` is often the Microsoft Store alias.** It exists on PATH but
+  fails (or opens the Store) when executed, so `command -v python3` is not a
+  valid check. The launcher probes by executing and falls back to `python`; it
+  exits with an explicit message if neither is a working 3.9+.
+* **ARM is untested.** The bench image is built for x86_64; there is no
+  `platform:` pin, so Apple Silicon may fail to pull an arm64 base image.
+
 
 Reference host used for the certified run: Windows 11, Docker 29.8.0, Compose
 v5.5.1, Git Bash. Linux/macOS behave the same; the only Windows-specific trap is
@@ -421,6 +434,8 @@ value/UX; **low** = cosmetic or environmental.
 | I-11 | environment | live `comp_demo` ERPNext was already wedged (HTTP 000, no request logs) and ngrok pointed at dead `localhost:11883` **before** P9 started | reproduced before any P9 change; fixed by a plain `docker restart comp_demo-bench-1` (no volumes touched) and `ngrok http 1880` | high (env) | **REPAIRED** — not caused by P9 |
 | I-12 | docs | `DEPLOY.md` said "all six custom apps" (there are five) and §9 named the removed EU app as an empty string | file inspection | low | **FIXED** in this docs commit |
 | I-13 | verify | `bench list-apps` lists 2 of 7 apps on a fully installed site | reproduced on every run; verifier uses the DB instead | low (known) | **OPEN (known)** — never judge from `list-apps` |
+| I-14 | prerequisites | the launcher required a host `python3`; on Windows the Microsoft Store alias satisfies `command -v` but fails when executed, and `DEPLOY.md` claimed "only Docker" was needed | `python3` resolved to `…\WindowsApps\python3` (Store alias) on the reference host; a machine without Python would pass the preflight and die at `validate-env.py` | medium | **FIXED** (this commit) — probe by executing, `python` fallback, 3.9+ enforced, docs list the real prerequisites |
+| I-15 | prerequisites | ARM64/Apple Silicon is untested and unpinned | `FROM ${ERPNEXT_BASE}` and no `platform:` anywhere in the compose/Dockerfile | medium | **OPEN** — documented as x86_64-only; no arm64 base guarantee |
 
 ---
 
@@ -457,6 +472,8 @@ the HTTP/API boundary only.
   failed check; start a new project instead.
 - **Never** judge app installation from `bench --site … list-apps`; use
   `frappe.get_installed_apps` / `tabInstalled Application`.
+- **Never** assume "only Docker": the Linux launcher also needs Git, bash, curl
+  and a *working* Python 3.9+ (the Windows Store `python3` alias is not one).
 - **Never** point the host ngrok at a test port; leave it on `1880`.
 - **Never** commit `.env`, `sandbox/node-red/flows.json` (contains an API token),
   or any file from the test clone into the source repo.

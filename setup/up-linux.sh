@@ -35,7 +35,7 @@ if (( $# > 0 )); then
   exit 2
 fi
 
-for tool in docker python3 curl; do
+for tool in docker curl; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "ERROR: $tool is required." >&2
     exit 1
@@ -43,6 +43,27 @@ for tool in docker python3 curl; do
 done
 docker compose version >/dev/null
 docker info >/dev/null
+
+# Python 3 runs sandbox/scripts/validate-env.py. `command -v python3` is NOT
+# enough on Windows: the Microsoft Store ships an App Execution Alias named
+# python3 that sits on PATH but fails (or opens the Store) when executed, so the
+# preflight passed and the launcher then died on a confusing traceback. Probe
+# by executing, accept python as a fallback, and require 3.9+ (validate-env
+# uses builtin generics like dict[str, str] in annotations).
+PYTHON=""
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 \
+     && "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 9) else 1)' >/dev/null 2>&1; then
+    PYTHON="$candidate"
+    break
+  fi
+done
+if [ -z "$PYTHON" ]; then
+  echo "ERROR: a working Python 3.9+ is required (it validates .env)." >&2
+  echo "       On Windows the 'python3' Microsoft Store alias does not count -" >&2
+  echo "       install Python from https://python.org and re-run this script." >&2
+  exit 1
+fi
 
 if [[ ! -f .env ]]; then
   cp .env.example .env
@@ -52,7 +73,7 @@ if [[ ! -f .env ]]; then
 fi
 [[ -f versions.env ]] || { echo "ERROR: versions.env is missing." >&2; exit 1; }
 
-python3 sandbox/scripts/validate-env.py --env-file .env
+"$PYTHON" sandbox/scripts/validate-env.py --env-file .env
 
 env_value() {
   awk -F= -v key="$1" '
