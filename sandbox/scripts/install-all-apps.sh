@@ -52,13 +52,22 @@ if [ -z "${SP:-}" ] || [ ! -d "$SP" ]; then
     exit 1
 fi
 
-installed_list="$(bench --site "$SITE" list-apps 2>/dev/null || true)"
-if [ -z "$installed_list" ]; then
-    echo "ERROR: 'bench --site $SITE list-apps' returned nothing - the site is not usable." >&2
-    exit 1
-fi
+# Two different sources of truth:
+#   - `bench list-apps`  -> apps registered in sites/apps.txt (what the CLI sees)
+#   - frappe.get_installed_apps() -> rows in `tabInstalled Application` (the DB)
+# On a restored demo dump the DB can hold apps that apps.txt has never heard of,
+# and an app installed during this run may not appear in list-apps until the next
+# bench process reads apps.txt. An app counts as installed only if the DB says
+# so, so the DB answer is what decides.
+db_apps() {
+    bench --site "$SITE" execute frappe.get_installed_apps 2>/dev/null \
+        | tr -d "[]'\"" | tr ',' '\n' | tr -d ' ' | sed '/^$/d'
+}
 
-is_installed() { printf '%s\n' "$installed_list" | grep -qE "^$1([[:space:]]|$)"; }
+is_installed() {
+    printf '%s\n' "$installed_list" | grep -qE "^$1([[:space:]]|$)" && return 0
+    db_apps | grep -qx "$1"
+}
 
 register_in_apps_txt() {
     local app="$1"
