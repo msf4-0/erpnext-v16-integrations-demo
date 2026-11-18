@@ -30,9 +30,11 @@ $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $EnvPath = Join-Path $Root '.env'
 $LocalTag = 'comp_demo-bench:v16'
 $GhcrImage = 'ghcr.io/msf4-0/comp-demo-bench:v16'
-$BundleUrl = if ($env:BENCH_BUNDLE_URL) { $env:BENCH_BUNDLE_URL } else {
-    'https://github.com/msf4-0/erpnext-v16-integrations-demo/releases/latest/download/comp-demo-bench-v16-amd64.tar.gz'
-}
+# No default: the bench image is NOT published publicly (company policy blocks a
+# public GHCR package / public release asset), so guessing a URL only produces a
+# long failure before the inevitable local build. Set BENCH_BUNDLE_URL when you
+# host the tarball somewhere your users can reach (internal registry, SMB share).
+$BundleUrl = if ($env:BENCH_BUNDLE_URL) { $env:BENCH_BUNDLE_URL } else { '' }
 
 function Say([string]$m)  { Write-Host "  ...   $m" }
 function Ok([string]$m)   { Write-Host "  OK    $m" -ForegroundColor Green }
@@ -54,6 +56,19 @@ if (Test-Path $EnvPath) {
 if ($LASTEXITCODE -eq 0 -and -not $Force) {
     Ok "bench image already present ($LocalTag)"
     exit 0
+}
+
+# ---------------------------------------------------------------------------
+# 0. can we pull at all?
+# ---------------------------------------------------------------------------
+# A local build is the DEFAULT path for a new user. Pulling is an opt-in
+# shortcut: BENCH_PULL_GHCR=1 for an internal/authorised registry, or BENCH_IMAGE
+# set to a namespaced ref your Docker can already reach.
+$allowGhcr = ($env:BENCH_PULL_GHCR -eq '1') -or ($GhcrImage -notmatch '^ghcr\.io/msf4-0/')
+if (-not $allowGhcr -and -not $BundleUrl) {
+    Warn 'no pullable image configured - this is expected for a fresh clone'
+    Warn 'building comp_demo-bench locally (25-40 minutes, once)'
+    exit 2
 }
 
 # ---------------------------------------------------------------------------

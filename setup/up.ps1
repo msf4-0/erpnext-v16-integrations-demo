@@ -685,6 +685,16 @@ if (-not $SkipInstall) {
     } else {
         Write-Info 'demo master data seeded (supplier groups, stock entry types, barcode scanning, demo docs)'
     }
+
+    # 8b-2. the simple go-kart dataset (items + prices + BOM + serial numbers).
+    # This is the demo a reviewer is meant to see; it replaces the old
+    # production-style dataset and re-uses the FRM-001-#### serial numbers.
+    Write-Step '8b-2/11 go-kart demo data (items, prices, BOM, serials)'
+    if ((Invoke-Bench 'cd /home/frappe/frappe-bench && SITE_NAME=frontend ./env/bin/python /tmp/scripts/seed-gokart-demo.py') -ne 0) {
+        Add-Failure 'seed-gokart' 'go-kart demo data seeding failed - the catalogue/BOM will be empty'
+    } else {
+        Write-Info 'go-kart demo data seeded (GO-KART BOM: frame, wheels, steering wheel, seat)'
+    }
 }
 
 # ---------------------------------------------------------------------------
