@@ -4,6 +4,19 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+# Git Bash / Cygwin (MSYS) rewrites every argument that looks like a POSIX
+# path. That silently turns the in-CONTAINER paths below into Windows paths:
+#   docker compose exec -T bench mkdir -p /tmp/comp-demo-bootstrap/lib
+# really ran `mkdir -p C:/Users/<user>/AppData/Local/Temp/comp-demo-bootstrap/lib`
+# inside the container (exit 0, wrong place), so the next
+#   docker cp provision-base.sh <container>:/tmp/comp-demo-bootstrap/
+# died with "no such directory". Every absolute path in this script is a path
+# inside the container/image, so conversion must be off for the whole run.
+if [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]]; then
+  export MSYS_NO_PATHCONV=1
+  export MSYS2_ARG_CONV_EXCL='*'
+fi
+
 if [[ "${1:-}" == "--help" ]]; then
   cat <<'HELP'
 Usage: ./up-linux.sh
