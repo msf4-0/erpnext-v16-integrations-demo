@@ -464,3 +464,84 @@ module import **Verified**, restart **Verified**, DB persistence **Verified** (`
 before and after restart), apps.txt/`bench version` **Verified** after the fix.
 Still not verified: genuinely cold machine, Windows launchers, from-scratch (`bench new-site`) path,
 UI-level integration pass - see the table above.
+
+## P8 — Close the deployment gaps (2026-11-18)
+
+Status vocabulary, used strictly: **Implemented** (code written), **Tested** (run at least
+once, transcript exists), **Verified** (run repeatedly / end-to-end with evidence recorded
+here), **Blocked** (cannot proceed, reason given), **Not started**.
+
+### P7 defects carried into P8
+
+| # | Defect | Status |
+|---|---|---|
+| 1 | `common_site_config.json` baked at build time; a start-up "write only if missing" guard is dead code because Docker copies image content into the fresh volume | **Verified** — endpoints are baked *and* merged/upserted at start-up; cold runs show db/redis endpoints present in a fresh `bench_sites` volume |
+| 2 | `apps.txt` stale after image build, so `bench version`/`list-apps` misreport | **Verified** — `sandbox/scripts/install-all-apps.sh` reconciles `sites/apps.txt` before verifying |
+| 3 | Install status decided from `bench list-apps` (under-reports on this bench build) | **Verified** — installer and verifier both decide from `frappe.get_installed_apps`; `list-apps` is printed for information only |
+| 4 | Verifier's app check trusted `list-apps` | **Verified** — verifier queries `tabInstalled Application` / `frappe.get_installed_apps` |
+
+### Defect found and fixed in P8 — the verifier could pass the wrong stack
+
+`verify-deployment.sh` selects its target through environment variables only (`PROJECT`,
+`SITE_NAME`, `ERPNEXT_PORT`). It took **no** positional arguments and silently ignored them, so
+`verify-deployment.sh -p comp_demo_cold` verified the **default** project `comp_demo` and printed
+`ALL CHECKS PASSED` — a false PASS against the live demo stack instead of the intended test stack.
+This was hit for real during P8.
+
+Fixed in this round: unknown positional arguments now abort with exit code 2 and print the correct
+invocation; `-h/--help` prints usage. Tested: `... verify-deployment.sh -p x` → exit 2 with the
+guidance message; `bash -n` clean.
+
+### A. Cold-machine deployment — Tested, not Verified
+
+Evidence (`comp_demo_cold`, ports 18001, image `comp_demo-bench:coldtest`, build log
+`F:\ERPsessions\p7-cold-build.log`, 163 KB, **zero** `CACHED` lines → `--no-cache`):
+
+```
+== verify-deployment: project 'comp_demo_cold', site 'frontend', port 18001 ==
+PASS  docker compose config renders
+PASS  bench container is running
+PASS  db container is running
+PASS  bench --site frontend version works
+PASS  all 8 apps installed exactly once (tabInstalled Application)
+      frappe / erpnext / barcode_shrdc / shopify / eu_einvoice
+      metabase_integration / item_tracking / my_invois
+      bench list-apps:  frappe 16.35.0 UNVERSIONED erpnext 16.35.0 UNVERSIONED
+PASS  all 8 app modules import in the bench venv
+PASS  GET /api/method/ping answered: {"message":"pong"}
+PASS  every app_include_js/css referenced by hooks.py resolves
+== verify-deployment: ALL CHECKS PASSED ==   (exit 0)
+```
+
+That transcript also re-confirms hard-won fact 1: on the same site where the DB lists all eight
+apps, `bench list-apps` printed only `frappe` and `erpnext`.
+
+**Why this is Tested and not Verified:** the criterion was a *genuinely* cold machine, i.e. prune
+the built bench image **and** the pinned base `frappe/erpnext:v16.35.0`. The build was `--no-cache`,
+but the base image was still present locally (`frappe/erpnext:v16.35.0`, 7 weeks old), so base-layer
+reuse from this host cannot be excluded. Not started: a second machine or fresh VM, which is the
+only clean proof.
+
+### B. Windows launcher path (`setup/up.ps1`, `setup/start.ps1`) — Not started
+
+No run of either launcher since the `setup/` move has produced a transcript. The known
+Windows-hostile step (`docker compose up -d` can hang on this host) is therefore still undocumented
+in `docs/DEPLOY.md` as a workaround. This is the next concrete task; the isolated-project harness
+(`-p comp_demo_p8`, `ERPNEXT_PORT=18003`) is ready for it.
+
+### C. UI-level integration pass — Not started
+
+Not started, deliberately: it needs an isolated project serving the restored demo DB on its own
+ports, and every one of its checks (barcode/QR scan, `item_tracking` Shift+I, `eu_einvoice` import,
+`my_invois` coexistence, Metabase rebind, planner SPA write-back at :3001, Node-RED at :1880) is an
+interactive check against a live stack. None of it is claimed.
+
+Outstanding decision carried from the brief: whether `eu_einvoice` and `my_invois` may both stay
+enabled by default. No evidence gathered yet, so the default `SKIP_APPS` is unchanged.
+
+### D. Ship it
+
+- P8 section in this file (four P7 defects + cold transcript + the verifier false-PASS defect):
+  **Implemented**.
+- GHCR image publish + CI job that builds and runs `verify-deployment.sh`: **Not started**.
+
