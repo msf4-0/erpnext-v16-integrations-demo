@@ -677,6 +677,7 @@ it on an isolated project beside the live demo and certifies the result in
 | `6b90eab` | `setup/up-linux.sh` | project name from `COMPOSE_PROJECT_NAME` (was hard-coded `-p comp_demo`); `build` + `compose create` + `docker start` instead of `compose up -d`; start all nine services, not four | Verified |
 | `f9d3ed1` | `setup/up-linux.sh` | `MSYS_NO_PATHCONV=1` on Git Bash/Cygwin: MSYS rewrote in-container `/tmp/...` to `C:/Users/.../Temp/...`, so the deploy died at `docker cp` with `no such directory` | Verified |
 | `ce54eeb` | `sandbox/scripts/install-all-apps.sh`, `setup/up-linux.sh`, `seed/seed-site.sh`, `docker-compose.yml`, `sandbox/scripts/verify-deployment.sh` | installer mirrors `tabInstalled Application` into `site_config.json` (custom `www/` pages were 500); materialise `sandbox/node-red/flows.json` before `create`; dashboard URL uses `METABASE_PORT`; verifier text says seven apps | Verified |
+| `2c54cc2` | `setup/up-linux.sh`, `docs/DEPLOY.md`, `docs/TEST-PLAN.md` | require a **working** Python 3.9+ (the Windows Store `python3` alias passes `command -v` but fails when run); document the real prerequisites (Git, bash, curl, Python) and x86_64-only/ARM-untested | Verified |
 | docs commit | `docs/TEST-PLAN.md`, `docs/DEPLOY.md`, this section | certification plan + corrections (I-12) | Implemented |
 
 ### Cold run — Verified
@@ -756,6 +757,29 @@ ngrok                          https://scoreless-barcode-length.ngrok-free.dev -
 | D-7 | First ERPNext request after a restart takes ~9 s; the readiness gate allows 5 s, so the command waits ~4 min before printing READY | **Open (low).** It succeeds; raising the gate's `--max-time` would shorten the wait (I-10) |
 | D-8 | Node-RED reports `unhealthy` for ~2.5 min while its palette loads | **Open (low).** Self-heals; do not judge it in the first 3 minutes (I-9) |
 | D-9 | `bench list-apps` printed 2 of 7 apps (known under-report) | **Documented**, not a defect; verifier and installer decide from `tabInstalled Application` (I-13) |
+| D-10 | `DEPLOY.md` claimed "only Docker"; the Linux path also needs Git, bash, curl and a *working* Python 3.9+ (the Windows Store alias is not one), and the image is x86_64-only | **Fixed** `2c54cc2`; the launcher probes by executing and names the Store alias in its error |
+
+### Second run on the same project (idempotency) — Verified
+
+`bash ./setup/up-linux.sh` again at `2c54cc2` on the already-deployed project:
+**exit 0 in 1.6 min** (17:49:52 → 17:51:28).
+
+```
+ Image comp_demo-bench:p9clone Built
+Creating the containers...
+Starting MariaDB and Redis...
+Demo site already restored (seed exited 0) - nothing to do.
+Starting ERPNext, Metabase, Node-RED, planner and webhook sink...
+== no new apps to install - migrate skipped ==
+site_config: installed_apps already current
+-- installed (db): frappe erpnext barcode_shrdc shopify item_tracking metabase_integration my_invois
+ERPNext is ready at http://localhost:18008 (site: frontend, project: comp_demo_p9clone).
+```
+
+The verifier re-run immediately afterwards still printed
+`== verify-deployment: ALL CHECKS PASSED ==` (exit 0). The command is therefore
+safely re-runnable: seed and installer both exit early, and the restart does not
+regress the site. A run on a genuinely different machine remains untested.
 
 ### Metabase defects found and fixed (re-verified in P9)
 
@@ -794,6 +818,8 @@ not caused by P9.
 | Guest `/item_qr` 200 | **Verified** |
 | Planner / Node-RED / webhook-sink HTTP | **Verified** (endpoint level) |
 | Live stack preserved; host ngrok restored to `:1880` | **Verified** |
+| Second run of the command (idempotency) | **Verified** — exit 0 in 1.6 min; verifier still green |
+| Python 3.9+ preflight vs the Windows Store alias | **Verified** — stubbed probe falls back to `python`; with both broken it exits non-zero with the new message |
 | Git Bash path conversion, project isolation, full service set | **Verified** |
 | Shopify flow wired on a clone (needs credentials) | **Not started** |
 | Browser click-through (desk, planner SPA, QR camera) | **Not started** |

@@ -144,6 +144,11 @@ Timing on the certified run (UTC, from Docker timestamps):
 | seed restore (`bench new-site` + dump + migrate) | **3 min 29 s** |
 | whole command, start to exit 0 | **10.2 min** |
 
+Re-running the same command on an already-deployed project is safe and took
+**1.6 min**: it printed `Demo site already restored (seed exited 0) - nothing to
+do.` and `== no new apps to install - migrate skipped ==`, and the verifier
+stayed green afterwards.
+
 **FAIL:** any non-zero exit, or `ERROR:` in the output. Do not continue.
 
 ---
