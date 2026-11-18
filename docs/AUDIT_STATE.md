@@ -492,7 +492,38 @@ Fixed in this round: unknown positional arguments now abort with exit code 2 and
 invocation; `-h/--help` prints usage. Tested: `... verify-deployment.sh -p x` → exit 2 with the
 guidance message; `bash -n` clean.
 
-### A. Cold-machine deployment — Tested, not Verified
+### A. Cold-machine deployment — cold build + cold site **Verified**; literal doc sequence not yet
+
+Round 2 (2026-11-18, `comp_demo_p9`, ports 18004/11881/13002/13006/18089) removed the
+image-cache caveat above:
+
+1. `docker rmi comp_demo-bench:coldtest frappe/erpnext:v16.35.0 frappe/erpnext:v16` and
+   `docker builder prune -af` (1.4 GB of layers) — the pinned base the bench image is
+   built FROM was gone, so no base-layer reuse was possible.
+2. `setup/up.ps1 -Project comp_demo_p9 -EnvFile <p9 env> -SkipScheduler` built
+   `comp_demo-bench:p9-cold` from `bake/bench.Dockerfile` (3.12 GB, base pulled fresh),
+   provisioned a from-scratch site, and installed the apps.
+3. `PROJECT=comp_demo_p9 ERPNEXT_PORT=18004 SITE_NAME=frontend bash sandbox/scripts/verify-deployment.sh`:
+
+```
+PASS  docker compose config renders
+PASS  bench container is running
+PASS  db container is running
+PASS  bench --site frontend version works          (all 8 apps, incl. item_tracking 0.0.2)
+PASS  all 8 apps installed exactly once (tabInstalled Application)
+PASS  all 8 app modules import in the bench venv
+PASS  GET /api/method/ping answered: {"message":"pong"}
+PASS  every app_include_js/css referenced by hooks.py resolves
+== verify-deployment: ALL CHECKS PASSED ==   (exit 0)
+```
+
+`bench list-apps` again printed all eight — but only after the DB had them; the earlier
+under-reporting run stands as evidence that it cannot be trusted.
+
+**What is still not Verified:** the exact doc sequence *fresh GitHub clone → `cp
+.env.example .env` → `bash ./setup/up-linux.sh`*. The cold run above used the Windows
+launcher and the existing working `.env`, not a fresh clone and not `up-linux.sh`. The
+image and site were genuinely cold; the clone was not.
 
 Evidence (`comp_demo_cold`, ports 18001, image `comp_demo-bench:coldtest`, build log
 `F:\ERPsessions\p7-cold-build.log`, 163 KB, **zero** `CACHED` lines → `--no-cache`):
@@ -516,13 +547,9 @@ PASS  every app_include_js/css referenced by hooks.py resolves
 That transcript also re-confirms hard-won fact 1: on the same site where the DB lists all eight
 apps, `bench list-apps` printed only `frappe` and `erpnext`.
 
-**Why this is Tested and not Verified:** the criterion was a *genuinely* cold machine, i.e. prune
-the built bench image **and** the pinned base `frappe/erpnext:v16.35.0`. The build was `--no-cache`,
-but the base image was still present locally (`frappe/erpnext:v16.35.0`, 7 weeks old), so base-layer
-reuse from this host cannot be excluded. Not started: a second machine or fresh VM, which is the
-only clean proof.
 
-### B. Windows launcher path (`setup/up.ps1`, `setup/start.ps1`) — Tested, four defects fixed
+
+### B. Windows launcher path (`setup/up.ps1`, `setup/start.ps1`) — Verified on a cold project
 
 First ever run of the launcher after the move to `setup/`. Exercised on an isolated
 Compose project (`comp_demo_p8`, ports 18003/11880/13001/13005/18088, image tag
@@ -550,17 +577,27 @@ re-verified end to end**:
 | `$demoServices` omitted `webhook-sink` | the documented `http://localhost:8088/healthz` was left in `Created` and never answered on a launcher-built stack (proved by starting it by hand: `200 {"ok": true, "stored": 0}`) | added to the start list |
 | the launcher installs apps by hand and only covers four of them (`barcode_shrdc`, `shopify`, `eu_einvoice`, `item_tracking`) | the site ended with **6 of 8** apps: `metabase_integration` and `my_invois` were never installed, and the launcher never called `install-all-apps.sh` at all | new step 7b-3 runs the canonical image-baked installer, which is ordered, idempotent and DB-truth |
 
-**Still open on this path (Blocked, needs the next run):** `bench --site frontend
-version` fails with `module 'item_tracking' has no attribute '__version__'`, so
-the acceptance verifier reports that check as FAIL even though the 8 app modules
-import and `/api/method/ping` answers. The cause is the duplicated
-`repos/item_tracking` tree: the launcher's copy yields hooks.py at three depths,
-and the interpreter resolves the app package to the nested copy, whose
-`__init__.py` has no `__version__`. Deleting the nested copy in the running test
-container made the module unimportable (`ModuleNotFoundError`), which proves the
-nested copy is what `bench` resolves there. Fixing it properly means normalising
-`repos/item_tracking` to one package level (or making the copy flatten it) and
-re-running — not something to guess at without a fresh run.
+**Resolved in the second cold run (`comp_demo_p9`).** The duplicated
+`repos/item_tracking` tree was normalised to one `hooks.py` at package level
+(the root copy and the module-level copy were removed; the module package got a
+`__version__`), so `bench --site frontend version` now lists `item_tracking
+0.0.2` and the verifier's version check passes. The launcher's feature probes now
+log in as Administrator instead of trusting a possibly-stale API token — which is
+why `barcode app` and `e-invoicing` went from 401 to OK — and the QR page probe
+uses a real Item instead of the seed-only `PLN-BRACKET` (a from-scratch site
+answered an honest 404, which the run reported as a broken feature). The
+canonical installer step retries once, because its first call returned non-zero
+while the site was still settling after the previous app's migrate, then
+installed all eight on the retry. Final state of the cold launcher run: **8 of 8
+apps, verifier ALL CHECKS PASSED**.
+
+**Still failing on the from-scratch path** (pre-existing, not caused by P8):
+`seed-masters` and `virtual-work-order` report failures, so a site built by the
+launcher has no demo documents (no Items at all). That is why the QR probe had to
+become data-driven. The documented *restore* path (`up-linux.sh` → `seed` with
+`seed/frontend-database.sql.gz`) is the one that produces demo data, and it is the
+path the P7 cold transcript passed on; the launcher's own from-scratch seeding is
+what needs fixing next.
 
 ### C. UI-level integration pass — partially Tested
 
