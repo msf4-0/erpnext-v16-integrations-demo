@@ -57,7 +57,7 @@ mkdir -p sites/assets
 mkdir -p sites
 if [ ! -f sites/apps.txt ]; then
     echo "seed: writing sites/apps.txt"
-    printf 'frappe\nerpnext\nbarcode_shrdc\nshopify\neu_einvoice\nitem_tracking\nmetabase_integration\nmy_invois\n' > sites/apps.txt
+    printf 'frappe\nerpnext\nbarcode_shrdc\nshopify\nitem_tracking\nmetabase_integration\nmy_invois\n' > sites/apps.txt
 fi
 
 # --- db/redis endpoints in the GLOBAL config ---------------------------------

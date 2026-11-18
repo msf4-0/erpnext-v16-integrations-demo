@@ -22,7 +22,7 @@ name: comp_demo
 
 services:
   bench:
-    # Baked image: frappe + erpnext + barcode_shrdc + shopify + eu_einvoice
+    # Baked image: frappe + erpnext + barcode_shrdc + shopify
     # + render deps are baked INTO the image at build time (bake/bench.Dockerfile),
     # so a fresh clone can reproduce the exact image without re-provisioning.
     # `start.ps1` pulls ghcr.io/msf4-0/comp-demo-bench:v16 on a first run and
@@ -146,7 +146,7 @@ services:
     volumes:
       - bench_sites:/home/frappe/frappe-bench/sites
       # P7: no application source is bind-mounted any more. All six custom apps
-      # (barcode_shrdc, shopify, eu_einvoice, item_tracking,
+      # (barcode_shrdc, shopify, item_tracking,
       # metabase_integration, my_invois) are baked into the image by
       # bake/bench.Dockerfile, so a clean clone runs on the image alone.
       # To live-edit an app without rebuilding, re-add an override mount here,
@@ -220,7 +220,7 @@ services:
       - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
       # Space-separated apps to leave uninstalled, e.g. "my_invois" on a site
-      # where the LHDN MyInvois layer would conflict with eu_einvoice.
+      # where the LHDN MyInvois layer would conflict with an EU e-invoicing app.
       - SKIP_APPS=${SKIP_APPS:-}
       - ALLOW_PARTIAL=${ALLOW_PARTIAL:-0}
     command: ["bash", "/seed/seed-site.sh"]

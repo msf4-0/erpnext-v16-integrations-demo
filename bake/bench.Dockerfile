@@ -12,7 +12,6 @@
 # App -> bench app name mapping (directory name is NOT the app name):
 #   repos/barcode-shrdc-v16-fixed -> barcode_shrdc
 #   repos/shopify-shrdc-v16-fixed -> shopify
-#   repos/eu_einvoice             -> eu_einvoice       (pyproject, no requirements.txt)
 #   repos/item_tracking           -> item_tracking
 #   repos/metabase_integration    -> metabase_integration
 #   repos/my_invois               -> my_invois
@@ -51,7 +50,6 @@ RUN apt-get update -qq \
 # ---------------------------------------------------------------------------
 COPY --chown=frappe:frappe repos/barcode-shrdc-v16-fixed   /home/frappe/frappe-bench/apps/barcode_shrdc
 COPY --chown=frappe:frappe repos/shopify-shrdc-v16-fixed   /home/frappe/frappe-bench/apps/shopify
-COPY --chown=frappe:frappe repos/eu_einvoice               /home/frappe/frappe-bench/apps/eu_einvoice
 COPY --chown=frappe:frappe repos/item_tracking             /home/frappe/frappe-bench/apps/item_tracking
 COPY --chown=frappe:frappe repos/metabase_integration      /home/frappe/frappe-bench/apps/metabase_integration
 COPY --chown=frappe:frappe repos/my_invois                 /home/frappe/frappe-bench/apps/my_invois
@@ -71,7 +69,7 @@ WORKDIR /home/frappe/frappe-bench
 # ---------------------------------------------------------------------------
 RUN set -eu; \
     fail=0; \
-    for app in barcode_shrdc shopify eu_einvoice item_tracking metabase_integration my_invois; do \
+    for app in barcode_shrdc shopify item_tracking metabase_integration my_invois; do \
         if [ ! -f "apps/$app/$app/hooks.py" ]; then \
             echo "BUILD ERROR: apps/$app/$app/hooks.py is missing (app source not vendored?)" >&2; fail=1; fi; \
         if [ ! -f "apps/$app/$app/__init__.py" ]; then \
@@ -80,14 +78,14 @@ RUN set -eu; \
             echo "BUILD ERROR: apps/$app/$app/__init__.py has no __version__ (frappe cannot load it)" >&2; fail=1; fi; \
     done; \
     [ "$fail" -eq 0 ] || exit 1; \
-    echo "app-source guard: all 6 custom app sources present and well-formed"
+    echo "app-source guard: all 5 custom app sources present and well-formed"
 
 # ---------------------------------------------------------------------------
 # Put each app on the bench venv's import path by writing its .pth file next to
 # the frappe.pth / erpnext.pth that the base image already installed.
 # ---------------------------------------------------------------------------
 RUN SP=$(dirname "$(find /home/frappe/frappe-bench/env -name 'frappe.pth' -print -quit)") \
-    && for app in barcode_shrdc shopify eu_einvoice item_tracking metabase_integration my_invois; do \
+    && for app in barcode_shrdc shopify item_tracking metabase_integration my_invois; do \
         printf '/home/frappe/frappe-bench/apps/%s\n' "$app" > "$SP/${app}.pth"; \
     done \
     && ls -la "$SP"/*.pth
@@ -134,17 +132,7 @@ PY
 # Server-side rasterisation + QR libs into the bench venv (idempotent, baked once).
 RUN /home/frappe/frappe-bench/env/bin/pip install --no-cache-dir reportlab qrcode pillow
 
-# eu_einvoice's own runtime dependencies (its pyproject: factur-x, drafthorse,
-# saxonche, lxml). These were never installed, so every request that touched an
-# eu_einvoice doctype died in `load_doctype_module` with
-#   ModuleNotFoundError: No module named 'drafthorse'
-# i.e. clicking E-Invoicing / E Invoice Import threw "Module import failed".
-# Pinned to the ranges in repos/eu_einvoice/pyproject.toml.
-RUN /home/frappe/frappe-bench/env/bin/pip install --no-cache-dir \
-        "factur-x~=3.1" "drafthorse~=2025.2.0" "saxonche>=12.5.0,<13.0.0"
-
-# Every app's own requirements.txt. eu_einvoice ships a pyproject instead and
-# is covered above. A failing requirements file fails the build: a half-installed
+# Every app's own requirements.txt. A failing requirements file fails the build: a half-installed
 # app is exactly the "Module import failed" class of bug this image exists to
 # avoid. `--no-deps` is NOT used - transitive deps are wanted here.
 RUN for app in barcode_shrdc shopify item_tracking metabase_integration my_invois; do \
@@ -160,12 +148,11 @@ RUN for app in barcode_shrdc shopify item_tracking metabase_integration my_invoi
 # ---------------------------------------------------------------------------
 # IMPORT SMOKE TEST: importing each app package is what Frappe does on every
 # request (`load_doctype_module`). Catching it here means a missing dependency
-# breaks the build, not the demo. eu_einvoice is imported last because its
-# deps (saxonche) are the heaviest.
+# breaks the build, not the demo.
 # ---------------------------------------------------------------------------
 RUN cd /home/frappe/frappe-bench && env/bin/python - <<'PY'
 import importlib, sys
-apps = ["barcode_shrdc", "shopify", "eu_einvoice", "item_tracking",
+apps = ["barcode_shrdc", "shopify", "item_tracking",
         "metabase_integration", "my_invois"]
 failed = []
 for app in apps:

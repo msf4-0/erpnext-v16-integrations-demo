@@ -9,7 +9,7 @@ if [[ "${1:-}" == "--help" ]]; then
 Usage: ./install-apps-linux.sh
 
 Install the bundled custom apps into an already-provisioned comp_demo site:
-barcode_shrdc, shopify, eu_einvoice, item_tracking, metabase_integration,
+barcode_shrdc, shopify, item_tracking, metabase_integration,
 my_invois. Run ./up-linux.sh first (up-linux.sh already installs these, so this
 script is only useful for re-running the installer by hand).
 For a one-shot install of every app use the image-baked canonical installer:
@@ -71,7 +71,7 @@ if ! compose exec -T -e "SITE_NAME=$SITE_NAME" bench \
   exit 1
 fi
 
-apps=(barcode_shrdc shopify eu_einvoice item_tracking metabase_integration my_invois)
+apps=(barcode_shrdc shopify item_tracking metabase_integration my_invois)
 for app in "${apps[@]}"; do
   if ! compose exec -T bench test -d "/home/frappe/frappe-bench/apps/$app"; then
     echo "ERROR: mounted app source '$app' is missing from the bench container." >&2
@@ -84,7 +84,7 @@ compose exec -T -u root bench mkdir -p "$stage_dir/lib" "$stage_dir/recipes"
 docker cp sandbox/scripts/install-app.sh "$bench_id:$stage_dir/"
 docker cp sandbox/scripts/fix-barcode-v16-renderdeps.sh "$bench_id:$stage_dir/"
 docker cp sandbox/scripts/lib/common.sh "$bench_id:$stage_dir/lib/"
-for recipe in barcode_shrdc eu_einvoice item_tracking; do
+for recipe in barcode_shrdc item_tracking; do
   docker cp "sandbox/recipes/$recipe.yaml" "$bench_id:$stage_dir/recipes/"
 done
 compose exec -T -u root bench chown -R frappe:frappe "$stage_dir"
@@ -95,7 +95,7 @@ compose exec -T -u root bench bash "$stage_dir/fix-barcode-v16-renderdeps.sh"
 for app in "${apps[@]}"; do
   recipe=""
   case "$app" in
-    barcode_shrdc|eu_einvoice|item_tracking)
+    barcode_shrdc|item_tracking)
       recipe="$stage_dir/recipes/$app.yaml"
       ;;
   esac

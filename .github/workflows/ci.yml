@@ -166,4 +166,4 @@ jobs:
         # YAML block scalar, and indented terminators do not work in bash.
         run: |
           docker run --rm ghcr.io/msf4-0/comp-demo-bench:${{ github.sha }} \
-            /home/frappe/frappe-bench/env/bin/python -c "import importlib; mods=('frappe','erpnext','barcode_shrdc','shopify','eu_einvoice','reportlab','qrcode','PIL','drafthorse','saxonche'); [print('OK', m) for m in (importlib.import_module(x) and x for x in mods)]"
+            /home/frappe/frappe-bench/env/bin/python -c "import importlib; mods=('frappe','erpnext','barcode_shrdc','shopify','reportlab','qrcode','PIL'); [print('OK', m) for m in (importlib.import_module(x) and x for x in mods)]"

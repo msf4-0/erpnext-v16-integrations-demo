@@ -10,9 +10,9 @@
 # Runs INSIDE the bench container, from anywhere (it cd's to the bench root).
 #
 # What it guarantees:
-#   * all eight apps end up installed on the site
+#   * all seven apps end up installed on the site
 #   * correct dependency order (frappe -> erpnext -> barcode_shrdc -> shopify
-#     -> eu_einvoice -> item_tracking -> metabase_integration -> my_invois)
+#     -> item_tracking -> metabase_integration -> my_invois)
 #   * no app is installed twice (the DB is checked first; re-runs are cheap)
 #   * a missing app source or a failed install FAILS LOUDLY (exit 1) instead of
 #     being skipped, unless ALLOW_PARTIAL=1 is set explicitly
@@ -22,7 +22,7 @@
 #   SITE_NAME         site to install on (default: frontend)
 #   SKIP_APPS         space-separated app names to leave uninstalled
 #                     (e.g. SKIP_APPS="my_invois" when the LHDN MyInvois layer
-#                      conflicts with eu_einvoice on a particular site)
+#                      conflicts with another e-invoicing app on a site)
 #   ALLOW_PARTIAL=1   downgrade install failures to warnings (NOT for
 #                     acceptance testing - the clean-machine test requires 0)
 #   INSTALL_APPS      override the full ordered app list
@@ -33,7 +33,7 @@ BENCH_DIR="${BENCH_DIR:-/home/frappe/frappe-bench}"
 SITE="${SITE_NAME:-frontend}"
 SKIP_APPS="${SKIP_APPS:-}"
 ALLOW_PARTIAL="${ALLOW_PARTIAL:-0}"
-APPS="${INSTALL_APPS:-frappe erpnext barcode_shrdc shopify eu_einvoice item_tracking metabase_integration my_invois}"
+APPS="${INSTALL_APPS:-frappe erpnext barcode_shrdc shopify item_tracking metabase_integration my_invois}"
 
 cd "$BENCH_DIR" || { echo "ERROR: bench dir $BENCH_DIR not found" >&2; exit 1; }
 

@@ -503,7 +503,7 @@ if ($siteCheck.Code -ne 0 -or -not $siteCheck.Output.Trim()) {
 } else {
     Write-Ok "site '$siteName' present"
     $apps = (Invoke-Bench 'cat /home/frappe/frappe-bench/sites/apps.txt' -Capture).Output
-    foreach ($app in @('frappe', 'erpnext', 'barcode_shrdc', 'shopify', 'eu_einvoice', 'item_tracking', 'metabase_integration', 'my_invois')) {
+    foreach ($app in @('frappe', 'erpnext', 'barcode_shrdc', 'shopify', 'item_tracking', 'metabase_integration', 'my_invois')) {
         if ($apps -match "(?m)^\s*$([regex]::Escape($app))\s*$") { Write-Ok "app $app" } else { Write-Warn "app $app not installed" }
     }
     # frappe's logger needs this; a recreated container loses it
@@ -597,30 +597,6 @@ if ($siteCheck.Code -ne 0 -or -not $siteCheck.Output.Trim()) {
         Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName mariadb -e '$sqlHpSet'" | Out-Null
         Invoke-Bench "cd /home/frappe/frappe-bench && bench --site $siteName clear-cache" | Out-Null
         Write-Change 'desk home page moved off setup-wizard - stops the reload loop'
-    }
-
-    # --- custom-app python dependencies -----------------------------------
-    # `bench install-app` does not install the dependencies declared in an
-    # app's pyproject.toml. eu_einvoice needs factur-x, drafthorse and saxonche,
-    # so every request that touched one of its doctypes died in
-    # load_doctype_module with `ModuleNotFoundError: No module named 'drafthorse'`
-    # and the desk showed "Module import failed for E Invoice Import". The image
-    # now bakes them (bake/bench.Dockerfile); this keeps an existing container
-    # healthy without a rebuild.
-    $depCmd = "/home/frappe/frappe-bench/env/bin/python -c 'import drafthorse, facturx, saxonche'"
-    $depOk = (Invoke-Bench "$depCmd && echo DEPSOK" -Capture).Output.Trim()
-    if ($depOk -match 'DEPSOK') {
-        Write-Ok 'eu_einvoice deps present (drafthorse/factur-x/saxonche)'
-    } elseif ($VerifyOnly) {
-        Write-Fail 'eu_einvoice deps missing - clicking E-Invoicing throws ModuleNotFoundError: drafthorse'
-    } else {
-        Invoke-Bench "/home/frappe/frappe-bench/env/bin/pip install --no-input 'factur-x~=3.1' 'drafthorse~=2025.2.0' 'saxonche>=12.5.0,<13.0.0'" | Out-Null
-        $depOk = (Invoke-Bench "$depCmd && echo DEPSOK" -Capture).Output.Trim()
-        if ($depOk -match 'DEPSOK') {
-            Write-Change 'installed eu_einvoice deps (factur-x, drafthorse, saxonche)'
-        } else {
-            Write-Fail 'eu_einvoice deps still missing after install - E-Invoicing forms will not load'
-        }
     }
 
     # --- MariaDB grant self-heal -----------------------------------------

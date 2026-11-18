@@ -15,7 +15,7 @@
 #   1. compose config renders (env files present and consistent)
 #   2. bench + db containers are running
 #   3. site exists and `bench --site <site> version` works
-#   4. `bench --site <site> list-apps` contains all 8 apps exactly once
+#   4. `bench --site <site> list-apps` contains all 7 apps exactly once
 #   5. every app module imports in the bench venv
 #   6. /api/method/ping answers over HTTP through the published port
 #   7. no active app_include_js asset referenced by hooks.py is missing
@@ -57,7 +57,7 @@ SITE="${SITE:-frontend}"
 [ -n "${ERPNEXT_PORT:-}" ] || PORT="$(awk -F= '$1=="ERPNEXT_PORT"{print $2; exit}' .env 2>/dev/null)"
 PORT="${PORT:-8000}"
 
-APPS="frappe erpnext barcode_shrdc shopify eu_einvoice item_tracking metabase_integration my_invois"
+APPS="frappe erpnext barcode_shrdc shopify item_tracking metabase_integration my_invois"
 
 fails=0
 ok()   { echo "PASS  $*"; }
@@ -134,7 +134,7 @@ else
         if [ "$n" -gt 1 ]; then bad "$app is installed $n times"; fi
     done
     if [ -z "$missing" ]; then
-        ok "all 8 apps installed exactly once (tabInstalled Application)"
+        ok "all 7 apps installed exactly once (tabInstalled Application)"
     else
         bad "apps missing from tabInstalled Application:$missing"
     fi

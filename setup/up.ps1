@@ -418,7 +418,6 @@ $reposDir = Join-Path $RootDir 'repos'
 $barcodeFixed = Join-Path $reposDir 'barcode-shrdc-v16-fixed'
 $barcodeMaster = Join-Path $reposDir 'barcode-shrdc-master'
 $shopifySrc = Join-Path $reposDir 'shopify-shrdc-v16-fixed'
-$einvoiceSrc = Join-Path $reposDir 'eu_einvoice'
 $trackingSrc = Join-Path $reposDir 'item_tracking'
 
 if (Test-Path $barcodeFixed) {
@@ -435,14 +434,6 @@ if (Test-Path $shopifySrc) {
     Write-Info 'staged shopify'
 } else {
     Write-Warn 'no shopify source under repos/ - the Shopify side cannot be installed'
-}
-# e-invoicing (best-effort: the original e_invoice_erp source is 404, so this
-# uses the public alyf-de/eu_einvoice v16 branch instead).
-if (Test-Path $einvoiceSrc) {
-    Copy-Into $einvoiceSrc '/tmp/repos/eu_einvoice'
-    Write-Info 'staged eu_einvoice (e-invoicing)'
-} else {
-    Write-Warn 'no eu_einvoice source under repos/ - e-invoicing will be skipped'
 }
 # Individual item tracking. REQUIRED by Barcode Printing's "Load Tracked Items"
 # (one label per Tracked Item). Without it the doctype is absent, the app's
@@ -499,16 +490,6 @@ if (-not $SkipInstall) {
     } else {
         Write-Info 'barcode_shrdc + shopify installed'
     }
-    # 7b. e-invoicing - best-effort, never blocks the build.
-    if (Test-Path $einvoiceSrc) {
-        Write-Step '7b/11 installing eu_einvoice (e-invoicing) - best-effort'
-        if ((Invoke-Bench 'bash /tmp/scripts/install-app.sh eu_einvoice /tmp/repos/eu_einvoice 16 /tmp/recipes/eu_einvoice.yaml') -ne 0) {
-            Write-Warn 'eu_einvoice install reported errors - e-invoicing is optional, continuing'
-        } else {
-            Write-Info 'eu_einvoice (e-invoicing) installed'
-        }
-    }
-
     # 7b-2. item tracking - required by Barcode Printing's per-unit labels.
     if (Test-Path $trackingSrc) {
         Write-Step '7b-2/11 installing item_tracking (individual item tracking)'
@@ -624,21 +605,6 @@ if ($hpVal -eq 'setup-wizard') {
     Write-Info ("desk home page is '" + $hpVal + "'")
 }
 
-# eu_einvoice's python deps. `bench install-app` skips an app's pyproject
-# dependencies, so without these every eu_einvoice doctype throws
-#   ModuleNotFoundError: No module named 'drafthorse'
-# and the desk says "Module import failed for E Invoice Import".
-Write-Step '7e/11  app python dependencies'
-$depCmd = "/home/frappe/frappe-bench/env/bin/python -c 'import drafthorse, facturx, saxonche'"
-$depOk = (Invoke-Bench "$depCmd && echo DEPSOK" -Capture).Output
-if ($depOk -match 'DEPSOK') {
-    Write-Info 'eu_einvoice deps already present'
-} else {
-    Invoke-Bench "/home/frappe/frappe-bench/env/bin/pip install --no-input 'factur-x~=3.1' 'drafthorse~=2025.2.0' 'saxonche>=12.5.0,<13.0.0'" | Out-Null
-    $depOk = (Invoke-Bench "$depCmd && echo DEPSOK" -Capture).Output
-    if ($depOk -match 'DEPSOK') { Write-Info 'installed eu_einvoice deps' }
-    else { Write-Warn 'eu_einvoice deps still missing - E-Invoicing forms will not load' }
-}
 
 # ---------------------------------------------------------------------------
 # 7f. Metabase: schema + grant + dashboard
