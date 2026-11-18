@@ -324,6 +324,14 @@ services:
     # (http://localhost:3000) once, using METABASE_DB_USER / METABASE_DB_PASS.
     # Version is pinned in the root versions.env file.
     image: ${METABASE:?Load versions.env before starting Compose}
+    # Run as the image's own unprivileged user (uid 2000).
+    # As root, Metabase's entrypoint first runs `chmod o+r /app/metabase.jar`,
+    # which forces an overlayfs copy-up of the ~400 MB jar. On Docker Desktop
+    # that took 10+ minutes at ~75% CPU with zero log output and no HTTP - the
+    # dashboard looked permanently "starting" while its seeded metadata was in
+    # fact restored and correct (diagnosed in the P12 seed test). The non-root
+    # branch of run_metabase.sh execs java immediately.
+    user: "2000:2000"
     ports:
       - "${METABASE_PORT:-3005}:3000"
     environment:

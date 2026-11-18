@@ -194,6 +194,14 @@ if [ -f "${MB_DUMP}" ]; then
     MYSQL_PWD="${DB_ROOT_PASSWORD}" mariadb -h db -uroot -e "
         CREATE USER IF NOT EXISTS 'metabase_user'@'%' IDENTIFIED BY 'metabase_demo_2026';
         ALTER USER 'metabase_user'@'%' IDENTIFIED BY 'metabase_demo_2026';
+        -- Metabase must own its OWN metadata schema. Granting only SELECT on the
+        -- ERPNext database (as this script used to) leaves the container unable
+        -- to open its app DB:
+        --   Access denied for user 'metabase_user'@'%' to database 'metabase'
+        -- and Metabase shuts itself down, so the /metabase page never loads even
+        -- though the seeded dashboards are present. A pre-existing dev machine
+        -- had this grant from manual setup, which hid the bug.
+        GRANT ALL PRIVILEGES ON \`metabase\`.* TO 'metabase_user'@'%';
         GRANT SELECT, SHOW VIEW ON \`${DN}\`.* TO 'metabase_user'@'%';
         UPDATE metabase.metabase_database
            SET details = JSON_SET(details, '$.dbname', '${DN}', '$.host', 'db',
