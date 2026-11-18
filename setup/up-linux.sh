@@ -87,6 +87,19 @@ compose() {
 echo "Project '$PROJECT': building the bench image (25-40 min on a cold machine)..."
 compose build bench
 
+# node-red bind-mounts sandbox/node-red/flows.json as a FILE. The built flow is
+# gitignored (it embeds a real API token), so a fresh clone has no such file and
+# Docker creates a DIRECTORY at the mount source. node-red then refuses to
+# start: "error mounting .../flows.json ... not a directory". Materialise a
+# valid empty flow so the bridge container comes up; the Shopify flow itself is
+# built separately once credentials exist (sandbox/node-red/build-flows.py).
+FLOWS_FILE="sandbox/node-red/flows.json"
+if [[ ! -f "$FLOWS_FILE" ]]; then
+  rm -rf "$FLOWS_FILE"
+  printf '[]\n' > "$FLOWS_FILE"
+  echo "node-red: created $FLOWS_FILE (empty flow; Shopify wiring needs credentials)"
+fi
+
 # WHY NOT `docker compose up -d`: on this host Docker Desktop attaches agent
 # hooks to the `up` subcommand and it never returns, leaving containers in
 # `Created`. `create` returns immediately and `docker start` takes ~15 s, so

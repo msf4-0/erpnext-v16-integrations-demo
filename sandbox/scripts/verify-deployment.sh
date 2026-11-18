@@ -145,7 +145,7 @@ if [ -n "$(printf '%s' "$listapps" | tr -d '[:space:]')" ]; then
 fi
 
 if printf '%s' "$bench_out" | grep -qE '^IMPORT_FAILURES 0$'; then
-    ok "all 8 app modules import in the bench venv"
+    ok "all 7 app modules import in the bench venv"
 else
     bad "one or more app modules failed to import"
     printf '%s' "$bench_out" | grep -E '^(bad|IMPORT_FAILURES)' | sed 's/^/      /'

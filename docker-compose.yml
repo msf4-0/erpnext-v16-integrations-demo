@@ -219,6 +219,9 @@ services:
       - SITE_NAME=${SITE_NAME:-frontend}
       - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin}
+      # The seeded dashboard URL is embedded in the /metabase page, so the
+      # seeder must know the host port Metabase is published on.
+      - METABASE_PORT=${METABASE_PORT:-3005}
       # Space-separated apps to leave uninstalled, e.g. "my_invois" on a site
       # where the LHDN MyInvois layer would conflict with an EU e-invoicing app.
       - SKIP_APPS=${SKIP_APPS:-}

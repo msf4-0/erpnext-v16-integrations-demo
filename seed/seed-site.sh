@@ -20,6 +20,9 @@ cd /home/frappe/frappe-bench
 SITE="${SITE_NAME:-frontend}"
 DB_ROOT_PASSWORD="${DB_ROOT_PASSWORD:-admin}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
+# Host port Metabase is published on. The dashboard URL is embedded in the
+# /metabase page, so it must use THIS stack's port, not the default 3005.
+METABASE_PORT="${METABASE_PORT:-3005}"
 SEED_DIR="/seed"
 DUMP="${SEED_DIR}/frontend-database.sql.gz"
 
@@ -213,15 +216,15 @@ if [ -f "${MB_DUMP}" ]; then
     MB_UUID=$(MYSQL_PWD="${DB_ROOT_PASSWORD}" mariadb -h db -uroot -N -B \
         -e "select public_uuid from metabase.report_dashboard where id=2 and public_uuid is not null limit 1" 2>/dev/null || true)
     if [ -n "${MB_UUID:-}" ]; then
-        /home/frappe/frappe-bench/env/bin/python - "$SITE" "$MB_UUID" <<'PY'
+        /home/frappe/frappe-bench/env/bin/python - "$SITE" "$MB_UUID" "$METABASE_PORT" <<'PY'
 import json
 import sys
 
-site, uuid = sys.argv[1], sys.argv[2]
+site, uuid, mb_port = sys.argv[1], sys.argv[2], sys.argv[3]
 path = f"/home/frappe/frappe-bench/sites/{site}/site_config.json"
 with open(path) as handle:
     cfg = json.load(handle)
-cfg["metabase_dashboard_url"] = f"http://localhost:3005/public/dashboard/{uuid}"
+cfg["metabase_dashboard_url"] = f"http://localhost:{mb_port}/public/dashboard/{uuid}"
 with open(path, "w") as handle:
     json.dump(cfg, handle, indent=1)
 print(f"seed: metabase_dashboard_url -> {cfg['metabase_dashboard_url']}")

@@ -150,6 +150,41 @@ fi
 # ---------------------------------------------------------------------------
 echo "== verification =="
 db_list="$(db_apps)"
+
+# ---------------------------------------------------------------------------
+# site_config.json must list the installed apps as well as the database.
+#
+# `bench new-site` writes "installed_apps": ["frappe"], and restoring a dump
+# replaces the DATABASE only - the file keeps that one-entry list. Frappe builds
+# the Jinja template loader from this key, so on a restored site every www/ page
+# shipped by a custom app answered HTTP 500 ("TemplateNotFound") while core
+# pages were fine. The DB was correct all along; only this file was stale.
+# Writing the authoritative DB list here fixes seed, up-linux.sh and manual
+# runs in one place (it is the canonical installer).
+# ---------------------------------------------------------------------------
+if env/bin/python - "$SITE" "$(printf '%s ' $db_list)" <<'PY'
+import json
+import sys
+
+site, apps = sys.argv[1], sys.argv[2].split()
+path = f"sites/{site}/site_config.json"
+with open(path) as handle:
+    cfg = json.load(handle)
+if cfg.get("installed_apps") == apps:
+    print("site_config: installed_apps already current")
+else:
+    cfg["installed_apps"] = apps
+    with open(path, "w") as handle:
+        json.dump(cfg, handle, indent=1)
+    print("site_config: installed_apps -> " + " ".join(apps))
+PY
+then
+    bench --site "$SITE" clear-cache >/dev/null 2>&1 || true
+else
+    echo "ERROR: could not synchronise installed_apps in site_config.json" >&2
+    failed="$failed site-config"
+fi
+
 echo "-- installed (db): $(printf '%s ' $db_list)"
 echo "-- list-apps:"
 bench --site "$SITE" list-apps 2>&1 | sed 's/^/   /'
