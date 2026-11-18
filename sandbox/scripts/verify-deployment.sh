@@ -5,9 +5,11 @@
 # Answers one question: is this deployment actually complete and working?
 # Runs from the HOST, against a Compose project. Safe: read-only.
 #
-# Usage:
+# Usage (no positional arguments - select the target with env vars):
 #   ./sandbox/scripts/verify-deployment.sh                    # project comp_demo
 #   PROJECT=comp_demo_p7 ./sandbox/scripts/verify-deployment.sh   # isolated test
+#   PROJECT=comp_demo_cold ERPNEXT_PORT=18001 SITE_NAME=frontend \
+#       ./sandbox/scripts/verify-deployment.sh                # cold-run re-check
 #
 # Checks:
 #   1. compose config renders (env files present and consistent)
@@ -24,6 +26,22 @@ set -uo pipefail
 
 ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR" || exit 1
+
+# This script takes no positional flags; the target is selected with env vars.
+# It used to ignore them silently, so `verify-deployment.sh -p comp_demo_cold`
+# verified the DEFAULT project and printed a false PASS. Refuse them loudly.
+case "${1:-}" in
+  "") : ;;
+  -h|--help) sed -n '8,13p' "${BASH_SOURCE[0]}"; exit 0 ;;
+  *)
+    {
+      echo "verify-deployment: unexpected argument '$1'"
+      echo "This script takes no positional arguments. Select the target with env vars:"
+      echo "  PROJECT=<compose-project> SITE_NAME=<site> ERPNEXT_PORT=<port> $0"
+    } >&2
+    exit 2
+    ;;
+esac
 
 PROJECT="${PROJECT:-comp_demo}"
 SITE="${SITE_NAME:-}"
