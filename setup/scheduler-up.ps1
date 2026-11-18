@@ -42,12 +42,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$DemoDir = $PSScriptRoot
+$DemoDir = Split-Path -Parent $PSScriptRoot
 # Vendored copy on purpose: comp_demo is self-contained (sandbox/ + scheduler/ live
 # next to this script). The old ERPNEXT-FIX path is only a fallback.
 $SandboxDir = Join-Path $DemoDir 'sandbox'
 if (-not (Test-Path (Join-Path $SandboxDir 'scripts'))) {
-    $SandboxDir = Join-Path $PSScriptRoot 'sandbox'
+    $SandboxDir = Join-Path (Split-Path -Parent $PSScriptRoot) 'sandbox'
 if (-not (Test-Path $SandboxDir)) { throw "sandbox is missing from this checkout ($SandboxDir) - re-clone the repository" }
 }
 $EnvPath = Join-Path $DemoDir '.env'

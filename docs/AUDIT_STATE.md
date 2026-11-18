@@ -44,7 +44,7 @@ the next build. A rebuild will carry it.
 | Change | Status |
 |---|---|
 | 108 of 160 `sandbox/scripts/*` moved to `sandbox/scripts/_legacy/` (proven unreferenced) | Implemented / Verified |
-| Deleted `sandbox/up.ps1`, `sandbox/scheduler-up.ps1`, `sandbox/docker-compose.yml`, `sandbox/docker-compose.erpnext-fix.yml`, `sandbox/rebuild.sh`, `sandbox/scripts/rebuild-sandbox.sh`, `adji`, `SETUP-GUIDE.docx` | Implemented |
+| Deleted `sandbox/up.ps1`, `sandbox/scheduler-setup/up`, `sandbox/docker-compose.yml`, `sandbox/docker-compose.erpnext-fix.yml`, `sandbox/rebuild.sh`, `sandbox/scripts/rebuild-sandbox.sh`, `adji`, `SETUP-GUIDE.docx` | Implemented |
 | `.cache/` — 2 ngrok log files still open by a running process; not deleted, now gitignored | Partial |
 
 Reference proof method: every tracked text file (572) was loaded and searched for each script's
@@ -57,7 +57,7 @@ prompt's "regenerate last or delete" only in choosing delete.
 
 ## P2 — Kill the ai-fix generation
 
-13 files pointed at the deleted launcher; all rewritten to the canonical root `up.ps1`.
+13 files pointed at the deleted launcher; all rewritten to the canonical root `setup/up`.
 `sandbox/.env.ai-fix` / `.env.fix` mentions removed; `ai-fix-*.sh` → `fix-*.sh`.
 
 **Verified**
@@ -69,8 +69,8 @@ $ Test-Path on all 23 keep-list paths             # missing=0
 ```
 
 **Regression caught and fixed:** the blanket path rewrite also turned the CI guard
-"the retired `up.ps1` must not come back" into a guard against the **canonical** root launcher
-(`.github/workflows/ci.yml`), and reworded `up.ps1`'s own help so it described itself as dead.
+"the retired `setup/up` must not come back" into a guard against the **canonical** root launcher
+(`.github/workflows/ci.yml`), and reworded `setup/up`'s own help so it described itself as dead.
 Both were corrected: the guard now checks `sandbox/up.ps1` again, and the help text names the
 retired file explicitly.
 
@@ -88,8 +88,8 @@ doc claims were changed.
 | Metabase route | `Customisations.md` `/metabase_dashboard` → **`/metabase`** |
 | Frappe/ERPNext versions | `MILESTONES.md:51` 16.53.0/16.52.1 and `ASSESSMENT-einvoicing-barcode.md:16` 16.53/16.54 → **16.35.0** |
 
-Remaining `4041` occurrences are intentional: a fallback default in `up.ps1:236` and two
-"probe both ports" loops (`verify-all.ps1`, `shopify-setup/setup-shopify-erpnext.ps1`), plus
+Remaining `4041` occurrences are intentional: a fallback default in `setup/up:236` and two
+"probe both ports" loops (`setup/verify-all`, `shopify-setup/setup-shopify-erpnext.ps1`), plus
 `orders.json`, which is vendored third-party data.
 
 ## Not started — and why
@@ -226,7 +226,7 @@ dozens of files and should not be bundled with defect repair; it remains the lar
 
 Automated scan: every backticked repo-relative path in live docs/scripts/skills was tested with
 `Test-Path`. 17 distinct misses; 12 are intentional (they document deleted files, namely
-`sandbox/up.ps1`, `sandbox/scheduler-up.ps1`, the sandbox composes, `_legacy/`, and two planned
+`sandbox/up.ps1`, `sandbox/scheduler-setup/up`, the sandbox composes, `_legacy/`, and two planned
 directories). The real defects found and fixed:
 
 | Reference | Problem | Fix |
@@ -437,7 +437,7 @@ eight. This defect would have hit every restored deployment.
 | Item | Status | Note |
 |---|---|---|
 | Truly cold machine (no cached `frappe/erpnext` base layer, fresh Docker) | Not started | the base image was already pulled here; only the build/run/restart path was exercised |
-| Windows `up.ps1` / `setup.ps1` deployment path | Not started | P7 changes are Compose/Dockerfile-level, but the PowerShell launchers were not re-run |
+| Windows `setup/up` / `setup/setup` deployment path | Not started | P7 changes are Compose/Dockerfile-level, but the PowerShell launchers were not re-run |
 | `install-apps-linux.sh` full run against a from-scratch (non-restored) site | Not started | the restore path was tested; the `bench new-site` path was not |
 | Metabase UI, Node-RED flow, planner SPA, Shopify token flow | Not started | services were started for the restore path only in local checks; no end-to-end UI pass |
 | Baked image published to GHCR (`docs/DISTRIBUTION.md`) | Not started | clean clones currently build locally (20-40 min); publishing remains a distribution task |

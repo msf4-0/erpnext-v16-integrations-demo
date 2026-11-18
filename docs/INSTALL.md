@@ -5,8 +5,8 @@
 > **HISTORICAL GUIDE — not the onboarding path for this repository.**
 > This document describes the old `erpnext-build.zip` bundle (different folder
 > name, different `.env`). For a `git clone` of this repo, follow
-> [`README.md`](../README.md) section 3 and run `.\up.ps1` from the repo root.
-> The `up.ps1` it references belonged to the retired `erpnext-fix`
+> [`README.md`](../README.md) section 3 and run `.\setup\up` from the repo root.
+> The `setup/up` it references belonged to the retired `erpnext-fix`
 > project and no longer exists.
 
 > Authoritative stack architecture, ports, versions, and database durability:
@@ -50,7 +50,7 @@ cp .env.example .env
 #    SHOPIFY_CLIENT_SECRET, NGROK_AUTHTOKEN. Leave them blank to skip those
 #    integrations - a blank value is reported as SKIPPED, not as a failure.
 
-powershell -ExecutionPolicy Bypass -File .\up.ps1          # Windows: full integration setup
+powershell -ExecutionPolicy Bypass -File .\setup\up          # Windows: full integration setup
 bash ./up-linux.sh                                         # Linux: core ERPNext site
 bash ./install-apps-linux.sh                               # Linux: install custom apps
 ```
@@ -61,7 +61,7 @@ integration workflow is currently orchestrated by the PowerShell scripts.
 
 After the full Windows setup: ERPNext <http://localhost:8000> (Administrator/admin) ·
 planner <http://localhost:3001> · Node-RED <http://localhost:1880>. Verify with
-`verify-all.ps1` (41 checks).
+`setup/verify-all` (41 checks).
 
 > The site DB is stored in the `db_data` named volume and survives container and Docker restarts.
 > From the repo root, `docker compose --env-file .env --env-file versions.env down -v` removes that volume.
@@ -272,7 +272,7 @@ Sales Invoice with einvoice_profile=XRECHNUNG      # .xml attached
    into its nodes, so re-run `build-flows.py` + restart node-red when it starts answering 401.
 5. **`docker restart <bench>` kills `bench serve`.** Restart it inside the container:
    `cd /home/frappe/frappe-bench && setsid nohup bench serve --port 8000 >/tmp/bench-serve.log 2>&1 &`
-6. **Don't run `up.ps1` against your own site.** It creates its own compose project (`comp_demo`)
+6. **Don't run `setup/up` against your own site.** It creates its own compose project (`comp_demo`)
    and uses the durability configured for that existing bench; Path B is the integration path.
 7. **Planner API user needs 3 role families** (Manufacturing, Sales, Stock) or the forecast/batch
    tabs answer 403 — `fix-scheduler-token.py` grants them.

@@ -49,15 +49,15 @@
     interactively (y/N) at the end instead.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\setup.ps1
+    powershell -ExecutionPolicy Bypass -File .\setup\setup
     # the everyday command: converge + verify, ~2-4 min
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\setup.ps1 -VerifyOnly
+    powershell -ExecutionPolicy Bypass -File .\setup\setup -VerifyOnly
     # read-only health report, ~30 s
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\setup.ps1 -Full
+    powershell -ExecutionPolicy Bypass -File .\setup\setup -Full
     # clean machine or after `docker compose down`: full rebuild, then verify
 #>
 [CmdletBinding()]
@@ -78,7 +78,7 @@ $ProgressPreference = 'SilentlyContinue'
 # ---------------------------------------------------------------------------
 # paths / identity
 # ---------------------------------------------------------------------------
-$DemoDir    = $PSScriptRoot
+$DemoDir    = Split-Path -Parent $PSScriptRoot
 $SandboxDir = Join-Path $DemoDir 'sandbox'
 $EnvPath    = Join-Path $DemoDir '.env'
 $VersionsPath = Join-Path $DemoDir 'versions.env'
@@ -416,13 +416,13 @@ if ($Full) {
     # A full rebuild may recreate the site (and -Wipe drops the volumes). Take a
     # host-side backup first, every time, so 'compose down then setup' can never
     # silently cost another afternoon of BOMs and items.
-    $backupScript = Join-Path $DemoDir 'backup.ps1'
+    $backupScript = Join-Path $PSScriptRoot 'backup.ps1'
     if (Test-Path $backupScript) {
         Write-Info 'backing up the site before the rebuild'
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $backupScript
         if ($LASTEXITCODE -ne 0) { Write-Warn 'backup failed - continuing, but a wipe will lose data' }
     }
-    $upArgs = @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $DemoDir 'up.ps1'))
+    $upArgs = @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'up.ps1'))
     if ($Wipe) { $upArgs += '-Fresh' }
     Write-Info 'this pulls the prebuilt image (~8 min) or builds it (25-40 min) and streams up.ps1 output'
     $rc = Invoke-Native -Exe 'powershell.exe' -Arguments $upArgs
@@ -456,7 +456,7 @@ if ($VerifyOnly) {
                 Invoke-Docker -Arguments @('start', $cn) | Out-Null
                 Write-Change "$cn started"
             } else {
-                throw "$cn does not exist - its writable layer (the whole bench) is gone. Run: .\setup.ps1 -Full"
+                throw "$cn does not exist - its writable layer (the whole bench) is gone. Run: .\setup\setup -Full"
             }
         }
     }

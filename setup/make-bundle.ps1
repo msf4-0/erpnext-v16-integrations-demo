@@ -19,18 +19,18 @@
     Copy + zip only (no 41-check run).
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\make-bundle.ps1
+    powershell -ExecutionPolicy Bypass -File .\setup\make-bundle
 #>
 [CmdletBinding()]
 param(
-    [string]$Dest = (Join-Path (Split-Path $PSScriptRoot -Parent) 'comp_demo-dist'),
+    [string]$Dest = (Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'comp_demo-dist'),
     [switch]$SkipVerify
 )
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$Src = $PSScriptRoot
+$Src = Split-Path -Parent $PSScriptRoot
 if (-not $Dest) { $Dest = Join-Path (Split-Path -Parent $Src) 'comp_demo-dist' }
 $Leaf = Split-Path $Src -Leaf                      # comp_demo
 $Stamp = Get-Date -Format 'yyyy-MM-dd'
@@ -85,7 +85,7 @@ if ($contextLine -notmatch [regex]::Escape($Work)) { throw "build context does n
 if (-not $SkipVerify) {
     Step 'running verify-all.ps1 from the copy (41 checks, ~5 min)'
     $log = Join-Path $Work 'verify-all-final.log'
-    $out = & powershell.exe -ExecutionPolicy Bypass -NoProfile -File (Join-Path $Work 'verify-all.ps1') 2>&1
+    $out = & powershell.exe -ExecutionPolicy Bypass -NoProfile -File (Join-Path $Work 'setup\verify-all.ps1') 2>&1
     $out | Set-Content -LiteralPath $log -Encoding UTF8
     $result = ($out | Select-String -Pattern 'RESULT:' | Select-Object -Last 1).Line
     if (-not $result) { throw 'verify-all.ps1 from the copy produced no RESULT line' }

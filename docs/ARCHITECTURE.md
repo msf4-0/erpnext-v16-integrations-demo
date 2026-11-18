@@ -11,7 +11,7 @@ The project is the repository root, with Docker Compose project name `comp_demo`
 and ERPNext site `frontend` by default. Run commands from the repository root;
 paths in this document are repository-relative. `docker-compose.yml` is the
 authoritative definition of the container stack. The PowerShell entry points
-`up.ps1` and `setup.ps1` handle the full integration workflow. Linux also has
+`setup/up` and `setup/setup` handle the full integration workflow. Linux also has
 the native Bash `up-linux.sh` for the core ERPNext site and
 `install-apps-linux.sh` for the bundled custom apps; they need Docker Compose,
 Python 3, and curl, but not PowerShell. They do not configure the planner,
@@ -81,7 +81,7 @@ source used by this build.
 
 The default site name, host ports, and other runtime settings are configurable
 through `.env`; `.env.example` documents the supported defaults. The supported
-`up.ps1` and `setup.ps1` entry points load both `.env` and `versions.env`. Direct
+`setup/up` and `setup/setup` entry points load both `.env` and `versions.env`. Direct
 Compose commands must pass `--env-file .env --env-file versions.env`.
 # Architecture and state map
 
@@ -105,7 +105,7 @@ Compose project: `comp_demo` · site: `frontend` · host ports: 8000 (ERPNext),
 | `metabase` | `metabase/metabase:v0.58.38.2` | BI dashboard | db (healthy) |
 
 There is **no** `ngrok` service. The tunnel is the host's ngrok binary, started
-by `up.ps1` / `setup.ps1`, and it is the one moving part that is not a container.
+by `setup/up` / `setup/setup`, and it is the one moving part that is not a container.
 
 ## Where state lives
 
@@ -129,22 +129,22 @@ by `up.ps1` / `setup.ps1`, and it is the one moving part that is not a container
 | `docker compose stop` / `start` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ webhooks point at a dead URL | ✅ |
 | `docker compose down` (no `-v`) | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ URL changes, must re-wire | ❌ lost |
 | `docker compose down -v` | ❌ | ❌ | ✅ (image) | ❌ | ❌ | ❌ | ❌ |
-| `up.ps1 -Fresh` | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| `setup/up -Fresh` | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Rebuild the bench image | ✅ | ✅ | ✅ (from `repos/`) | ✅ | ✅ | ❌ | ✅ |
 
 **The short version:** `down` without `-v` keeps your data and your apps. What it
 does *not* keep is the Shopify/ngrok wiring — the public URL changes, so the
 three ERPNext `Webhook` records point at a host that no longer answers. Recovery
-is `setup.ps1`, not `up.ps1` (2–4 min, no rebuild).
+is `setup/setup`, not `setup/up` (2–4 min, no rebuild).
 
-`down -v` throws everything away and is only recoverable with a full `up.ps1`
+`down -v` throws everything away and is only recoverable with a full `setup/up`
 (25–35 min) or a restore from `bench backup`.
 
 ## First boot vs. restart
 
 - **Fresh volume** (`bench_sites` empty): `bench serve` answers
   `404 localhost does not exist`. There is no site yet. Only provisioning
-  (`up.ps1`) or a restore creates one. A plain `docker compose up` on a fresh
+  (`setup/up`) or a restore creates one. A plain `docker compose up` on a fresh
   clone is therefore *not* a working stack — this is why `bake/README.md` no
   longer claims otherwise.
 - **Existing volume**: the container's `command:` block re-asserts the DB grant,
@@ -153,7 +153,7 @@ is `setup.ps1`, not `up.ps1` (2–4 min, no rebuild).
 
 ## What proves a feature works
 
-`up.ps1` ends with these; each one is a hard failure, not a warning:
+`setup/up` ends with these; each one is a hard failure, not a warning:
 
 | Feature | Check |
 |---|---|
@@ -164,7 +164,7 @@ is `setup.ps1`, not `up.ps1` (2–4 min, no rebuild).
 | E-invoicing | `GET /api/resource/E Invoice Import` (token) → 200 |
 | Planner | `GET :3001/api/health` → `{status: ...}` |
 | Tunnel + webhooks | `POST <public>/delivery-note`, `/stock-entry`, `/stock-recon` → 200 |
-| Full suite | `verify-all.ps1` (41 checks) |
+| Full suite | `setup/verify-all` (41 checks) |
 
 A homepage 200 proves none of the above — an app whose `app_include_js` 404s
 still returns a 200 HTML shell.
@@ -199,7 +199,7 @@ by design.
 |---|---|---|
 | Static (every push) | GitHub Actions `ci`: compose config, clean tree, no machine paths, PowerShell parse, shellcheck, python compile, image build, app-import smoke | ~4 min |
 | Onboarding path (manual) | `tests/verify-clean-clone.ps1` - clones from GitHub into a disposable project (`comp_demo_verify`, shifted ports, own volumes), seeds, asserts, tears down | ~9 min |
-| Full feature suite | `verify-all.ps1` against the live stack | ~5 min |
+| Full feature suite | `setup/verify-all` against the live stack | ~5 min |
 
 `tests/verify-clean-clone.ps1` is the one that matters before a release: it is
 the only check that exercises `git clone` -> `docker compose` -> seeded site.
@@ -210,7 +210,7 @@ currentsite, missing logs dir).
 The per-capability table lives in `README.md` section 3b - keep it there, it is
 the one people read first. Summary: core ERPNext, barcode, item tracking and the
 seeded demo data work with no further steps; planner data endpoints, Shopify,
-ngrok webhooks and Metabase dashboards each need credentials, and `setup.ps1`
+ngrok webhooks and Metabase dashboards each need credentials, and `setup/setup`
 covers the first three.
 
 ## Not part of the running stack

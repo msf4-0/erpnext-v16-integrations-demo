@@ -162,8 +162,8 @@ filter that matched nothing).
 
 1. **Install Docker Desktop + ERPNext.** The script assumes an ERPNext v16 site is
    already reachable at `ERP_URL`. For this build that is the `comp_demo` stack
-   (`<repo>`) — bring it up with `setup.cmd` there, or run
-   the full `up.ps1`. The upstream reference is the `msf4-0/ERPNext-ECommerce-Shopify`
+   (`<repo>`) — bring it up with `setup/setup` there, or run
+   the full `setup/up`. The upstream reference is the `msf4-0/ERPNext-ECommerce-Shopify`
    repo; cloning and installing that is outside this script.
 2. **Create the Shopify Dev Dashboard app.** Shopify admin → Settings → Apps →
    Develop apps → create app → configure Admin API scopes → copy the **client id**

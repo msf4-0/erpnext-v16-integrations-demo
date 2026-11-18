@@ -40,8 +40,8 @@
     # is this file. The retired sandbox/up.ps1 belonged to an older
     # `erpnext-fix` generation, provisioned a DIFFERENT compose project, and was
     # deleted on 2026-11-17 - if you still have a copy, do not run it.
-    powershell -ExecutionPolicy Bypass -File .\up.ps1
-    powershell -ExecutionPolicy Bypass -File .\up.ps1 -Fresh
+    powershell -ExecutionPolicy Bypass -File .\setup\up
+    powershell -ExecutionPolicy Bypass -File .\setup\up -Fresh
 #>
 [CmdletBinding()]
 param(
@@ -55,7 +55,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $script:RunStart = Get-Date
 
-$DemoDir = $PSScriptRoot
+$DemoDir = Split-Path -Parent $PSScriptRoot
 # SELF-CONTAINED BY DEFAULT: everything this script stages (sandbox scripts,
 # recipes, the Node-RED flow, the app sources under repos/, and the planner) lives
 # inside comp_demo. The step-0 guard below falls back to ERPNEXT-FIX only if the
@@ -326,7 +326,7 @@ if (-not (Test-Path $flowsPath)) {
 Write-Step '3/11  starting the stack'
 if ($Fresh) {
     Write-Warn 'DESTRUCTIVE: removing existing volumes (the site DB will be lost)'
-    $backupScript = Join-Path $RootDir 'backup.ps1'
+    $backupScript = Join-Path $PSScriptRoot 'backup.ps1'
     if (Test-Path $backupScript) {
         Write-Info 'backing up the site before removing the volumes'
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $backupScript
@@ -348,7 +348,7 @@ if ($Fresh) {
 }
 # Pull the published image before compose create. Without this, compose builds
 # the 3 GB bench image whenever its tag is missing - the 25-40 minute stall.
-$pullScript = Join-Path $RootDir 'pull-bench.ps1'
+$pullScript = Join-Path $PSScriptRoot 'pull-bench.ps1'
 if (Test-Path $pullScript) {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $pullScript
     if ($LASTEXITCODE -eq 2) { Write-Warn 'continuing with a local build' }
@@ -610,10 +610,10 @@ if ($depOk -match 'DEPSOK') {
 # dashboard only when it is absent. Non-fatal: BI must not block the stack.
 Write-Step '7f/11  Metabase schema + dashboard'
 try {
-    & (Join-Path $PSScriptRoot 'sandbox/scripts/ensure_metabase.ps1') `
+    & (Join-Path (Split-Path -Parent $PSScriptRoot) 'sandbox/scripts/ensure_metabase.ps1') `
         -DbUser $metabaseDbUser -DbPassword $metabaseDbPass `
         -AdminEmail $metabaseAdminEmail -AdminPassword $metabaseAdminPassword
-    & (Join-Path $PSScriptRoot 'sandbox/scripts/ensure_metabase_app.ps1') `
+    & (Join-Path (Split-Path -Parent $PSScriptRoot) 'sandbox/scripts/ensure_metabase_app.ps1') `
         -AdminEmail $metabaseAdminEmail -AdminPassword $metabaseAdminPassword
 } catch {
     Write-Warn ("metabase setup did not complete: " + $_.Exception.Message)
@@ -704,7 +704,7 @@ if (-not $SkipScheduler) {
     # Called in-process, not `pwsh -File`: this host has no pwsh on PATH, and a
     # .ps1's `exit N` only ends that script, so the parent keeps going.
     try {
-        & (Join-Path $DemoDir 'scheduler-up.ps1') -SkipBuild
+        & (Join-Path $PSScriptRoot 'scheduler-up.ps1') -SkipBuild
         if ($LASTEXITCODE -ne 0) { Write-Warn 'the planner did not verify - review the output above' }
     } catch {
         Write-Warn "planner bring-up failed: $($_.Exception.Message)"
@@ -931,7 +931,7 @@ if ($script:Failures.Count -gt 0) {
     Write-Host ("  SETUP INCOMPLETE - $($script:Failures.Count) required step(s) failed") -ForegroundColor Red
     foreach ($f in $script:Failures) { Write-Host "   - $f" -ForegroundColor Red }
     Write-Host '  The containers are up, but the features above will not work.' -ForegroundColor Red
-    Write-Host '  Re-run the failing part:  .\up.ps1 -SkipProvision -SkipInstall' -ForegroundColor Red
+    Write-Host '  Re-run the failing part:  .\setup\up -SkipProvision -SkipInstall' -ForegroundColor Red
     Write-Host ('=' * 72) -ForegroundColor Red
     exit 1
 }

@@ -15,12 +15,12 @@
     Run it whenever the Node-RED Shopify nodes start answering 401
     (`/delivery-note`, inventory and fulfillment pushes), or just on a schedule:
 
-        $script = (Resolve-Path .\refresh-shopify-token.ps1).Path
+        $script = (Resolve-Path .\setup\refresh-shopify-token).Path
         schtasks /create /tn "comp_demo shopify token" /sc daily /st 08:00 `
             /tr "powershell -ExecutionPolicy Bypass -File <repo>\refresh-shopify-token.ps1"
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\refresh-shopify-token.ps1
+    powershell -ExecutionPolicy Bypass -File .\setup\refresh-shopify-token
 #>
 [CmdletBinding()]
 param(
@@ -31,9 +31,9 @@ param(
 $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 
-$DemoDir = $PSScriptRoot
+$DemoDir = Split-Path -Parent $PSScriptRoot
 $EnvPath = Join-Path $DemoDir '.env'
-$RootDir = $PSScriptRoot
+$RootDir = Split-Path -Parent $PSScriptRoot
 $SandboxDir = Join-Path $RootDir 'sandbox'
 $Bench = 'comp_demo-bench-1'
 
@@ -107,7 +107,7 @@ if (-not $SkipErpNext) {
 if (-not $SkipNodeRed) {
     $flowSrc = $cfg['NODE_RED_SOURCE_FLOW']
     if (-not $flowSrc -or -not (Test-Path $flowSrc)) {
-        $fallback = (Join-Path $PSScriptRoot 'sandbox\node-red\source-flow.json')
+        $fallback = (Join-Path (Split-Path -Parent $PSScriptRoot) 'sandbox\node-red\source-flow.json')
         if (Test-Path $fallback) { $flowSrc = $fallback }
     }
     $builder = Join-Path $SandboxDir 'node-red\build-flows.py'

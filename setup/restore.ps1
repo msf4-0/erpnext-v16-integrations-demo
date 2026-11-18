@@ -15,8 +15,8 @@
     Folder name under backups/, e.g. 20261116-101500. Omit to list what exists.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\restore.ps1
-    powershell -ExecutionPolicy Bypass -File .\restore.ps1 -Backup 20261116-101500
+    powershell -ExecutionPolicy Bypass -File .\setup\restore
+    powershell -ExecutionPolicy Bypass -File .\setup\restore -Backup 20261116-101500
 #>
 param(
     [string]$Backup,
@@ -24,7 +24,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $BackupRoot = Join-Path $Root 'backups'
 
 if (-not $Backup) {
@@ -57,7 +57,7 @@ if ($answer -ne 'RESTORE') { Write-Host 'aborted'; exit 1 }
 
 if (-not $SkipSafetyBackup) {
     Write-Host '  ...   taking a safety backup first'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'backup.ps1')
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'backup.ps1')
     if ($LASTEXITCODE -ne 0) { Write-Host 'safety backup failed - aborting' -ForegroundColor Red; exit 1 }
 }
 
@@ -75,4 +75,4 @@ if ($LASTEXITCODE -ne 0) { Write-Host 'restore FAILED - the previous data may st
 & docker exec -u frappe $Bench bash -lc "cd /home/frappe/frappe-bench && bench --site $Site migrate --skip-search-index; bench --site $Site clear-cache" | Out-Null
 
 Write-Host ''
-Write-Host '  Restored. Run .\setup.ps1 to restart the scheduler/worker and verify.' -ForegroundColor Green
+Write-Host '  Restored. Run .\setup\setup to restart the scheduler/worker and verify.' -ForegroundColor Green

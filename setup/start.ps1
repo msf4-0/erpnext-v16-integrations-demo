@@ -34,10 +34,10 @@
     never deleted by this script.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\start.ps1
+    powershell -ExecutionPolicy Bypass -File .\setup\start
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\start.ps1 -NoWiring
+    powershell -ExecutionPolicy Bypass -File .\setup\start -NoWiring
 #>
 param(
     [switch]$NoWiring,
@@ -47,7 +47,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $Root
 $ComposeFile = Join-Path $Root 'docker-compose.yml'
 $EnvPath     = Join-Path $Root '.env'
@@ -113,7 +113,7 @@ $haveImage = $false
 & docker image inspect $LocalTag *> $null
 if ($LASTEXITCODE -eq 0) { $haveImage = $true }
 
-$pullScript = Join-Path $Root 'pull-bench.ps1'
+$pullScript = Join-Path $PSScriptRoot 'pull-bench.ps1'
 if (-not $NoPull -and (-not $haveImage -or $Pull)) {
     $pullArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $pullScript)
     if ($Pull) { $pullArgs += '-Force' }
@@ -136,7 +136,7 @@ if (-not ($volumes -match [regex]::Escape("${Project}_db_data")) -and (Test-Path
     ((Get-ChildItem $backupDir -Directory | Measure-Object).Count -gt 0)) {
     Warn 'the db_data volume is gone but host backups exist:'
     Warn 'this run will restore seed/frontend-database.sql.gz, which is older than those backups.'
-    Warn "to keep your data, restore instead:  powershell -File .\restore.ps1 -Backup <name>"
+    Warn "to keep your data, restore instead:  powershell -File .\setup\restore -Backup <name>"
     $answer = Read-Host 'continue and seed a fresh site? [y/N]'
     if ($answer -notmatch '^(y|yes)$') { Fail 'aborted before touching volumes'; exit 1 }
 }
@@ -232,7 +232,7 @@ Ok "ERPNext answers on http://localhost:$ErpPort"
 # ---------------------------------------------------------------------------
 if (-not $NoWiring) {
     Say 'wiring tokens and background jobs (setup.ps1 -NonInteractive -SkipTunnel)'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root 'setup.ps1') -NonInteractive -SkipTunnel
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'setup.ps1') -NonInteractive -SkipTunnel
     if ($LASTEXITCODE -ne 0) {
         Warn "setup.ps1 reported problems (exit $LASTEXITCODE). The site still runs; see 'outstanding' above."
     }
@@ -254,7 +254,7 @@ Write-Host "  Node-RED  http://localhost:$NrPort"
 Write-Host "  Metabase  http://localhost:$MbPort"
 Write-Host ''
 Write-Host '  optional integrations (off until configured):'
-Write-Host '    Shopify  fill SHOPIFY_* in .env, then: .\setup.ps1'
-Write-Host '    ngrok    install + "ngrok config add-authtoken <token>", then: .\setup.ps1'
-Write-Host '  health check (read only):  .\setup.ps1 -VerifyOnly'
+Write-Host '    Shopify  fill SHOPIFY_* in .env, then: .\setup\setup'
+Write-Host '    ngrok    install + "ngrok config add-authtoken <token>", then: .\setup\setup'
+Write-Host '  health check (read only):  .\setup\setup -VerifyOnly'
 Write-Host ''

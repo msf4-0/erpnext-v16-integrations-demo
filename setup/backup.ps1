@@ -29,10 +29,10 @@
     How many timestamped backups to keep on the host. Default 10.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\backup.ps1
+    powershell -ExecutionPolicy Bypass -File .\setup\backup
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\backup.ps1 -RefreshSeed
+    powershell -ExecutionPolicy Bypass -File .\setup\backup -RefreshSeed
 #>
 param(
     [switch]$RefreshSeed,
@@ -41,7 +41,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $EnvPath = Join-Path $Root '.env'
 $BackupRoot = Join-Path $Root 'backups'
 
@@ -61,7 +61,7 @@ $Bench   = "$Project-bench-1"
 $running = (& docker ps --format '{{.Names}}') 2>&1
 if (-not ("$running" -match [regex]::Escape($Bench))) {
     Warn "bench container $Bench is not running - cannot back up right now"
-    Warn 'start the stack first (.\start.ps1), then back up'
+    Warn 'start the stack first (.\setup\start), then back up'
     exit 1
 }
 
@@ -91,7 +91,7 @@ comp_demo backup
 site      : $Site
 taken     : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')
 source    : $Bench (docker volume ${Project}_db_data)
-restore   : powershell -ExecutionPolicy Bypass -File .\restore.ps1 -Backup $stamp
+restore   : powershell -ExecutionPolicy Bypass -File .\setup\restore -Backup $stamp
 "@ | Set-Content -Path (Join-Path $dest 'MANIFEST.txt') -Encoding utf8
 
 Ok "backup written: backups\$stamp\$dump"

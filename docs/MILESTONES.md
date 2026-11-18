@@ -13,10 +13,10 @@ Everything needed to rebuild and verify the demo lives **inside `F:\ERPNEXT\erpn
 |---|---|
 | `docker-compose.yml` | the whole stack; the planner's build context is `./scheduler` |
 | `.env` | ports, site name, Shopify store + client credentials, planner port |
-| `up.ps1` | one-command bring-up (11 steps) |
-| `verify-all.ps1` | the 41-check end-to-end test (`verify-all-final.log` is the last run) |
-| `refresh-shopify-token.ps1` | re-mints the 24 h Shopify token and rebuilds the Node-RED flow |
-| `scheduler-up.ps1` | planner-only bring-up (token, seed, desk shortcut, verify) |
+| `setup/up` | one-command bring-up (11 steps) |
+| `setup/verify-all` | the 41-check end-to-end test (`verify-all-final.log` is the last run) |
+| `setup/refresh-shopify-token` | re-mints the 24 h Shopify token and rebuilds the Node-RED flow |
+| `setup/scheduler-up` | planner-only bring-up (token, seed, desk shortcut, verify) |
 | `sandbox/scripts/` | provisioning, install, seeders, probes and the verification suite staged into the container |
 | `sandbox/recipes/` | per-app install recipes (`barcode_shrdc`, `shopify`, `eu_einvoice`) |
 | `sandbox/node-red/` | flow builder, built `flows.json`, vendored `source-flow.json` export |
@@ -29,7 +29,7 @@ Everything needed to rebuild and verify the demo lives **inside `F:\ERPNEXT\erpn
 
 Host prerequisites (not project files): Docker Desktop, the `ngrok` binary + authtoken,
 Node/npm (only to rebuild the planner frontend), Python (only for the Node-RED flow builder).
-Two intentional fallbacks remain in the scripts Ã¢â‚¬â€ `up.ps1` step 0 and `scheduler-up.ps1`
+Two intentional fallbacks remain in the scripts Ã¢â‚¬â€ `setup/up` step 0 and `setup/scheduler-up`
 still try `F:\ERPNEXT\ERPNEXT-FIX\sandbox` **if** the vendored `sandbox/` is absent.
 
 Last verified: **2026-10-26**, live stack on `F:\ERPNEXT\erpnext-build` (project `comp_demo`).
@@ -64,7 +64,7 @@ Installed apps: `frappe 16.35.0`, `erpnext 16.35.0`, `barcode_shrdc 0.0.1`, `sho
 | M8 | Barcode scanning incl. changed barcode/QR values | **done** | CODE128 / CODE39 / EAN13 â†’ three distinct PNGs; a changed value â†’ different PNG; invalid EAN13 (`123`) **rejected with a message**; QR rendered per item; `/files/*.png` served as `image/png` |
 | M9 | Barcode/QR item tracking | **done** | `scan_barcode` resolves `SHRDC-BRK-0001 â†’ PLN-BRACKET` and `SHRDC-KIT-0001 â†’ PLN-KIT`, unknown â†’ empty; HTTP endpoint 200; Delivery Note `MAT-DN-2026-00001` submitted with `barcode_validation` and `checking_qty == qty`; Stock Entry `MAT-STE-2026-00003` submitted with `scan_stock_entry_barcode`; guest `/item_qr?item_code=PLN-BRACKET` â†’ 200 |
 | M9b | Scanned-quantity rule enforced **server-side** | **done** | a Delivery Note with `barcode_validation`, `qty 2` but `checking_qty 1` is rejected on submit with `ValidationError: Barcode validation failed Ã¢â‚¬Â¦ row 1 (PLN-BRACKET): qty 2.0 vs checked 1.0` Ã¢â‚¬â€ a REST submit can no longer bypass it |
-| M10 | Live local demo + result list | **done** | this document + `verify-all.ps1` |
+| M10 | Live local demo + result list | **done** | this document + `setup/verify-all` |
 | — | E-invoicing (extra) | **done** | EN 16931 invoice → 4 835-byte UN/CEFACT CII XML (`CrossIndustryInvoice`, `en16931`); XRECHNUNG invoice auto-attaches `ACC-SINV-2026-00001.xml` (4 835 B) |
 
 ## The headline fix: Shopify push went live
@@ -83,7 +83,7 @@ tokens, so a single pasted `shpat_...` value can never stay valid.
 ## Other fixes applied this session
 
 ### 1. Demo data was seeded before its dependencies existed (build order)
-`up.ps1` ran `seed-demo-masters.py` at step **7c**, but that script needs the Company,
+`setup/up` ran `seed-demo-masters.py` at step **7c**, but that script needs the Company,
 chart of accounts and the `PLN-*` Items that are created in step **8** (Shopify
 post-setup). Every demo document failed with `Could not find Company: SHRDC`.
 Now: `8b` (demo master data, after the Shopify sync) and `9b` (`Virtual Work Order`
@@ -149,7 +149,7 @@ as text inside the Work Order card. Two fixes:
 Verified in headless Chrome: 12 Job Card cards in the matrix (all `draggable=true`),
 23 Job Card events in the calendar, both drag paths issue
 `PUT … {"type":"jobcard"}` → 200 and move every capacity block. Repeatable checks live
-in `scheduler/ui-tests/` (`ui-cards.mjs` is read-only and is part of `verify-all.ps1`).
+in `scheduler/ui-tests/` (`ui-cards.mjs` is read-only and is part of `setup/verify-all`).
 
 ### 11. The SPA was built against the standalone app's API URL
 `scheduler/frontend/.env` still said `REACT_APP_API_URL=http://localhost:3500/api` and
@@ -163,7 +163,7 @@ and `REACT_APP_ERPNEXT_URL=http://localhost:8000` (browser-facing links).
 
 ```powershell
 # everything (41 checks, ~5 min; creates and deletes a throwaway AI-VERIFY-* item)
-powershell -ExecutionPolicy Bypass -File .\verify-all.ps1
+powershell -ExecutionPolicy Bypass -File .\setup\verify-all
 
 # frappe-level half only, inside the container
 docker exec comp_demo-bench-1 bash -lc 'cd /home/frappe/frappe-bench && \
@@ -179,17 +179,17 @@ test suppliers, repairs an out-of-sequence WO — idempotent).
 
 | Item | Why | What unblocks it |
 |---|---|---|
-| One capacity block short of a fresh build (64 vs 65) | consumed by the pre-fix drag while the defect was being reproduced — precisely the loss the fix removes | rebuild with `up.ps1` (~25–35 min) or re-seed the planner |
+| One capacity block short of a fresh build (64 vs 65) | consumed by the pre-fix drag while the defect was being reproduced — precisely the loss the fix removes | rebuild with `setup/up` (~25–35 min) or re-seed the planner |
 | Stock reconciliation does not push stock to Shopify | `update_product_inventory.on_submit` is not wired in `hooks.py` (the header bug is fixed) | add a `Stock Ledger Entry` doc_event if push-on-stock is wanted |
 | Malaysia (LHDN) e-invoicing | the substituted app is EU EN 16931 / XRechnung (CII), not MyInvois; the original MY source is 404 | supply the MY app source |
 | Timers tab shows an empty object | `/api/work-orders/timers` now answers 200 but no Work Order has a running timer until someone clicks **Start** in the planner | start a timer in the UI (state is the planner's own `timers.json`) |
-| Anything after `docker compose down` / engine restart | the DB lives on the `db_data` volume, which is durable across restarts and `docker compose down` (only `-v`/`-Wipe` deletes it) | rerun `powershell -File .\up.ps1` (~25â€“35 min) |
+| Anything after `docker compose down` / engine restart | the DB lives on the `db_data` volume, which is durable across restarts and `docker compose down` (only `-v`/`-Wipe` deletes it) | rerun `powershell -File .\setup\up` (~25â€“35 min) |
 
 ### Operational gotchas
 
 - **Shopify tokens expire in 24 h.** The ERPNext side re-mints by itself; the Node-RED
   flow bakes the token into its nodes, so run
-  `powershell -File .\refresh-shopify-token.ps1` daily (or schedule it).
+  `powershell -File .\setup\refresh-shopify-token` daily (or schedule it).
 - **Server Scripts must stay enabled** (`server_script_enabled = 1` in
   `common_site_config.json`) or the planner falls back to a validated `PUT` and a Work
   Order drag will only move its first operation.

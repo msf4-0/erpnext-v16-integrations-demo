@@ -12,10 +12,10 @@ Node-RED, plus the **erpnext-planner** and module-* agents used to build it.
 
 ```powershell
 copy .env.example .env                        # if .env is missing (holds secrets — do not commit)
-powershell -File .\up.ps1  # full build: stack + provision v16 + install apps + seed + verify
-powershell -File .\up.ps1 -SkipProvision   # reuse an existing site (skip the long v16 provision)
-powershell -File .\up.ps1 -SkipInstall     # reuse installed apps
-powershell -File .\up.ps1 -SkipScheduler   # skip the planner image build (~6 min)
+powershell -File .\setup\up  # full build: stack + provision v16 + install apps + seed + verify
+powershell -File .\setup\up -SkipProvision   # reuse an existing site (skip the long v16 provision)
+powershell -File .\setup\up -SkipInstall     # reuse installed apps
+powershell -File .\setup\up -SkipScheduler   # skip the planner image build (~6 min)
 ```
 
 On Linux, use the native Bash core-site launcher (no PowerShell required):

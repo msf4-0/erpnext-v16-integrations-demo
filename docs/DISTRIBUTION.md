@@ -46,16 +46,16 @@ release gate; 7–8 are quality gates.
 | # | Criterion | How it is proven |
 |---|---|---|
 | 1 | The bench image is retrievable **anonymously** (no GitHub account, no PAT) - either the GHCR pull or the public release bundle | `docker logout ghcr.io; docker manifest inspect …` returns a manifest, **or** the release asset downloads |
-| 2 | `start.ps1` **tries the pull first** on a machine without the image, and only builds as a fallback | run on a clean machine/Docker; log shows `bench image pulled in N min` |
-| 3 | A failed pull prints the exact remediation link instead of silently building | stop GHCR access; run `start.ps1`; expect the three `WARN` lines |
-| 4 | Cold start ≤ **15 min** on a 20 Mbit/s link (pull + 5–6 min seed + wiring) | time `start.ps1` from a clean Docker state |
-| 5 | No secrets and no machine-specific paths are needed for the local demo | fresh clone has no `.env`; `start.ps1` creates it from `.env.example`; `ci.yml` hygiene job passes |
+| 2 | `setup/start` **tries the pull first** on a machine without the image, and only builds as a fallback | run on a clean machine/Docker; log shows `bench image pulled in N min` |
+| 3 | A failed pull prints the exact remediation link instead of silently building | stop GHCR access; run `setup/start`; expect the three `WARN` lines |
+| 4 | Cold start ≤ **15 min** on a 20 Mbit/s link (pull + 5–6 min seed + wiring) | time `setup/start` from a clean Docker state |
+| 5 | No secrets and no machine-specific paths are needed for the local demo | fresh clone has no `.env`; `setup/start` creates it from `.env.example`; `ci.yml` hygiene job passes |
 | 6 | The published image matches `main` (apps import, templates non-empty) | `ci.yml` smoke job: `frappe, erpnext, barcode_shrdc, shopify, eu_einvoice, reportlab, qrcode, PIL, drafthorse, saxonche` all import |
-| 7 | Every advertised feature is either working or explicitly reported | `setup.ps1 -VerifyOnly` prints a per-feature table; `up.ps1` exits non-zero on a missing advertised feature |
+| 7 | Every advertised feature is either working or explicitly reported | `setup/setup -VerifyOnly` prints a per-feature table; `setup/up` exits non-zero on a missing advertised feature |
 | 8 | The image platform is documented | currently **linux/amd64 only**; ARM hosts must use `--platform linux/amd64` (Docker Desktop emulation) |
 
 Not part of the gate: Shopify, ngrok and the planner API tokens need per-machine
-credentials. They are intentionally optional in `start.ps1 -SkipTunnel` and are
+credentials. They are intentionally optional in `setup/start -SkipTunnel` and are
 documented in README section 9.
 
 #### Machine prerequisites (put these in the invite)
@@ -97,7 +97,7 @@ documented in README section 9.
    ```powershell
    git clone https://github.com/msf4-0/erpnext-v16-integrations-demo.git
    cd erpnext-v16-integrations-demo
-   powershell -ExecutionPolicy Bypass -File .\start.ps1
+   powershell -ExecutionPolicy Bypass -File .\setup\start
    ```
 
    Expected: `bench image pulled in …` (not `building`), seed exits 0, ERPNext
@@ -122,11 +122,11 @@ answers `403`. Do not put such a PAT in the repo; use the UI once.
 - `.github/workflows/ci.yml` — hygiene (clean checkout, no machine paths, every
   app has a non-empty `hooks.py`), compose/PowerShell/Python validation, bench
   image build + push on `main`, and an import smoke test of the pushed image.
-- `start.ps1` — pulls the GHCR image by default, tags it as the local
+- `setup/start` — pulls the GHCR image by default, tags it as the local
   `comp_demo-bench:v16`, and only builds when the pull fails (`-NoPull` to skip).
-- `pull-bench.ps1` — the same pull step for the other entry point; `up.ps1`
-  (used by `setup.ps1 -Full`) calls it before `docker compose create`, so the
-  documented `setup.ps1` route also avoids the build.
+- `setup/pull-bench` — the same pull step for the other entry point; `setup/up`
+  (used by `setup/setup -Full`) calls it before `docker compose create`, so the
+  documented `setup/setup` route also avoids the build.
 - `docker-compose.yml` — `image: ${BENCH_IMAGE:-comp_demo-bench:v16}` with the
   `build:` fallback kept for offline work.
 - `docs/DISTRIBUTION.md` (this file) — the contract above.
@@ -153,7 +153,7 @@ sha256sum -c comp-demo-bench-v16-amd64.tar.gz.sha256
 docker load -i comp-demo-bench-v16-amd64.tar.gz
 ```
 
-`pull-bench.ps1` / `start.sh` do exactly this when the GHCR pull fails, verify
+`setup/pull-bench` / `setup/start` do exactly this when the GHCR pull fails, verify
 the checksum, `docker load`, and retag as `comp_demo-bench:v16`. Override the
 location with `BENCH_BUNDLE_URL` (env or `.env`) for a fork or an internal
 mirror.
@@ -164,7 +164,7 @@ account can still run the demo; GHCR stays the primary path.
 
 If you would rather hand out tokens than use the bundle: each colleague runs
 `echo <PAT with read:packages> | docker login ghcr.io -u <user> --password-stdin`
-once, then `start.ps1` pulls normally.
+once, then `setup/start` pulls normally.
 
 ## Bench image policy (tags, digests, platforms, size)
 
@@ -176,7 +176,7 @@ the same thing.
 
 | Tag | Moves? | Use |
 |---|---|---|
-| `ghcr.io/msf4-0/comp-demo-bench:v16` | yes | default; what `start.ps1` / `start.sh` pull |
+| `ghcr.io/msf4-0/comp-demo-bench:v16` | yes | default; what `setup/start` / `setup/start` pull |
 | `ghcr.io/msf4-0/comp-demo-bench:v16.3` | no | release tag, for pinning a known-good build |
 | `ghcr.io/msf4-0/comp-demo-bench:<git-sha>` | no | every `main` build from `ci.yml` |
 | `ghcr.io/msf4-0/comp-demo-bench@sha256:...` | no | the only fully reproducible reference |
@@ -200,7 +200,7 @@ Reproducible (digest) — the same bytes for everyone, forever:
 BENCH_IMAGE=ghcr.io/msf4-0/comp-demo-bench@sha256:<digest>
 ```
 
-`start.ps1` / `start.sh` treat a namespaced `BENCH_IMAGE` as the pull target and
+`setup/start` / `setup/start` treat a namespaced `BENCH_IMAGE` as the pull target and
 still tag it locally as `comp_demo-bench:v16`, so compose does not build.
 
 Check what a machine is actually running:
@@ -217,7 +217,7 @@ docker image inspect --format '{{index .RepoDigests 0}}' comp_demo-bench:v16
   multi-arch manifest under the same tags. Verify `docker manifest inspect`
   lists both before advertising it.
 - Apple Silicon without an arm64 image: Docker Desktop runs the amd64 image under
-  emulation. It works but is slow; `start.sh`/`start.ps1` already pass
+  emulation. It works but is slow; `setup/start`/`setup/start` already pass
   `--platform linux/amd64`.
 
 ### Size budget

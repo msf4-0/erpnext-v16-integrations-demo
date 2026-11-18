@@ -21,7 +21,7 @@ installation path.
 | RAM | 8 GB recommended (Metabase is capped at 3 GB) | — |
 
 Linux/macOS: use `bash`, not `sh`. Windows: use **Git Bash** or WSL for the
-`.sh` scripts, or the PowerShell launchers (`up.ps1`) — the Docker artefacts are
+`.sh` scripts, or the PowerShell launchers (`setup/up`) — the Docker artefacts are
 identical either way.
 
 Ports used by default: `8000` (ERPNext), `1880` (Node-RED), `3001` (planner),

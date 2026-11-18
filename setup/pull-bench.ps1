@@ -26,7 +26,7 @@
 param([switch]$Force)
 
 $ErrorActionPreference = 'Stop'
-$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $EnvPath = Join-Path $Root '.env'
 $LocalTag = 'comp_demo-bench:v16'
 $GhcrImage = 'ghcr.io/msf4-0/comp-demo-bench:v16'

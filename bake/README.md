@@ -8,7 +8,7 @@ The current setup keeps three things OUT of a durable image:
 
 | What | Where today | Lost on… |
 | --- | --- | --- |
-| frappe + erpnext + apps + venv + render deps | bench container **writable layer** (installed at runtime by `up.ps1`) | `docker compose down` + recreate |
+| frappe + erpnext + apps + venv + render deps | bench container **writable layer** (installed at runtime by `setup/up`) | `docker compose down` + recreate |
 | site DB (900 tables) | `db_data` named volume mounted at `/var/lib/mysql` | explicit volume deletion or storage loss |
 | staged scripts/repos | `/tmp/...` in the container | every run |
 
@@ -38,7 +38,7 @@ docker compose --env-file .env --env-file versions.env up -d
 ## Track 1 — bake the CODE (safe, high value)
 
 `bench.Dockerfile` builds `comp_demo-bench:v16` with everything installed at
-build time. `up.ps1` then skips provision + app-install (steps 5–7) and only
+build time. `setup/up` then skips provision + app-install (steps 5–7) and only
 creates/start the stack, dropping a full build from ~25–35 min to ~1–2 min.
 
 ```powershell

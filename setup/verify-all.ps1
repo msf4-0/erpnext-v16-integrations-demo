@@ -23,7 +23,7 @@
     M4 creates and deletes again.
 
 .EXAMPLE
-    powershell -ExecutionPolicy Bypass -File .\verify-all.ps1
+    powershell -ExecutionPolicy Bypass -File .\setup\verify-all
 #>
 [CmdletBinding()]
 param(
@@ -206,7 +206,7 @@ foreach ($tab in @(
 # M7 (UI) - the Job Cards must exist as draggable cards in BOTH views. Read-only:
 # it counts DOM nodes and never drags anything. Needs node + playwright-core
 # (see scheduler/ui-tests/README.md); skipped without them.
-$uiDir = Join-Path $PSScriptRoot 'scheduler\ui-tests'
+$uiDir = Join-Path (Split-Path -Parent $PSScriptRoot) 'scheduler\ui-tests'
 $nodeExe = (Get-Command node -ErrorAction SilentlyContinue).Source
 if ($nodeExe -and (Test-Path (Join-Path $uiDir 'node_modules\playwright-core'))) {
     Push-Location $uiDir
@@ -240,7 +240,7 @@ Add-Result 'M5.home' 'storefront home' ($homeCode -eq 200) "HTTP $homeCode"
 # ===========================================================================
 if (-not $SkipContainerSuite) {
     Section 'M4 + M6-M10  in-container suite (this takes a few minutes)'
-    $host_suite = Join-Path $PSScriptRoot 'sandbox\scripts\verify-milestones.py'
+    $host_suite = Join-Path (Split-Path -Parent $PSScriptRoot) 'sandbox\scripts\verify-milestones.py'
     if (-not (Test-Path $host_suite)) {
         Add-Result 'M4.suite' 'in-container suite' $false "missing $host_suite"
     } else {

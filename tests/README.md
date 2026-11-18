@@ -42,7 +42,7 @@ needs read/select on `Account` and `Cost Center` just to write a Delivery Note.
 this after any change to `sandbox/scripts/create-demo-user.py` or to a doctype's
 permissions.
 
-Requires: a running stack (any of `start.ps1` / `up.ps1` / `setup.ps1`) and the
+Requires: a running stack (any of `setup/start` / `setup/up` / `setup/setup`) and the
 `ERPNEXT_API_TOKEN` line in `.env` for cleanup.
 
 ## Requirements for the clone gate

@@ -12,7 +12,7 @@
 # Usage: ./start.sh [--no-pull] [--no-wiring] [--recreate]
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 NO_PULL=0
@@ -187,7 +187,7 @@ ok "ERPNext answers on http://localhost:${ERP_PORT}"
 if [ "$NO_WIRING" -eq 0 ]; then
   if command -v pwsh >/dev/null 2>&1; then
     say "wiring tokens and background jobs (setup.ps1 -NonInteractive -SkipTunnel)"
-    pwsh -NoProfile -File "$ROOT/setup.ps1" -NonInteractive -SkipTunnel \
+    pwsh -NoProfile -File "$ROOT/setup/setup.ps1" -NonInteractive -SkipTunnel \
       || warn "setup.ps1 reported problems; the site still runs"
   else
     warn "pwsh not found - planner tokens and background jobs were not wired"

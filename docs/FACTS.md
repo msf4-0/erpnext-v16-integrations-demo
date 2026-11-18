@@ -79,7 +79,7 @@ app.
 
 | Platform | First command | Notes |
 |---|---|---|
-| Windows | `powershell -ExecutionPolicy Bypass -File .\up.ps1` | `start.ps1` wraps pull → seed → start → wire; `setup.ps1` is convergence/verification (`-VerifyOnly`) |
+| Windows | `powershell -ExecutionPolicy Bypass -File .\setup\up` | `setup/start` wraps pull → seed → start → wire; `setup/setup` is convergence/verification (`-VerifyOnly`) |
 | Linux | `bash ./up-linux.sh` then `bash ./install-apps-linux.sh` | `up-linux.sh` deliberately uses `docker compose up -d`; on Windows that can hang |
 | Either | — | There is no `sandbox/up.ps1` any more; it was deleted 2026-11-17 |
 
