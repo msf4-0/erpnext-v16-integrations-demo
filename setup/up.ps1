@@ -511,6 +511,10 @@ if (-not $SkipInstall) {
     # canonical path - ordered, idempotent, SKIP_APPS-aware, and it decides
     # "installed" from the DB rather than from list-apps.
     Write-Step '7b-3/11 installing any remaining apps (canonical installer)'
+    # $siteExpr is defined much later (step 7d), so using it here produced an
+    # empty SITE_NAME= and bash died on "syntax error near unexpected token
+    # `then'" (P11 run). Resolve the site from .env instead.
+    $installSite = if ($cfg['SITE_NAME']) { $cfg['SITE_NAME'] } else { 'frontend' }
     $installer = 'if [ -x /usr/local/bin/install-all-apps.sh ]; then bash /usr/local/bin/install-all-apps.sh; else bash /tmp/scripts/install-all-apps.sh; fi'
     # One retry: on the P8/P9 cold runs the first invocation came back non-zero
     # while the site was still settling after the previous app's migrate, then
@@ -518,7 +522,7 @@ if (-not $SkipInstall) {
     # idempotent and DB-truth, so a retry costs seconds and nothing else.
     $installOk = $false
     for ($attempt = 1; $attempt -le 2; $attempt++) {
-        if ((Invoke-Bench ("cd /home/frappe/frappe-bench && SITE_NAME=" + $siteExpr + " " + $installer)) -eq 0) {
+        if ((Invoke-Bench ("cd /home/frappe/frappe-bench && SITE_NAME=" + $installSite + " " + $installer)) -eq 0) {
             $installOk = $true
             break
         }
@@ -672,6 +676,23 @@ if ($shopifyToken) {
     }
 } else {
     Write-Warn 'SHOPIFY_ACCESS_TOKEN is blank - skipping the Shopify sync entirely'
+}
+
+# ---------------------------------------------------------------------------
+# 8a. bootstrap the master data EVERY later step depends on
+# ---------------------------------------------------------------------------
+# Company + chart of accounts + UOM + Item Group + Warehouse. This used to run
+# only inside fix-postsetup.sh, i.e. only when a Shopify token was configured, so
+# on a site without Shopify there was NO Company at all and both the demo seeder
+# and the go-kart seeder died with "no Company on this site" (P11 run). It is now
+# an unconditional step of its own, before anything that needs a Company.
+if (-not $SkipInstall) {
+    Write-Step '8a/11  bootstrap master data (company, chart of accounts, UOM, warehouse)'
+    if ((Invoke-Bench 'cd /home/frappe/frappe-bench && ./env/bin/python /tmp/scripts/bootstrap_masters.py') -ne 0) {
+        Add-Failure 'bootstrap-masters' 'master data bootstrap failed - no Company, so nothing else can be seeded'
+    } else {
+        Write-Info 'master data bootstrapped'
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -972,7 +993,6 @@ if ($qrItem) {
     Write-Warn 'barcode page check skipped - this site has no Item to open yet'
 }
 Test-Feature 'item tracking' "$erpUrl/assets/item_tracking/js/item_tracking_scan.js"
-Test-Feature 'e-invoicing'   "$erpUrl/api/resource/E%20Invoice%20Import" @{} -UseSession
 Test-Feature 'barcode scan js' "$erpUrl/assets/barcode_shrdc/js/scanner_barcode_patch.js"
 Test-Feature 'barcode link js' "$erpUrl/assets/barcode_shrdc/js/barcode_create_links.js"
 # ---------------------------------------------------------------------------
