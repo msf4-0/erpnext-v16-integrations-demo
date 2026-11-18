@@ -92,6 +92,45 @@ RUN SP=$(dirname "$(find /home/frappe/frappe-bench/env -name 'frappe.pth' -print
     done \
     && ls -la "$SP"/*.pth
 
+# ---------------------------------------------------------------------------
+# Bake the GLOBAL site config endpoints into the image.
+#
+# The base image's sites/common_site_config.json contains only `default_site`.
+# Docker copies image content into a fresh named volume, so on a clean clone the
+# seeder's old "write it only if missing" guard never fired: every bench command
+# resolved db_host=localhost:3306 and redis://localhost:6379, and
+# `bench migrate` aborted with "Service redis_cache is not running" while the
+# site kept serving without cache or queue. Writing the compose service names
+# here makes a fresh volume correct from the first second.
+# ---------------------------------------------------------------------------
+RUN /home/frappe/frappe-bench/env/bin/python - <<'PY'
+import json
+import os
+
+path = "/home/frappe/frappe-bench/sites/common_site_config.json"
+os.makedirs(os.path.dirname(path), exist_ok=True)
+cfg = {}
+if os.path.exists(path):
+    try:
+        with open(path) as handle:
+            cfg = json.load(handle) or {}
+    except Exception:  # noqa: BLE001
+        cfg = {}
+cfg.update(
+    {
+        "db_host": "db",
+        "db_port": 3306,
+        "redis_cache": "redis://redis-cache:6379",
+        "redis_queue": "redis://redis-queue:6379",
+        "redis_socketio": "redis://redis-queue:6379",
+        "socketio_port": 9000,
+    }
+)
+with open(path, "w") as handle:
+    json.dump(cfg, handle, indent=1)
+print("baked common_site_config ->", ", ".join(sorted(cfg)))
+PY
+
 # Server-side rasterisation + QR libs into the bench venv (idempotent, baked once).
 RUN /home/frappe/frappe-bench/env/bin/pip install --no-cache-dir reportlab qrcode pillow
 

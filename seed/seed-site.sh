@@ -55,23 +55,46 @@ mkdir -p logs
 mkdir -p frontend/logs
 mkdir -p sites/assets
 mkdir -p sites
-if [ ! -f sites/common_site_config.json ]; then
-    echo "seed: writing sites/common_site_config.json"
-    cat > sites/common_site_config.json <<JSON
-{
-  "db_host": "db",
-  "db_port": 3306,
-  "redis_cache": "redis://redis-cache:6379",
-  "redis_queue": "redis://redis-queue:6379",
-  "redis_socketio": "redis://redis-queue:6379",
-  "socketio_port": 9000
-}
-JSON
-fi
 if [ ! -f sites/apps.txt ]; then
     echo "seed: writing sites/apps.txt"
     printf 'frappe\nerpnext\nbarcode_shrdc\nshopify\neu_einvoice\nitem_tracking\nmetabase_integration\nmy_invois\n' > sites/apps.txt
 fi
+
+# --- db/redis endpoints in the GLOBAL config ---------------------------------
+# The base image ships a sites/common_site_config.json containing only
+# `default_site`, and Docker copies image content into a fresh named volume.
+# The old guard ("write it only if the file is missing") therefore never fired
+# on a clean clone, so every bench command in this container resolved
+# db_host=localhost:3306 / redis://localhost:6379 and `bench migrate` aborted
+# with "Service redis_cache is not running" - while the site itself kept serving
+# without cache/queue. Merge the keys unconditionally instead of skipping.
+echo "seed: ensuring db/redis keys in sites/common_site_config.json"
+/home/frappe/frappe-bench/env/bin/python - <<'PY'
+import json
+import os
+
+path = "/home/frappe/frappe-bench/sites/common_site_config.json"
+cfg = {}
+if os.path.exists(path):
+    try:
+        with open(path) as handle:
+            cfg = json.load(handle) or {}
+    except Exception:  # noqa: BLE001
+        cfg = {}
+cfg.update(
+    {
+        "db_host": "db",
+        "db_port": 3306,
+        "redis_cache": "redis://redis-cache:6379",
+        "redis_queue": "redis://redis-queue:6379",
+        "redis_socketio": "redis://redis-queue:6379",
+        "socketio_port": 9000,
+    }
+)
+with open(path, "w") as handle:
+    json.dump(cfg, handle, indent=1)
+print("seed: common_site_config ->", ", ".join(sorted(cfg)))
+PY
 
 # --- case 2: create the site record, then restore over it -------------------
 # new-site is needed even though the dump contains everything: it creates the
