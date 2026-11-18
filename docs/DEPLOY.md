@@ -57,6 +57,13 @@ Linux / macOS / WSL / Git Bash:
 bash ./setup/up-linux.sh
 ```
 
+`COMPOSE_PROJECT_NAME` in `.env` selects the Compose project (default
+`comp_demo`), and `BENCH_IMAGE` selects the image tag. **On a machine that
+already runs the live demo, set both to fresh values** (plus the four ports):
+the default project name is the live one. On Git Bash/Cygwin the launcher
+disables MSYS path conversion itself, so in-container paths are not rewritten
+into `C:/…`.
+
 Windows (PowerShell, native — no Git Bash needed):
 
 ```powershell
@@ -70,10 +77,12 @@ That is the whole deployment. In order, it:
 
 1. validates `.env` and `versions.env`;
 2. builds the bench image from `bake/bench.Dockerfile` (pulls the pinned
-   `frappe/erpnext` base, copies **all six** custom apps from `repos/`,
+   `frappe/erpnext` base, copies **all five** custom apps from `repos/`,
    installs every app's Python dependencies, then *fails the build* if any app
    source is missing, is not a valid Frappe app, or cannot be imported);
-3. starts `db`, `redis-cache`, `redis-queue` and the one-shot `seed` service;
+3. starts `db`, `redis-cache`, `redis-queue` and the one-shot `seed` service,
+   then `bench`, `metabase`, `node-red`, `scheduler` and `webhook-sink` (so
+   every endpoint in §5 is live after the one command);
 4. `seed` restores the prepared demo site (`seed/frontend-database.sql.gz`)
    plus the Metabase metadata, so the demo data exists on first boot;
 5. runs the canonical installer `/usr/local/bin/install-all-apps.sh`, which
@@ -226,22 +235,14 @@ replacing the bench image with one built on another machine.
 SKIP_APPS="my_invois" bash ./setup/up-linux.sh
 ```
 
-`my_invois` (Malaysia LHDN/MyInvois) and `` install overlapping
-e-invoice concern areas. **Both stay enabled by default** — decided on 2026-11-18
-after reading their hooks, not by guesswork:
+`my_invois` (Malaysia LHDN/MyInvois) is the only e-invoicing app in the default
+build. The EU app (`eu_einvoice`) was removed from the build; its source stays
+under `repos/eu_einvoice` for reference only (see §4).
 
-* `my_invois` registers **no** `doc_events`. It ships Custom Fields and a Sales
-  Invoice Client Script via `fixtures`, so it adds UI actions only.
-* `` hooks `Sales Invoice.validate` and `on_submit`. `validate_doc`
-  uses `frappe.msgprint` (warnings, never `frappe.throw`), so it cannot block a
-  save. `attach_xml_on_submit` returns immediately unless
-  `einvoice_profile == "XRECHNUNG"`, and swallows every error it can raise.
-
-The two therefore do not contend for the same hook, and a Malaysian invoice with
-no `einvoice_profile` triggers neither a block nor an XML attach. Set
-`SKIP_APPS` only if you are enabling real EU submission alongside real LHDN
-submission and want one of them out of the way. The installer reports skips
-explicitly — it never silently drops an app.
+`my_invois` registers **no** `doc_events`. It ships Custom Fields and a Sales
+Invoice Client Script via `fixtures`, so it adds UI actions only — it cannot
+block a save. The installer reports skips explicitly; it never silently drops
+an app.
 
 ## 10. Windows notes
 

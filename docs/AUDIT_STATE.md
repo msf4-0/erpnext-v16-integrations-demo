@@ -658,3 +658,145 @@ above; the click-through is not.
   while the verifier — the exact command `docs/DEPLOY.md` tells users to run — was
   broken. Workflow YAML parses and the step is present in the parsed job.
 
+## P9 — Fresh-clone certification and the Linux one-command path (2026-11-18)
+
+Status vocabulary, unchanged: **Implemented** / **Tested** / **Verified** /
+**Blocked** / **Not started**.
+
+### Scope
+
+Close the gap P8 named explicitly: *"the exact doc sequence fresh GitHub clone →
+`cp .env.example .env` → `bash ./setup/up-linux.sh`"* had never been run. P9 runs
+it on an isolated project beside the live demo and certifies the result in
+[`TEST-PLAN.md`](TEST-PLAN.md).
+
+### What changed
+
+| Commit | Files | Change | Status |
+|---|---|---|---|
+| `6b90eab` | `setup/up-linux.sh` | project name from `COMPOSE_PROJECT_NAME` (was hard-coded `-p comp_demo`); `build` + `compose create` + `docker start` instead of `compose up -d`; start all nine services, not four | Verified |
+| `f9d3ed1` | `setup/up-linux.sh` | `MSYS_NO_PATHCONV=1` on Git Bash/Cygwin: MSYS rewrote in-container `/tmp/...` to `C:/Users/.../Temp/...`, so the deploy died at `docker cp` with `no such directory` | Verified |
+| `ce54eeb` | `sandbox/scripts/install-all-apps.sh`, `setup/up-linux.sh`, `seed/seed-site.sh`, `docker-compose.yml`, `sandbox/scripts/verify-deployment.sh` | installer mirrors `tabInstalled Application` into `site_config.json` (custom `www/` pages were 500); materialise `sandbox/node-red/flows.json` before `create`; dashboard URL uses `METABASE_PORT`; verifier text says seven apps | Verified |
+| docs commit | `docs/TEST-PLAN.md`, `docs/DEPLOY.md`, this section | certification plan + corrections (I-12) | Implemented |
+
+### Cold run — Verified
+
+Host Windows 11, Docker 29.8.0, Compose v5.5.1. Clone
+`F:\ERPsessions\p9-clone` at `ce54eeb`, clean tree. Isolated project
+`comp_demo_p9clone`, own volumes, ports `18008 / 11885 / 13012 / 13013 / 18093`,
+image `comp_demo-bench:p9clone`. The live `comp_demo` stack was not touched.
+
+Wall clock: **10.2 min** (2026-11-18 16:49:24 → 16:59:37 local; 08:49:24 →
+08:59:37 UTC), exit code **0**. Build **74 s** with warm layers (the same
+Dockerfile, fully cold with no base image in attempt 1, took ≈5 min: pip and
+git-installed requirements dominated). Seed restore **3 min 29 s**
+(`08:51:00 → 08:54:29`). Metabase healthy ≈1–2 min after start.
+
+```
+$ bash ./setup/up-linux.sh
+startup policy: ENVIRONMENT=development
+demo-default credentials in use: DB_ROOT_PASSWORD, ERPNEXT_ADMIN_PASSWORD, METABASE_DB_PASS, METABASE_ADMIN_PASSWORD
+Project 'comp_demo_p9clone': building the bench image (25-40 min on a cold machine)...
+#23 naming to docker.io/library/comp_demo-bench:p9clone 0.1s done
+ Image comp_demo-bench:p9clone Built
+node-red: created sandbox/node-red/flows.json (empty flow; Shopify wiring needs credentials)
+Creating the containers...
+Starting MariaDB and Redis...
+Restoring the demo site (one-shot seed, ~5-7 min)...
+Demo site restored.
+Starting ERPNext, Metabase, Node-RED, planner and webhook sink...
+== no new apps to install - migrate skipped ==
+site_config: installed_apps already current
+-- installed (db): frappe erpnext barcode_shrdc shopify item_tracking metabase_integration my_invois
+ Container comp_demo_p9clone-bench-1 Restarting
+ERPNext is ready at http://localhost:18008 (site: frontend, project: comp_demo_p9clone).
+```
+
+Verifier (`PROJECT=comp_demo_p9clone ERPNEXT_PORT=18008 SITE_NAME=frontend`):
+
+```
+PASS  docker compose config renders
+PASS  bench container is running
+PASS  db container is running
+PASS  bench --site frontend version works          (all 7 apps)
+PASS  all 7 apps installed exactly once (tabInstalled Application)
+PASS  all 7 app modules import in the bench venv
+PASS  GET /api/method/ping answered: {"message":"pong"}
+PASS  every app_include_js/css referenced by hooks.py resolves
+== verify-deployment: ALL CHECKS PASSED ==   (exit 0)
+```
+
+Other evidence, same run:
+
+```
+items/boms/serials            5 / 1 / 68
+BOM                           FRM-001×1  WHL-001×4  STR-001×1  SEAT-001×1
+prices                        9 rows (5 selling, 4 buying) — see deviation D-6
+Metabase /api/health          {"status":"ok"}
+Metabase /api/session         {"id":"9a3a2975-..."}   (admin@demo.local / DemoPass2026!)
+guest /item_qr?item_code=FRM-001   200, 11340 B, contains Frame/FRM-001/barcode
+login + /metabase             200, 11511 B, iframe src=http://localhost:13013/public/dashboard/96f46652-...
+planner /api/health           200 {"status":"Server is running",...}
+Node-RED /                    200 (1731 B); /settings 200
+webhook-sink /healthz         200 {"ok": true, "stored": 0}
+live comp_demo                all 8 containers up, :8000 200, :3005 200
+ngrok                          https://scoreless-barcode-length.ngrok-free.dev -> http://localhost:1880
+```
+
+### Deviations from docs/DEPLOY.md
+
+| # | Deviation | Resolution |
+|---|---|---|
+| D-1 | `COMPOSE_PROJECT_NAME` was documented as the selector but the launcher ignored it (hard-coded `-p comp_demo`) | **Fixed** `6b90eab`; `DEPLOY.md` §4 now says the default project is the live one and both project and image tag must be changed on a shared host |
+| D-2 | `compose up -d` hangs on this host | **Fixed** `6b90eab` (build + create + start), matching `DEPLOY.md` §10 |
+| D-3 | The one command started only 4 of 9 services, so Metabase/Node-RED/planner/webhook-sink did not exist | **Fixed** `6b90eab`; `DEPLOY.md` §4 now lists the full start set |
+| D-4 | On Git Bash, in-container paths were rewritten by MSYS and the deploy died after the seed | **Fixed** `f9d3ed1` |
+| D-5 | Node-RED could not start on a fresh clone: `flows.json` is gitignored and Docker created a directory at the bind source | **Fixed** `ce54eeb` by writing an empty flow. **Deviation that remains:** the Shopify flow is *not* wired on a credential-free clone — building it needs a token (`build-flows.py`, `setup/up.ps1` §10) |
+| D-6 | Acceptance says "10 price rows"; the product has **9** | **Not fixed (spec).** `seed-gokart-demo.py` and `DEPLOY.md` §4 both define 5 Selling + 4 Buying. The brief's 10 is wrong; recorded as I-8 in `TEST-PLAN.md` |
+| D-7 | First ERPNext request after a restart takes ~9 s; the readiness gate allows 5 s, so the command waits ~4 min before printing READY | **Open (low).** It succeeds; raising the gate's `--max-time` would shorten the wait (I-10) |
+| D-8 | Node-RED reports `unhealthy` for ~2.5 min while its palette loads | **Open (low).** Self-heals; do not judge it in the first 3 minutes (I-9) |
+| D-9 | `bench list-apps` printed 2 of 7 apps (known under-report) | **Documented**, not a defect; verifier and installer decide from `tabInstalled Application` (I-13) |
+
+### Metabase defects found and fixed (re-verified in P9)
+
+Both were fixed before P9 (the P12 seed test) and are part of `bf52485`; P9
+re-verified that they still hold on a fresh clone:
+
+| Defect | Why it looked broken | Fix (still present, verified) |
+|---|---|---|
+| Entrypoint `chmod o+r /app/metabase.jar` caused an overlayfs copy-up that stalled 10+ min at ~75% CPU with **no logs** and no HTTP | running as root triggers the chmod branch | `docker-compose.yml` `user: "2000:2000"` — Metabase was **healthy in ~1–2 min** on this run, no stall |
+| `Access denied for user 'metabase_user'@'%' to database 'metabase'`, then Metabase shuts down | the seeder granted only `SELECT` on the ERPNext DB, not on Metabase's own schema | `seed/seed-site.sh`: `GRANT ALL PRIVILEGES ON \`metabase\`.* TO 'metabase_user'@'%'` — health and login both 200 |
+
+P9 additionally found and fixed a third Metabase defect: the seeded
+`metabase_dashboard_url` hard-coded `http://localhost:3005`, so the `/metabase`
+iframe pointed at the wrong stack whenever `METABASE_PORT` was not 3005. The
+seeder now takes `METABASE_PORT` from the environment (`ce54eeb`); the certified
+run's iframe is `http://localhost:13013/...`.
+
+### Live-stack preservation
+
+The live `comp_demo` stack kept its containers and volumes. It was found
+**already wedged** before P9 (ERPNext HTTP `000`, no request logs) and with the
+host ngrok pointing at a dead `localhost:11883`; a plain
+`docker restart comp_demo-bench-1` (no volumes, no retag) restored `:8000`, and
+the tunnel was restarted as `ngrok http 1880`. This is recorded as I-11 and is
+not caused by P9.
+
+### Status
+
+| Item | Status |
+|---|---|
+| Fresh-clone `bash ./setup/up-linux.sh` (one command, `.env` only) | **Verified** |
+| `verify-deployment.sh` ALL CHECKS PASSED | **Verified** |
+| Demo data 5 items / 1 BOM / 4 components / 68 serials | **Verified** |
+| Selling prices 4500/1800/220/310/260 + 4 buying prices | **Verified** (9 rows; brief's "10" is a spec error) |
+| Metabase health, `.env.example` login, `/metabase` page with correct port | **Verified** |
+| Guest `/item_qr` 200 | **Verified** |
+| Planner / Node-RED / webhook-sink HTTP | **Verified** (endpoint level) |
+| Live stack preserved; host ngrok restored to `:1880` | **Verified** |
+| Git Bash path conversion, project isolation, full service set | **Verified** |
+| Shopify flow wired on a clone (needs credentials) | **Not started** |
+| Browser click-through (desk, planner SPA, QR camera) | **Not started** |
+| Truly cold machine with no Docker layer cache | **Not started** — attempt 1 pulled the base and ran pip cold, but the certified attempt reused layers |
+
+
