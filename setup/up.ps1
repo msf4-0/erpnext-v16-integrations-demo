@@ -48,7 +48,14 @@ param(
     [switch]$Fresh,
     [switch]$SkipProvision,
     [switch]$SkipInstall,
-    [switch]$SkipScheduler
+    [switch]$SkipScheduler,
+    # Isolated-run switch. The default stays the live demo project so the
+    # documented command keeps working unchanged, but the name used to be hard
+    # coded, which made it IMPOSSIBLE to exercise this launcher without tearing
+    # down `comp_demo` (step 3 runs `compose down --remove-orphans`). That is why
+    # this script had no test transcript after the move to setup/.
+    [string]$Project = 'comp_demo',
+    [string]$EnvFile = '.env'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -63,10 +70,9 @@ $DemoDir = Split-Path -Parent $PSScriptRoot
 $SandboxDir = Join-Path $DemoDir 'sandbox'
 $RootDir = $DemoDir
 $ComposeFile = Join-Path $DemoDir 'docker-compose.yml'
-$EnvPath = Join-Path $DemoDir '.env'
+$EnvPath = if ([System.IO.Path]::IsPathRooted($EnvFile)) { $EnvFile } else { Join-Path $DemoDir $EnvFile }
 $VersionsPath = Join-Path $DemoDir 'versions.env'
 $EnvValidator = Join-Path $DemoDir 'sandbox/scripts/validate-env.py'
-$Project = 'comp_demo'
 $script:IsWindowsHost = $env:OS -eq 'Windows_NT'
 $NgrokYml = if ($script:IsWindowsHost -and $env:LOCALAPPDATA) {
     Join-Path $env:LOCALAPPDATA 'Packages/ngrok.ngrok_1g87z0zv29zzc/LocalCache/Local/ngrok/ngrok.yml'
@@ -383,7 +389,7 @@ Write-Step '4/11  root prep inside the bench container'
 # when the tree already belongs to frappe, which is the normal case for the
 # baked image. Only fix ownership when the bench root is actually wrong.
 Invoke-BenchRoot 'if [ "$(stat -c %U /home/frappe/frappe-bench)" = frappe ]; then echo bench already frappe-owned; else chown -R frappe:frappe /home/frappe/frappe-bench; fi; echo chown-done' | Out-Null
-Invoke-BenchRoot 'which redis-server >/dev/null 2>&1 || (apt-get update -qq && apt-get install -y -qq redis-server); echo redis-ok' | Out-Null
+Invoke-BenchRoot 'which redis-server >/dev/null 2>&1 || apt-get install -y -qq redis-server; echo redis-ok' | Out-Null
 
 # ---------------------------------------------------------------------------
 # 5. stage scripts, recipes and app sources into the container
