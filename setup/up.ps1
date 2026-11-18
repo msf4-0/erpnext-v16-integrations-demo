@@ -528,8 +528,20 @@ if (-not $SkipInstall) {
     # "installed" from the DB rather than from list-apps.
     Write-Step '7b-3/11 installing any remaining apps (canonical installer)'
     $installer = 'if [ -x /usr/local/bin/install-all-apps.sh ]; then bash /usr/local/bin/install-all-apps.sh; else bash /tmp/scripts/install-all-apps.sh; fi'
-    if ((Invoke-Bench ("cd /home/frappe/frappe-bench && SITE_NAME=" + $siteExpr + " " + $installer)) -ne 0) {
-        Add-Failure 'install-all-apps' 'canonical installer reported a missing or failed app'
+    # One retry: on the P8/P9 cold runs the first invocation came back non-zero
+    # while the site was still settling after the previous app's migrate, then
+    # installed all eight cleanly when re-run unchanged. The installer is
+    # idempotent and DB-truth, so a retry costs seconds and nothing else.
+    $installOk = $false
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        if ((Invoke-Bench ("cd /home/frappe/frappe-bench && SITE_NAME=" + $siteExpr + " " + $installer)) -eq 0) {
+            $installOk = $true
+            break
+        }
+        if ($attempt -lt 2) { Write-Warn "canonical installer failed (attempt $attempt) - retrying once in 15s"; Start-Sleep -Seconds 15 }
+    }
+    if (-not $installOk) {
+        Add-Failure 'install-all-apps' 'canonical installer reported a missing or failed app (after a retry)'
     } else {
         Write-Info 'canonical installer reports every app installed'
     }
@@ -965,7 +977,21 @@ try {
 
 $authHeaders = @{ Authorization = "token $erpToken" }
 Test-Feature 'barcode app'   "$erpUrl/api/resource/Barcode%20Printing"   @{} -UseSession
-Test-Feature 'barcode page'  "$erpUrl/item_qr?item_code=PLN-BRACKET"     @{} -UseSession
+# The QR page needs a real Item. It used to be probed with the hard-coded
+# PLN-BRACKET, which only exists after the demo dump is restored: on a
+# from-scratch site the page answered an honest 404 and the run reported
+# "barcode page ... will not work" for a feature that was fine (P9 cold run).
+$qrItem = $null
+try {
+    $itemResp = Invoke-WebRequest -Uri "$erpUrl/api/resource/Item?limit_page_length=1&fields=%5B%22name%22%5D" `
+        -WebSession $script:probeSession -UseBasicParsing -TimeoutSec 20
+    $qrItem = ($itemResp.Content | ConvertFrom-Json).data[0].name
+} catch { }
+if ($qrItem) {
+    Test-Feature 'barcode page' "$erpUrl/item_qr?item_code=$([uri]::EscapeDataString($qrItem))" @{} -UseSession
+} else {
+    Write-Warn 'barcode page check skipped - this site has no Item to open yet'
+}
 Test-Feature 'item tracking' "$erpUrl/assets/item_tracking/js/item_tracking_scan.js"
 Test-Feature 'e-invoicing'   "$erpUrl/api/resource/E%20Invoice%20Import" @{} -UseSession
 Test-Feature 'barcode scan js' "$erpUrl/assets/barcode_shrdc/js/scanner_barcode_patch.js"
