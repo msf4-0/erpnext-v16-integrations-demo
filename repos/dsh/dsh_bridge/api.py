@@ -36,6 +36,30 @@ def handle_a2ui_action():
             "message": "An internal error occurred while processing the action."
         }
 
+@frappe.whitelist()
+def handle_chat():
+    """
+    Receives chat prompt and ERP context from the A2UI React frontend,
+    routes it to the DSH orchestrator, and returns the response.
+    """
+    data = frappe.safe_eval(frappe.request.data) if frappe.request.data else frappe.form_dict
+    prompt = data.get("prompt")
+    company = data.get("company") or frappe.defaults.get_user_default("Company")
+    user = frappe.session.user
+
+    if not prompt:
+        frappe.local.response["http_status_code"] = 417
+        return {"error": "Prompt parameter is required."}
+
+    # --- DSH Orchestrator Integration Hook ---
+    reply_text = f"DSH Orchestrator received: '{prompt}' for user {user} under company '{company}'."
+
+    return {
+        "status": "success",
+        "reply": reply_text,
+        "a2ui_card": None
+    }
+
 def process_action_logic(action):
     # Your custom plugin logic here
     return {"processed_action": action}
