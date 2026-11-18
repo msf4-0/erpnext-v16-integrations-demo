@@ -678,6 +678,7 @@ it on an isolated project beside the live demo and certifies the result in
 | `f9d3ed1` | `setup/up-linux.sh` | `MSYS_NO_PATHCONV=1` on Git Bash/Cygwin: MSYS rewrote in-container `/tmp/...` to `C:/Users/.../Temp/...`, so the deploy died at `docker cp` with `no such directory` | Verified |
 | `ce54eeb` | `sandbox/scripts/install-all-apps.sh`, `setup/up-linux.sh`, `seed/seed-site.sh`, `docker-compose.yml`, `sandbox/scripts/verify-deployment.sh` | installer mirrors `tabInstalled Application` into `site_config.json` (custom `www/` pages were 500); materialise `sandbox/node-red/flows.json` before `create`; dashboard URL uses `METABASE_PORT`; verifier text says seven apps | Verified |
 | `2c54cc2` | `setup/up-linux.sh`, `docs/DEPLOY.md`, `docs/TEST-PLAN.md` | require a **working** Python 3.9+ (the Windows Store `python3` alias passes `command -v` but fails when run); document the real prerequisites (Git, bash, curl, Python) and x86_64-only/ARM-untested | Verified |
+| `6a720da` | `.github/workflows/ci.yml` | make push-CI pass for the first time: load `versions.env` in the compose check, exempt the host-migration helper from the path grep, pass `ERPNEXT_BASE` to the image build, and build with `load:true`/`push:false` so CI does not depend on GHCR (publishing stays in `publish-image.yml`) | Verified — run `44281356855` green: validate, repository-hygiene, build-bench-image + in-job import smoke |
 | docs commit | `docs/TEST-PLAN.md`, `docs/DEPLOY.md`, this section | certification plan + corrections (I-12) | Implemented |
 
 ### Cold run — Verified
@@ -758,6 +759,7 @@ ngrok                          https://scoreless-barcode-length.ngrok-free.dev -
 | D-8 | Node-RED reports `unhealthy` for ~2.5 min while its palette loads | **Open (low).** Self-heals; do not judge it in the first 3 minutes (I-9) |
 | D-9 | `bench list-apps` printed 2 of 7 apps (known under-report) | **Documented**, not a defect; verifier and installer decide from `tabInstalled Application` (I-13) |
 | D-10 | `DEPLOY.md` claimed "only Docker"; the Linux path also needs Git, bash, curl and a *working* Python 3.9+ (the Windows Store alias is not one), and the image is x86_64-only | **Fixed** `2c54cc2`; the launcher probes by executing and names the Store alias in its error |
+| D-11 | Push CI (`ci.yml`) had been red on every commit: two prerequisite steps failed before the image build was ever reached, so the X carried no signal about the product | **Fixed** `6a720da` (compose check loads `versions.env`; host-migration helper exempted; `ERPNEXT_BASE` passed from `versions.env`; CI builds with `load:true` and no GHCR push) |
 
 ### Second run on the same project (idempotency) — Verified
 
@@ -819,6 +821,7 @@ not caused by P9.
 | Planner / Node-RED / webhook-sink HTTP | **Verified** (endpoint level) |
 | Live stack preserved; host ngrok restored to `:1880` | **Verified** |
 | Second run of the command (idempotency) | **Verified** — exit 0 in 1.6 min; verifier still green |
+| Push CI (`ci.yml`) on `main` | **Verified** — all three jobs green on `6a720da` (run `44281356855`): validate, repository-hygiene, and a real image build + import smoke, with no GHCR push |
 | Python 3.9+ preflight vs the Windows Store alias | **Verified** — stubbed probe falls back to `python`; with both broken it exits non-zero with the new message |
 | Git Bash path conversion, project isolation, full service set | **Verified** |
 | Shopify flow wired on a clone (needs credentials) | **Not started** |
