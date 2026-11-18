@@ -522,26 +522,102 @@ but the base image was still present locally (`frappe/erpnext:v16.35.0`, 7 weeks
 reuse from this host cannot be excluded. Not started: a second machine or fresh VM, which is the
 only clean proof.
 
-### B. Windows launcher path (`setup/up.ps1`, `setup/start.ps1`) — Not started
+### B. Windows launcher path (`setup/up.ps1`, `setup/start.ps1`) — Tested, four defects fixed
 
-No run of either launcher since the `setup/` move has produced a transcript. The known
-Windows-hostile step (`docker compose up -d` can hang on this host) is therefore still undocumented
-in `docs/DEPLOY.md` as a workaround. This is the next concrete task; the isolated-project harness
-(`-p comp_demo_p8`, `ERPNEXT_PORT=18003`) is ready for it.
+First ever run of the launcher after the move to `setup/`. Exercised on an isolated
+Compose project (`comp_demo_p8`, ports 18003/11880/13001/13005/18088, image tag
+`comp_demo-bench:coldtest`) with the live `comp_demo` stack left running throughout.
+It failed, for four separate reasons — all now fixed:
 
-### C. UI-level integration pass — Not started
+| Defect | Effect | Fix |
+|---|---|---|
+| `$Project = 'comp_demo'` hard-coded, `.env` path hard-coded | The launcher could only ever be aimed at the live demo; step 3 runs `compose down --remove-orphans`, so testing it *was* taking the demo down. This is why it had no transcript. | `-Project` and `-EnvFile` parameters; `BENCH_IMAGE` already parameterised the tag |
+| `|| (apt-get update && apt-get install ...)` in the step-4 redis install | `bash: -c: line 2: unexpected EOF while looking for matching ')'` — the guarded branch could never run | no subshell: `command -v redis-server || apt-get install -y -qq redis-server` |
+| installer demanded exactly **1** `hooks.py` under `apps/<app>` | `repos/item_tracking` ships two extra copies (depth 1 and depth 3), so the guard refused a tree that `bench install-app` installs fine — `item_tracking` failed to install: "Shift+I scanner and per-unit labels will not work" | verify the load-bearing package hook `apps/<app>/<app>/hooks.py`, warn about the ignored copies instead of refusing |
+| `.Output.Trim()` on a `$null` capture at step 7d | `You cannot call a method on a null-valued expression` — aborted the whole run after app installation | null-guard both `mariadb` reads |
 
-Not started, deliberately: it needs an isolated project serving the restored demo DB on its own
-ports, and every one of its checks (barcode/QR scan, `item_tracking` Shift+I, `eu_einvoice` import,
-`my_invois` coexistence, Metabase rebind, planner SPA write-back at :3001, Node-RED at :1880) is an
-interactive check against a live stack. None of it is claimed.
+`docs/DEPLOY.md` also advertised the setup command as `./setup/$2` — an unfilled
+template variable — in three places, so a first-time user following the doc
+verbatim could not start anything. Replaced with the real commands plus a
+Windows section documenting that `docker compose up -d` hangs on this host and
+that `compose create` + `docker start` is the working alternative.
 
-Outstanding decision carried from the brief: whether `eu_einvoice` and `my_invois` may both stay
-enabled by default. No evidence gathered yet, so the default `SKIP_APPS` is unchanged.
+Two further defects were found in the same run and are **fixed but not yet
+re-verified end to end**:
+
+| Defect | Effect | Fix |
+|---|---|---|
+| `$demoServices` omitted `webhook-sink` | the documented `http://localhost:8088/healthz` was left in `Created` and never answered on a launcher-built stack (proved by starting it by hand: `200 {"ok": true, "stored": 0}`) | added to the start list |
+| the launcher installs apps by hand and only covers four of them (`barcode_shrdc`, `shopify`, `eu_einvoice`, `item_tracking`) | the site ended with **6 of 8** apps: `metabase_integration` and `my_invois` were never installed, and the launcher never called `install-all-apps.sh` at all | new step 7b-3 runs the canonical image-baked installer, which is ordered, idempotent and DB-truth |
+
+**Still open on this path (Blocked, needs the next run):** `bench --site frontend
+version` fails with `module 'item_tracking' has no attribute '__version__'`, so
+the acceptance verifier reports that check as FAIL even though the 8 app modules
+import and `/api/method/ping` answers. The cause is the duplicated
+`repos/item_tracking` tree: the launcher's copy yields hooks.py at three depths,
+and the interpreter resolves the app package to the nested copy, whose
+`__init__.py` has no `__version__`. Deleting the nested copy in the running test
+container made the module unimportable (`ModuleNotFoundError`), which proves the
+nested copy is what `bench` resolves there. Fixing it properly means normalising
+`repos/item_tracking` to one package level (or making the copy flatten it) and
+re-running — not something to guess at without a fresh run.
+
+### C. UI-level integration pass — partially Tested
+
+Run against the isolated cold stack (`comp_demo_cold`, restored demo database,
+HTTP on :18001) through the apps' own whitelisted entry points:
+
+```
+PASS  login as Administrator (HTTP 200)
+PASS  scan_barcode("FRM-001-0001") resolves the serial -> FRM-001-0001
+PASS  scan_barcode("1115653472") resolves the item -> 1115653472
+PASS  get_serial_summary(1115653472) -> item_name='Resting Bean Bag - 4 Piece'
+PASS  /item_qr?item_code=1115653472 -> HTTP 200, 12117B, barcode /files/barcode-980fec46f4d9.png
+PASS  item_tracking scanner asset (HTTP 200, 11579B, shift-shortcut=yes)
+PASS  Sales Invoice has 20 custom fields (my_invois fixtures applied)
+== 7 passed, 0 failed ==
+```
+
+**Defect found and fixed:** `/item_qr` — the QR/barcode scan page the demo
+advertises — returned **HTTP 500** for every item. `barcode_shrdc/www/item_qr.py`
+shipped without `www/item_qr.html`, so Jinja raised
+`TemplateNotFound: www/item_qr.html`. The template is now in the app (item card,
+scannable CODE128 via the `get_barcode_image` Jinja global, warehouse table,
+serial tracking table) and the page renders. Note that a web worker caches the
+negative template lookup: `bench clear-cache` is not enough, the bench process
+must restart.
+
+**Defect found, not fixed (demo data):** Serial Nos reference an item that does
+not exist. `FRM-001-0001` … `FRM-001-0068` point at item `FRM-001` ("Frame",
+go-kart demo item) while the restored DB has no such Item — 68 of the 68 serials
+are orphans. `scan_barcode` still resolves the serial (it reads the Serial No
+doc), but `/item_qr?serial_no=...` and any serial drill-down 404. Fixing it means
+either adding the missing Item to the seed dump or re-pointing the serials; both
+are seed-data changes, not code, and were left alone deliberately.
+
+**e-invoice coexistence — decided: both stay enabled.** `my_invois` registers no
+`doc_events` (fixtures + Client Script only); `eu_einvoice` hooks
+`Sales Invoice.validate` with `frappe.msgprint` warnings (never `frappe.throw`)
+and its `on_submit` returns immediately unless `einvoice_profile == "XRECHNUNG"`,
+swallowing every error. No shared hook, no way for either to block a plain
+Malaysian invoice. Default `SKIP_APPS` therefore unchanged.
+
+**Not done, and not claimed:** the browser-level pass (barcode camera scan,
+`item_tracking` Shift+I page interaction, `eu_einvoice` invoice import in the
+desk), Metabase rebound to a restored DB, planner SPA write-back at :3001, and
+the Node-RED flow at :1880. The asset, endpoint and hook levels are verified
+above; the click-through is not.
 
 ### D. Ship it
 
 - P8 section in this file (four P7 defects + cold transcript + the verifier false-PASS defect):
   **Implemented**.
-- GHCR image publish + CI job that builds and runs `verify-deployment.sh`: **Not started**.
+- GHCR publish: already existed before P8 — `publish-image.yml` builds and pushes
+  `ghcr.io/msf4-0/comp-demo-bench`, `make-package-public.yml` flips visibility, and
+  `setup/pull-bench.ps1` pulls it before compose builds. Nothing new was needed.
+- CI running the acceptance verifier: **Implemented** in `.github/workflows/e2e.yml`
+  (job `cold-start`, step *Acceptance verifier (7 checks, DB-truth)*), placed after
+  the planner-health step. It was previously possible for the seed/ping job to pass
+  while the verifier — the exact command `docs/DEPLOY.md` tells users to run — was
+  broken. Workflow YAML parses and the step is present in the parsed job.
 

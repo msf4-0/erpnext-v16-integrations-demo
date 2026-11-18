@@ -518,6 +518,21 @@ if (-not $SkipInstall) {
             Write-Info 'item_tracking (individual item tracking) installed'
         }
     }
+
+    # 7b-3. Finish with the canonical installer.
+    # The hand-written steps above cover four apps and predate the P7 eight-app
+    # inventory: metabase_integration and my_invois were NEVER installed by this
+    # launcher (P8 isolated run: the site ended with 6 of 8 apps). The app
+    # sources are already baked into apps/; install-all-apps.sh is the single
+    # canonical path - ordered, idempotent, SKIP_APPS-aware, and it decides
+    # "installed" from the DB rather than from list-apps.
+    Write-Step '7b-3/11 installing any remaining apps (canonical installer)'
+    $installer = 'if [ -x /usr/local/bin/install-all-apps.sh ]; then bash /usr/local/bin/install-all-apps.sh; else bash /tmp/scripts/install-all-apps.sh; fi'
+    if ((Invoke-Bench ("cd /home/frappe/frappe-bench && SITE_NAME=" + $siteExpr + " " + $installer)) -ne 0) {
+        Add-Failure 'install-all-apps' 'canonical installer reported a missing or failed app'
+    } else {
+        Write-Info 'canonical installer reports every app installed'
+    }
 } else {
     Write-Step '7/11  app install skipped (-SkipInstall)'
 }
