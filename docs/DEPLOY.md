@@ -51,9 +51,20 @@ base for the bench image; change it only deliberately.
 
 ## 4. The setup command
 
+Linux / macOS / WSL / Git Bash:
+
 ```bash
-./setup/$2
+bash ./setup/up-linux.sh
 ```
+
+Windows (PowerShell, native — no Git Bash needed):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\setup\up.ps1
+```
+
+Both run the same compose project and produce the same stack; the PowerShell
+launcher is not a wrapper around the shell script, it is the Windows path.
 
 That is the whole deployment. In order, it:
 
@@ -84,7 +95,7 @@ seconds: the site already exists, so `seed` and the installer both exit early.
 
 | Workflow | Command | What it does |
 |---|---|---|
-| **Restore demo data** (default) | `./setup/$2` or `docker compose up -d` | restores `seed/frontend-database.sql.gz`, then installs any app the dump predates |
+| **Restore demo data** (default) | `bash ./setup/up-linux.sh` (Windows: `.\setup\up.ps1`) | restores `seed/frontend-database.sql.gz`, then installs any app the dump predates |
 | **From-scratch site** | `docker compose exec bench bash /tmp/comp-demo-bootstrap/provision-base.sh 16` | `bench new-site` + installs every app, **no demo data** |
 
 Running both against the same `bench_sites` volume is not needed and not
@@ -107,9 +118,25 @@ a **new Compose project name and volumes** (never `down -v` on a live stack).
 ```
 
 Read-only, seven checks: Compose config, bench/db containers, `bench version`,
-all eight apps in `list-apps` installed exactly once, every app module
+all eight apps installed exactly once **as recorded in the database**
+(`frappe.get_installed_apps` / `tabInstalled Application`), every app module
 importable, `/api/method/ping` answering, and no `hooks.py`-referenced asset
-missing. Equivalent manual commands:
+missing.
+
+**Do not** judge installation from `bench --site frontend list-apps`: on this
+bench build it under-reports and can print only `frappe`/`erpnext` for a fully
+installed site. The verifier prints it for information only. The script takes
+**no** positional arguments — select the target with environment variables:
+
+```bash
+PROJECT=comp_demo_cold ERPNEXT_PORT=18001 SITE_NAME=frontend \
+  bash ./sandbox/scripts/verify-deployment.sh
+```
+
+An unknown argument now aborts with exit code 2 instead of silently verifying
+the default project.
+
+Equivalent manual commands:
 
 ```bash
 docker compose exec -T bench bench --site frontend version
@@ -151,10 +178,58 @@ replacing the bench image with one built on another machine.
 ## 9. Opting an app out
 
 ```bash
-SKIP_APPS="my_invois" ./setup/$2
+SKIP_APPS="my_invois" bash ./setup/up-linux.sh
 ```
 
 `my_invois` (Malaysia LHDN/MyInvois) and `eu_einvoice` install overlapping
-e-invoice doctypes. Both are installed by default because the demo covers both;
-on a site where they conflict, set `SKIP_APPS` in `.env`. The installer reports
-skips explicitly — it never silently drops an app.
+e-invoice concern areas. **Both stay enabled by default** — decided on 2026-11-18
+after reading their hooks, not by guesswork:
+
+* `my_invois` registers **no** `doc_events`. It ships Custom Fields and a Sales
+  Invoice Client Script via `fixtures`, so it adds UI actions only.
+* `eu_einvoice` hooks `Sales Invoice.validate` and `on_submit`. `validate_doc`
+  uses `frappe.msgprint` (warnings, never `frappe.throw`), so it cannot block a
+  save. `attach_xml_on_submit` returns immediately unless
+  `einvoice_profile == "XRECHNUNG"`, and swallows every error it can raise.
+
+The two therefore do not contend for the same hook, and a Malaysian invoice with
+no `einvoice_profile` triggers neither a block nor an XML attach. Set
+`SKIP_APPS` only if you are enabling real EU submission alongside real LHDN
+submission and want one of them out of the way. The installer reports skips
+explicitly — it never silently drops an app.
+
+## 10. Windows notes
+
+`setup/up.ps1` is the native Windows path and needs no Git Bash. Three things on
+this host are not obvious and cost real debugging time:
+
+**`docker compose up -d` can hang.** Docker Desktop attaches agent hooks to the
+`compose up` subcommand and the hook never returns; the containers are left in
+`Created`. The launcher therefore splits the two steps:
+
+```powershell
+docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml create
+docker start comp_demo-db-1 comp_demo-redis-cache-1 comp_demo-redis-queue-1 comp_demo-bench-1
+```
+
+`create` returns, `docker start` takes ~15 s. Use that pair instead of `up -d`.
+
+**Git Bash is still needed for the `.sh` tooling.** The `.sh` scripts and
+`verify-deployment.sh` assume bash: `C:\Program Files\Git\bin\bash.exe` works.
+PowerShell one-liners that nest quoting around these scripts fail on this host —
+write the command to a `.ps1`/`.sh` file in `%TEMP%` and run the file.
+
+**Never point the launcher at a project that holds a live demo.** Step 3 runs
+`compose down --remove-orphans` for the target project. Run an isolated check
+with its own project name, ports and image tag:
+
+```powershell
+# .env.p8test: ERPNEXT_PORT=18003, NODE_RED_PORT=11880, SCHEDULER_PORT=13001,
+#              METABASE_PORT=13005, WEBHOOK_SINK_PORT=18088,
+#              BENCH_IMAGE=comp_demo-bench:p8-test
+powershell -ExecutionPolicy Bypass -File .\setup\up.ps1 `
+  -Project comp_demo_p8 -EnvFile .env.p8test -SkipScheduler
+```
+
+`BENCH_IMAGE` selects the bench image, so a test run never overwrites the tag the
+live demo uses. `-SkipScheduler` leaves the standalone planner alone.
