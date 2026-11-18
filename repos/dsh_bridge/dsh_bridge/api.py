@@ -1,12 +1,41 @@
 import frappe
+from frappe import _
 
 @frappe.whitelist(allow_guest=False)
 def handle_a2ui_action():
-    """Receives button click actions from the rendered A2UI cards."""
-    # form_dict captures both GET query parameters and POST JSON body values
-    action_type = frappe.local.form_dict.get("action_type")
-    card_id = frappe.local.form_dict.get("card_id")
-    
-    # Process your logic here...
-    
-    return {"status": "success", "processed_action": action_type}
+    try:
+        # Parse incoming data from the request
+        data = frappe.local.form_dict
+        action = data.get("action")
+        
+        if not action:
+            frappe.throw(_("Missing required parameter: 'action'"), title=_("Invalid Request"))
+            
+        # Example business logic / plugin execution
+        result = process_action_logic(action)
+        
+        return {
+            "status": "success",
+            "message": "Action processed successfully",
+            "data": result
+        }
+
+    except frappe.ValidationError as e:
+        # Catch business logic / validation failures gracefully
+        frappe.local.response["http_status_code"] = 417
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+    except Exception as e:
+        # Catch unexpected server exceptions safely
+        frappe.log_error(frappe.get_traceback(), "DSH Bridge Action Error")
+        frappe.local.response["http_status_code"] = 500
+        return {
+            "status": "error",
+            "message": "An internal error occurred while processing the action."
+        }
+
+def process_action_logic(action):
+    # Your custom plugin logic here
+    return {"processed_action": action}
