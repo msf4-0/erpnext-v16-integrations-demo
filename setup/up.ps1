@@ -561,7 +561,10 @@ $siteExpr = '$(cat /home/frappe/frappe-bench/sites/currentsite.txt 2>/dev/null |
 $ssDoc = '0x53797374656d2053657474696e6773'   # System Settings
 $ssFld = '0x73657475705f636f6d706c657465'     # setup_complete
 $sqlRead = "select ifnull((select value from tabSingles where doctype = $ssDoc and field = $ssFld limit 1), 0) as v"
-$setupVal = (Invoke-Bench ("cd /home/frappe/frappe-bench && bench --site " + $siteExpr + " mariadb -N -B -e '" + $sqlRead + "'") -Capture).Output.Trim()
+$setupRaw = (Invoke-Bench ("cd /home/frappe/frappe-bench && bench --site " + $siteExpr + " mariadb -N -B -e '" + $sqlRead + "'") -Capture).Output
+# Output is $null when the capture helper returns nothing (mariadb hiccup, site
+# not fully migrated); `.Trim()` on $null aborted the whole run at step 7d.
+$setupVal = if ($setupRaw) { ([string]$setupRaw).Trim() } else { '' }
 if ($setupVal -match '^\s*(1|True)\s*$') {
     Write-Info 'setup_complete already 1'
 } else {
@@ -579,7 +582,8 @@ $hpKey = '0x6465736b746f703a686f6d655f70616765'   # desktop:home_page
 $hpRoot = '0x5f5f64656661756c74'                   # __default
 $hpGood = '0x776f726b737061636573'                 # workspaces
 $sqlHp = "select ifnull((select defvalue from tabDefaultValue where defkey = $hpKey and parent = $hpRoot limit 1), 0) as v"
-$hpVal = (Invoke-Bench ("cd /home/frappe/frappe-bench && bench --site " + $siteExpr + " mariadb -N -B -e '" + $sqlHp + "'") -Capture).Output.Trim()
+$hpRaw = (Invoke-Bench ("cd /home/frappe/frappe-bench && bench --site " + $siteExpr + " mariadb -N -B -e '" + $sqlHp + "'") -Capture).Output
+$hpVal = if ($hpRaw) { ([string]$hpRaw).Trim() } else { '' }
 if ($hpVal -eq 'setup-wizard') {
     $sqlHpSet = "update tabDefaultValue set defvalue = $hpGood where defkey = $hpKey and parent = $hpRoot"
     Invoke-Bench ("cd /home/frappe/frappe-bench && bench --site " + $siteExpr + " mariadb -e '" + $sqlHpSet + "'") | Out-Null
