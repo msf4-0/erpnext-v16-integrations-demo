@@ -1,4 +1,4 @@
-# Manual Linux setup — comp_demo (no scripts)
+﻿# Manual Linux setup â€” comp_demo (no scripts)
 
 Everything below is plain Docker/Compose and `bench` CLI. No `.ps1`, no `.sh`.
 
@@ -28,7 +28,7 @@ docker compose version               # v2.x
 docker info                          # daemon reachable
 ```
 
-Disk: ~15–20 GB free. RAM: 8 GB comfortable (Metabase alone is capped at 3 GB).
+Disk: ~15â€“20 GB free. RAM: 8 GB comfortable (Metabase alone is capped at 3 GB).
 
 ## 1. Configure `.env`
 
@@ -53,7 +53,7 @@ ERPNEXT_ADMIN_PASSWORD=<pick one>
 
 Leave `BENCH_IMAGE` empty so it resolves to the tag you build in step 2.
 
-## 2. Build the bench image (once, ~10–25 min)
+## 2. Build the bench image (once, ~10â€“25 min)
 
 ```bash
 cd /path/to/erpnextcomp_demo
@@ -130,7 +130,7 @@ Nothing that says `asset-check: MISSING ...`. `Ctrl-C` leaves the container
 running (it is detached).
 
 The compose `command:` starts `bench serve` **plus** `bench schedule` and
-`bench worker` — do not run those by hand.
+`bench worker` â€” do not run those by hand.
 
 ## 6. Verify
 
@@ -139,7 +139,7 @@ curl -sS -H 'Host: frontend' http://localhost:8000/api/method/ping
 $COMPOSE exec bench bench --site frontend list-apps
 ```
 
-Browser: <http://localhost:8000> — site `frontend`, login `Administrator`
+Browser: <http://localhost:8000> â€” site `frontend`, login `Administrator`
 with the password baked into the dump (the demo default is `admin`;
 `ERPNEXT_ADMIN_PASSWORD`/`ADMIN_PASSWORD` in `.env` only affect the throwaway
 site that `bench new-site` makes *before* the restore overwrites auth).
@@ -169,7 +169,7 @@ $COMPOSE exec bench bash -lc 'cd /home/frappe/frappe-bench && \
 ```
 
 Bind-mounted sources: `barcode_shrdc`, `item_tracking`, `metabase_integration`,
-`my_invois` (paths in `docker-compose.yml` lines 146–163). `shopify` and
+`my_invois` (paths in `docker-compose.yml` lines 146â€“163). `shopify` and
 `eu_einvoice` are baked into the image.
 
 ### Rebuild front-end assets (only if you changed app code)
@@ -180,7 +180,7 @@ $COMPOSE exec bench bash -lc 'export PATH="$(ls -d /home/frappe/.nvm/versions/no
 $COMPOSE restart bench
 ```
 
-### Barcode → PNG/PDF dependencies (root, runtime layer)
+### Barcode â†’ PNG/PDF dependencies (root, runtime layer)
 
 Already in `comp_demo-bench:v16`; only needed if you built a different base:
 
@@ -192,7 +192,7 @@ $COMPOSE exec bench bash -lc 'cd /home/frappe/frappe-bench && \
   ./env/bin/python -c "import reportlab, rlPyCairo; print(\"render deps OK\")"'
 ```
 
-These live in the container layer — re-run after any image rebuild.
+These live in the container layer â€” re-run after any image rebuild.
 
 ## 7. Optional services
 
@@ -208,9 +208,9 @@ $COMPOSE up -d node-red metabase
   without them, API calls 401 until you mint a token pair and put it in `.env`,
   then `$COMPOSE up -d scheduler` again.
 * Metabase is seeded by the `seed` service (`admin@demo.local` /
-  `compdemo2026`, port 3005).
+  `DemoPass2026!`, port 3005).
 * Node-RED without `SANDBOX`/Shopify creds starts but its Shopify nodes idle.
-* `ngrok` is deliberately not a container — skip it unless you need Shopify
+* `ngrok` is deliberately not a container â€” skip it unless you need Shopify
   webhooks from the internet.
 
 ## 8. Full site creation without the dump (fresh, empty ERPNext)
@@ -243,15 +243,15 @@ service name `db`, never `127.0.0.1`.
 |---|---|
 | `required variable ERPNEXT_BASE is missing a value` | you dropped `--env-file versions.env` |
 | `pull access denied for comp_demo-bench` | step 2 not done, or tagged with a different name |
-| `(1045) Access denied for user '...'@'172.x.x.x'` | bridge IP changed; restart `bench` — its startup block re-asserts the `'%'` grant. If you bypassed it: `$COMPOSE exec -T db sh -lc 'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb -uroot -e "SELECT user,host FROM mysql.user"'` |
+| `(1045) Access denied for user '...'@'172.x.x.x'` | bridge IP changed; restart `bench` â€” its startup block re-asserts the `'%'` grant. If you bypassed it: `$COMPOSE exec -T db sh -lc 'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" mariadb -uroot -e "SELECT user,host FROM mysql.user"'` |
 | `404 localhost does not exist` | no default site: `$COMPOSE exec bench bench --site frontend list-apps`, then `$COMPOSE exec bench bench use frontend`; the container also needs a restart to reload `default_site` |
-| Desk page reloads in a loop | `asset-check: MISSING /assets/...` in `$COMPOSE logs bench` — the referenced bundle was never built; run `bench build` (step 6) |
+| Desk page reloads in a loop | `asset-check: MISSING /assets/...` in `$COMPOSE logs bench` â€” the referenced bundle was never built; run `bench build` (step 6) |
 | `ModuleNotFoundError: No module named '<app>'` | `.pth` was lost on container recreate; re-run step 6.2 and `$COMPOSE restart bench` |
 | `bin/sh: node: not found` during `bench build` | node is under `~/.nvm`; export the PATH as shown in step 6 |
 | `Permission denied` reading `./repos` on Fedora/RHEL | SELinux blocks the bind mount; `sudo chcon -Rt svirt_sandbox_file_t /path/to/erpnextcomp_demo` (or add `:z` to those volumes) |
 | Everything `root`-owned after `sudo` docker | `$COMPOSE exec -u root bench chown -R frappe:frappe /home/frappe/frappe-bench/sites` |
 
-Remember: `$COMPOSE exec` runs as **`frappe`** by default — correct. Use
+Remember: `$COMPOSE exec` runs as **`frappe`** by default â€” correct. Use
 `-u root` only for `apt-get`.
 
 ## 10. Stop / reset
@@ -261,3 +261,4 @@ $COMPOSE stop                 # keep data
 $COMPOSE down                 # remove containers, keep db_data + bench_sites
 $COMPOSE down -v              # DESTRUCTIVE: drops the site DB and bench tree
 ```
+
