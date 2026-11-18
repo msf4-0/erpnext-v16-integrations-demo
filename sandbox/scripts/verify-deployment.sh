@@ -72,6 +72,8 @@ bench_out="$(compose exec -T bench bash -lc "
   cd /home/frappe/frappe-bench || exit 3
   echo '__VERSION__'
   bench --site $SITE version 2>&1 || echo '__VERSION_FAILED__'
+  echo '__DBAPPS__'
+  bench --site $SITE execute frappe.get_installed_apps 2>&1
   echo '__LISTAPPS__'
   bench --site $SITE list-apps 2>&1 || echo '__LISTAPPS_FAILED__'
   echo '__IMPORT__'
@@ -94,25 +96,34 @@ if printf '%s' "$bench_out" | grep -q '__VERSION_FAILED__'; then
     info "$(printf '%s' "$bench_out" | sed -n '/__VERSION__/,/__VERSION_FAILED__/p' | tail -3 | tr '\n' ' ')"
 else
     ok "bench --site $SITE version works"
-    printf '%s' "$bench_out" | sed -n '/__VERSION__/,/__LISTAPPS__/p' | sed '1d;$d' | sed 's/^/      /'
+    printf '%s' "$bench_out" | sed -n '/__VERSION__/,/__DBAPPS__/p' | sed '1d;$d' | sed 's/^/      /'
 fi
 
-if printf '%s' "$bench_out" | grep -q '__LISTAPPS_FAILED__'; then
-    bad "bench list-apps failed (site missing?)"
+dbapps_raw="$(printf '%s' "$bench_out" | sed -n '/__DBAPPS__/,/__LISTAPPS__/p' | sed '1d;$d')"
+dbapps="$(printf '%s\n' "$dbapps_raw" | tr -d "[]'\"" | tr ',' '\n' | tr -d ' ' | sed '/^$/d')"
+listapps="$(printf '%s' "$bench_out" | sed -n '/__LISTAPPS__/,/__IMPORT__/p' | sed '1d;$d')"
+
+# The DB (tabInstalled Application) is authoritative: on this bench
+# `bench list-apps` can under-report a fully installed site, so it is printed
+# for information and NOT used to decide whether an app is installed.
+if [ -z "$dbapps" ]; then
+    bad "frappe.get_installed_apps returned nothing (site missing?)"
 else
-    listapps="$(printf '%s' "$bench_out" | sed -n '/__LISTAPPS__/,/__IMPORT__/p' | sed '1d;$d')"
     missing=""
     for app in $APPS; do
-        n="$(printf '%s\n' "$listapps" | grep -cE "^$app([[:space:]]|$)")"
+        n="$(printf '%s\n' "$dbapps" | grep -cx "$app")"
         if [ "$n" -eq 0 ]; then missing="$missing $app"; fi
-        if [ "$n" -gt 1 ]; then bad "$app is listed $n times"; fi
+        if [ "$n" -gt 1 ]; then bad "$app is installed $n times"; fi
     done
     if [ -z "$missing" ]; then
-        ok "all 8 apps installed exactly once"
+        ok "all 8 apps installed exactly once (tabInstalled Application)"
     else
-        bad "apps missing from list-apps:$missing"
+        bad "apps missing from tabInstalled Application:$missing"
     fi
-    printf '%s\n' "$listapps" | sed 's/^/      /'
+    printf '%s\n' "$dbapps" | sed 's/^/      /'
+fi
+if [ -n "$(printf '%s' "$listapps" | tr -d '[:space:]')" ]; then
+    info "bench list-apps: $(printf '%s' "$listapps" | tr '\n' ' ' | tr -s ' ')"
 fi
 
 if printf '%s' "$bench_out" | grep -qE '^IMPORT_FAILURES 0$'; then
