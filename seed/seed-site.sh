@@ -173,6 +173,22 @@ case "${ITEM_COUNT}" in
     ''|0) echo "seed: ERROR - restore produced no Item rows"; exit 1 ;;
 esac
 
+# --- go-kart demo catalogue -------------------------------------------------
+# The committed dump predates the Go-Kart demo, and the `seed_demo_manufacturing`
+# patch only builds the generic 15-item dataset. Without this step a fresh clone
+# restores a site with no kart at all, which is easy to mistake for "the seeder
+# is broken". The seeder is idempotent: on a volume that already has the kart it
+# reports SKIPPED for every row, so it is safe on every boot.
+GOKART_SEEDER="/sandbox-scripts/seed-gokart-demo.py"
+if [ -f "${GOKART_SEEDER}" ]; then
+    echo "seed: go-kart demo catalogue (items, prices, BOM, serials)"
+    if ! SITE_NAME="${SITE}" /home/frappe/frappe-bench/env/bin/python "${GOKART_SEEDER}"; then
+        echo "seed: WARN go-kart seeding failed - the kart BOM will be missing" >&2
+    fi
+else
+    echo "seed: WARN ${GOKART_SEEDER} not mounted - skipping go-kart demo data" >&2
+fi
+
 # --- Metabase metadata (dashboards + the ERPNext data source) --------------
 # Metabase keeps its own metadata in the `metabase` schema, which a `bench
 # backup` of the SITE does not contain. Without this, every clone gets a blank

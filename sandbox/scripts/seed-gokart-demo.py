@@ -57,7 +57,15 @@ def company() -> str:
 
 COMP = company()
 CURRENCY = frappe.db.get_value("Company", COMP, "default_currency") or "MYR"
-ITEM_GROUP = frappe.db.get_value("Item Group", {"is_group": 0}, "name") or "Products"
+# Prefer the "Products" group the rest of the repo standardises on
+# (bootstrap_masters.py, seed_planner_demo.py, retrieve_product.py). The old
+# "first non-group" lookup returned whatever the DB happened to hand back first,
+# e.g. "Finished Goods", which put raw materials in the wrong group.
+ITEM_GROUP = (
+    frappe.db.get_value("Item Group", "Products", "name")
+    or frappe.db.get_value("Item Group", {"is_group": 0}, "name")
+    or "Products"
+)
 UOM = "Nos"
 SELLING = "Standard Selling"
 BUYING = "Standard Buying"
@@ -74,14 +82,30 @@ for pl in (SELLING, BUYING):
 # ---------------------------------------------------------------------------
 ITEMS = [
     # code, name, selling rate, buying rate, serial-tracked, description
-    ("GO-KART", "Go-Kart (assembled)", 4500.0, None, False,
+    # Every go-kart part is serial-tracked.  The restored demo database already
+    # carries serial rows for these codes (GKRT-001-####, WHL-001-####, ...), and
+    # a Serial No whose Item is not serial-tracked is a broken reference in
+    # ERPNext, so the flag has to be on for all of them.
+    ("GO-KART", "Go-Kart (assembled)", 4500.0, None, True,
      "Assembled go-kart - the finished good this demo builds."),
     ("FRM-001", "Frame", 1800.0, 1400.0, True,
      "Go-kart frame (go-kart demo item). Serial-tracked."),
-    ("WHL-001", "Wheel", 220.0, 150.0, False, "Go-kart wheel - four per kart."),
-    ("STR-001", "Steering Wheel", 310.0, 210.0, False, "Go-kart steering wheel - one per kart."),
-    ("SEAT-001", "Seat", 260.0, 180.0, False, "Go-kart seat - one per kart."),
+    ("WHL-001", "Wheel", 220.0, 150.0, True, "Go-kart wheel - four per kart."),
+    ("STR-001", "Steering Wheel", 310.0, 210.0, True, "Go-kart steering wheel - one per kart."),
+    ("SEAT-001", "Seat", 260.0, 180.0, True, "Go-kart seat - one per kart."),
 ]
+
+
+def _may_track_serials(code: str) -> bool:
+    """Can this item be switched to serial-tracked without breaking accounting?
+
+    ERPNext refuses to change `has_serial_no` once a submitted Stock Entry
+    points at the item.  Asking first is cleaner than triggering that error and
+    rolling back: a demo seeder must never out-vote posted stock transactions.
+    """
+    if frappe.db.get_value("Item", code, "has_serial_no"):
+        return True  # already on - nothing to change
+    return not frappe.db.exists("Stock Ledger Entry", {"item_code": code})
 
 
 def ensure_item(code, name, selling, buying, serial, description) -> None:
@@ -96,11 +120,19 @@ def ensure_item(code, name, selling, buying, serial, description) -> None:
         "is_purchase_item": 1,
         "include_item_in_manufacturing": 1,
         "has_serial_no": 1 if serial else 0,
-        "company": COMP,
+        # No `company` here on purpose: Item has no company field, so setting one
+        # never persists and every run would look "changed" (the seeder then
+        # rewrites all five items on each converge and never reports "current").
+        # Company-scoped defaults belong on Item Default, not Item.
     }
     if serial:
-        values["serial_no_series"] = f"{code}-.####"
-        values["has_batch_no"] = 0
+        if _may_track_serials(code):
+            values["serial_no_series"] = f"{code}-.####"
+            values["has_batch_no"] = 0
+        else:
+            # Leave the flag exactly as posted stock transactions expect it.
+            values.pop("has_serial_no", None)
+            note("skipped", f"Item {code} stays non-serial (posted stock entries pin the flag)")
     if frappe.db.exists("Item", code):
         doc = frappe.get_doc("Item", code)
         changed = False
@@ -164,6 +196,34 @@ except Exception as exc:  # noqa: BLE001
     frappe.db.rollback()
 
 # ---------------------------------------------------------------------------
+# adopt the serial numbers left behind by the retired barcode go-kart
+# ---------------------------------------------------------------------------
+# The old barcode demo serialised six items.  Three of those codes no longer
+# exist, so their Serial No rows point at nothing.  Where a retired code has an
+# exact equivalent in this dataset the serials are re-pointed instead of being
+# deleted: the serial *string* is kept (it may be printed on a label / QR code),
+# only the owning Item changes.
+LEGACY_SERIAL_REMAP = {"GKRT-001": "GO-KART", "SET-001": "SEAT-001"}
+# HST-001 ("Handling") has no counterpart in this four-part recipe, so its
+# serials are deliberately left alone and reported - deleting demo records is a
+# decision for the operator, not for an idempotent seeder.
+UNMAPPED_SERIAL_HINT = {"HST-001": "no matching item in this dataset"}
+try:
+    for legacy_code, target in LEGACY_SERIAL_REMAP.items():
+        rows = frappe.get_all("Serial No", filters={"item_code": legacy_code}, fields=["name"])
+        for row in rows:
+            frappe.db.set_value("Serial No", row.name, "item_code", target, update_modified=False)
+        note("updated" if rows else "skipped",
+             f"Serial No {legacy_code}-* re-pointed to {target} ({len(rows)} rows)")
+    for legacy_code, why in UNMAPPED_SERIAL_HINT.items():
+        left = frappe.db.count("Serial No", {"item_code": legacy_code})
+        if left:
+            note("skipped", f"Serial No {legacy_code}-* left as-is ({left} rows, {why})")
+except Exception as exc:  # noqa: BLE001
+    note("errors", f"Serial No re-point: {type(exc).__name__}: {exc}")
+    frappe.db.rollback()
+
+# ---------------------------------------------------------------------------
 # BOM: one kart = 1 frame + 4 wheels + 1 steering wheel + 1 seat
 # ---------------------------------------------------------------------------
 BOM_ITEMS = [("FRM-001", 1), ("WHL-001", 4), ("STR-001", 1), ("SEAT-001", 1)]
@@ -185,7 +245,13 @@ try:
                 "with_operations": 0,
                 "is_active": 1,
                 "is_default": 1,
-                "rm_cost_as_per": "Valuation Rate",
+                # "Price List" reads each component's Standard Buying rate, which
+                # this script always creates. "Valuation Rate" reads the stock
+                # valuation instead, and on a fresh site there is no stock - the
+                # BOM then reports a total cost of 0.00, which is what the demo
+                # used to show. Every other BOM in this repo uses "Price List".
+                "rm_cost_as_per": "Price List",
+                "buying_price_list": BUYING,
                 "items": [
                     {"item_code": code, "qty": qty, "uom": UOM, "stock_uom": UOM}
                     for code, qty in BOM_ITEMS

@@ -1018,6 +1018,36 @@ if (-not $publicUrl) {
 }
 
 # ---------------------------------------------------------------------------
+# 9b. demo catalogue (go-kart) - converge step
+# ---------------------------------------------------------------------------
+# The `seed_demo_manufacturing` patch used to DELETE these five items on every
+# migrate, so the kart vanished on any rebuild. It no longer does (see
+# repos/barcode-shrdc-v16-fixed/barcode_shrdc/demo.py), but a restored dump still
+# carries no kart, so converge has to be able to put it back. The seeder is
+# idempotent - it reports SKIPPED when everything is already in place.
+Write-Step '9b/10  demo catalogue (go-kart items + BOM)'
+$gokartScript = Join-Path $SandboxDir 'scripts\seed-gokart-demo.py'
+if (Test-Path $gokartScript) {
+    $tmpSeed = '/tmp/scripts/seed-gokart-demo.py'
+    Invoke-BenchRoot 'mkdir -p /tmp/scripts' | Out-Null
+    Invoke-Docker -Arguments @('cp', $gokartScript, "${BenchName}:$tmpSeed") -Capture | Out-Null
+    Invoke-BenchRoot "chown frappe:frappe $tmpSeed" | Out-Null
+    $seedTxt = ((Invoke-Bench "cd /home/frappe/frappe-bench && SITE_NAME=$siteName ./env/bin/python $tmpSeed" -Capture).Output | Out-String)
+    if ($seedTxt -match 'go-kart demo seed: OK') {
+        $seedWrites = @($seedTxt -split "`n" | Where-Object { $_ -match '^\s+(CREATED|UPDATED)\s' })
+        if ($seedWrites.Count -gt 0) {
+            Write-Change "go-kart catalogue converged ($($seedWrites.Count) record(s) created or updated)"
+        } else {
+            Write-Ok 'go-kart catalogue already current (GO-KART + BOM present)'
+        }
+    } else {
+        Write-Fail "go-kart seeding failed: $($seedTxt.Trim())"
+    }
+} else {
+    Write-Fail "go-kart seeder missing: $gokartScript"
+}
+
+# ---------------------------------------------------------------------------
 # 10. verify
 # ---------------------------------------------------------------------------
 Write-Step '10/10  verification'

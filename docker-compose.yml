@@ -213,6 +213,10 @@ services:
     volumes:
       - bench_sites:/home/frappe/frappe-bench/sites
       - ./seed:/seed:ro
+      # The go-kart demo seeder is a repo script, not image content. Mounting it
+      # read-only lets seed-site.sh re-add the kart after a restore without
+      # baking another copy into the image.
+      - ./sandbox/scripts:/sandbox-scripts:ro
       # P7: app sources are no longer mounted here either - they are baked into
       # the image and installed by the image-baked /usr/local/bin/install-all-apps.sh.
     environment:

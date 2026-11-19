@@ -94,17 +94,18 @@ DEMO_BOMS = (
 	),
 )
 
-# Everything created by the retired Go-Kart / Planner demo.  BOMs are removed
-# first; items that are still referenced by submitted transactions are disabled
-# rather than force-deleted so the cleanup can never corrupt a live site.
+# Everything created by the retired Planner demo, plus the retired *barcode*
+# go-kart (GKRT-001 and friends).  BOMs are removed first; items that are still
+# referenced by submitted transactions are disabled rather than force-deleted so
+# the cleanup can never corrupt a live site.
 LEGACY_ITEM_PREFIXES = ("PLN-", "GKRT-")
-LEGACY_ITEM_CODES = (
-	"FRM-001",
-	"WHL-001",
-	"STR-001",
-	"HST-001",
-	"SET-001",
-)
+# FRM-001 / WHL-001 / STR-001 / HST-001 / SET-001 used to be listed here as
+# "go-kart" leftovers.  They are NOT leftovers any more: the Go-Kart demo
+# (sandbox/scripts/seed-gokart-demo.py) reuses those exact codes for its Frame,
+# Wheel, Steering Wheel, and Seat.  Listing them here made every `bench migrate`
+# delete the go-kart BOM and its components, which is why the demo kept losing
+# the kart after a rebuild.  Kept empty on purpose - see docs/DEPLOY.md.
+LEGACY_ITEM_CODES: tuple[str, ...] = ()
 
 
 def _ensure_item_group(group_name: str, parent: str) -> None:

@@ -14,6 +14,7 @@ script prints relative paths.
 
 | Platform | Command | What it does |
 | --- | --- | --- |
+| Windows (from repo root) | `.\setup.ps1` | **Forwarder at the repository root.** Identical to `.\setup\setup.ps1`, but the command you type never changes if this folder is reorganised again. Arguments pass straight through: `.\setup.ps1 -VerifyOnly`, `-Full`, `-Full -Wipe`. |
 | Windows | `powershell -ExecutionPolicy Bypass -File .\setup\start.ps1` | Creates `.env` if missing, pulls (or builds) the bench image, creates/starts the containers in a safe order, waits for the seed restore, waits for ERPNext, then converges. |
 | Windows (shortcut) | `.\setup\setup.cmd` | Same as running `setup.ps1` with execution-policy bypass — one-line launcher. |
 | Linux / macOS | `bash ./setup/start.sh` | Bash twin of `start.ps1`: pull → seed → start → wiring (uses `pwsh` for the wiring step when available). |
