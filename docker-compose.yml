@@ -140,7 +140,7 @@ services:
       # app would add a second, conflicting e-invoice doctype set. Install it
       # deliberately with the three commands in docs/ARCHITECTURE.md.
       - ./repos/my_invois:/home/frappe/frappe-bench/apps/my_invois
-      - ./repos/dsh:/home/frappe/frappe-bench/apps/dsh
+      - ./repos/dsh:/home/frappe/frappe-bench/apps/dsh_bridge
     depends_on:
       # A fresh clone has an empty bench_sites volume, so bench would serve
       # "404 localhost does not exist". `seed` restores the demo DB first, then
@@ -199,7 +199,7 @@ services:
       # Mounting it here means `bench migrate` in the seeder runs the current
       # source, not the older copy baked into the image.
       - ./repos/barcode-shrdc-v16-fixed:/home/frappe/frappe-bench/apps/barcode_shrdc
-      - ./repos/dsh:/home/frappe/frappe-bench/apps/dsh
+      - ./repos/dsh:/home/frappe/frappe-bench/apps/dsh_bridge
     environment:
       - SITE_NAME=${SITE_NAME:-frontend}
       - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin}
