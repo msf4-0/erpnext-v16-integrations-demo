@@ -50,9 +50,9 @@ cp .env.example .env
 #    SHOPIFY_CLIENT_SECRET, NGROK_AUTHTOKEN. Leave them blank to skip those
 #    integrations - a blank value is reported as SKIPPED, not as a failure.
 
-powershell -ExecutionPolicy Bypass -File .\setup\up          # Windows: full integration setup
-bash ./setup/$2                                         # Linux: core ERPNext site
-bash ./setup/$2                               # Linux: install custom apps
+powershell -ExecutionPolicy Bypass -File .\setup\up.ps1    # Windows: full integration setup
+bash ./setup/up-linux.sh                                   # Linux: image + seed + 7 apps + full stack
+bash ./setup/install-apps-linux.sh                         # Linux: re-ensure the apps only
 ```
 
 The Linux commands install the custom apps but do not configure the planner,

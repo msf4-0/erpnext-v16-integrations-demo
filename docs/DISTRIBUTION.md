@@ -51,7 +51,7 @@ release gate; 7–8 are quality gates.
 | 4 | Cold start ≤ **15 min** on a 20 Mbit/s link (pull + 5–6 min seed + wiring) | time `setup/start` from a clean Docker state |
 | 5 | No secrets and no machine-specific paths are needed for the local demo | fresh clone has no `.env`; `setup/start` creates it from `.env.example`; `ci.yml` hygiene job passes |
 | 6 | The published image matches `main` (apps import, templates non-empty) | `ci.yml` smoke job: `frappe, erpnext, barcode_shrdc, shopify, reportlab, qrcode, PIL, drafthorse, saxonche` all import |
-| 7 | Every advertised feature is either working or explicitly reported | `setup/setup -VerifyOnly` prints a per-feature table; `setup/up` exits non-zero on a missing advertised feature |
+| 7 | Every advertised feature is either working or explicitly reported | `.\setup\setup.ps1 -VerifyOnly` prints a per-feature table; `setup/up` exits non-zero on a missing advertised feature |
 | 8 | The image platform is documented | currently **linux/amd64 only**; ARM hosts must use `--platform linux/amd64` (Docker Desktop emulation) |
 
 Not part of the gate: Shopify, ngrok and the planner API tokens need per-machine
@@ -97,7 +97,7 @@ documented in README section 9.
    ```powershell
    git clone https://github.com/msf4-0/erpnext-v16-integrations-demo.git
    cd erpnext-v16-integrations-demo
-   powershell -ExecutionPolicy Bypass -File .\setup\start
+   powershell -ExecutionPolicy Bypass -File .\setup\start.ps1
    ```
 
    Expected: `bench image pulled in …` (not `building`), seed exits 0, ERPNext

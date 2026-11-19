@@ -12,23 +12,25 @@ Node-RED, plus the **erpnext-planner** and module-* agents used to build it.
 
 ```powershell
 copy .env.example .env                        # if .env is missing (holds secrets — do not commit)
-powershell -File .\setup\up  # full build: stack + provision v16 + install apps + seed + verify
-powershell -File .\setup\up -SkipProvision   # reuse an existing site (skip the long v16 provision)
-powershell -File .\setup\up -SkipInstall     # reuse installed apps
-powershell -File .\setup\up -SkipScheduler   # skip the planner image build (~6 min)
+powershell -File .\setup\up.ps1  # full build: stack + provision v16 + install apps + seed + verify
+powershell -File .\setup\up.ps1 -SkipProvision   # reuse an existing site (skip the long v16 provision)
+powershell -File .\setup\up.ps1 -SkipInstall     # reuse installed apps
+powershell -File .\setup\up.ps1 -SkipScheduler   # skip the planner image build (~6 min)
 ```
 
 On Linux, use the native Bash core-site launcher (no PowerShell required):
 
 ```bash
 cp .env.example .env   # if missing; set passwords before sharing the site
-bash ./setup/$2
-bash ./setup/$2
+bash ./setup/up-linux.sh            # build image, restore demo site, install 7 apps, start the stack
+bash ./setup/install-apps-linux.sh  # re-ensure the apps on an existing site (idempotent)
 ```
 
-The first command provisions core ERPNext; the second installs barcode, Shopify,
-e-invoicing, and item-tracking apps. Neither configures the planner, Metabase,
-Node-RED, Shopify credentials, ngrok, or demo data.
+`up-linux.sh` is the whole deployment: it builds the image, restores the demo
+site with demo data, installs all seven apps and starts the full stack (Metabase,
+Node-RED, planner, webhook sink). `install-apps-linux.sh` only re-ensures the
+apps on an existing site. Neither configures Shopify credentials, ngrok or the
+webhooks.
 
 Full build ≈ 25–35 min. Status/down/logs (also usable directly):
 

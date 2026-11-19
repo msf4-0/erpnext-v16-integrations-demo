@@ -79,8 +79,8 @@ app.
 
 | Platform | First command | Notes |
 |---|---|---|
-| Windows | `powershell -ExecutionPolicy Bypass -File .\setup\up` | `setup/start` wraps pull → seed → start → wire; `setup/setup` is convergence/verification (`-VerifyOnly`) |
-| Linux | `bash ./setup/$2` then `bash ./setup/$2` | `up-linux.sh` deliberately uses `docker compose up -d`; on Windows that can hang |
+| Windows | `powershell -ExecutionPolicy Bypass -File .\setup\up.ps1` | `setup/start` wraps pull → seed → start → wire; `setup/setup` is convergence/verification (`-VerifyOnly`) |
+| Linux | `bash ./setup/up-linux.sh` | one command: builds the image, seeds, installs 7 apps, starts the stack; uses `compose create` + `docker start` (never `up -d`) |
 | Either | — | There is no `sandbox/up.ps1` any more; it was deleted 2026-11-17 |
 
 ## Regenerate the measurements

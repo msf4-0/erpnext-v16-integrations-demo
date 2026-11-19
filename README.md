@@ -31,21 +31,20 @@ See [`THIRD-PARTY.md`](THIRD-PARTY.md) for vendored-app licensing and redistribu
 Run from the repository root:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\setup\setup
+powershell -ExecutionPolicy Bypass -File .\setup\setup.ps1
 ```
 
-On Linux, use the native Bash launcher for a core ERPNext site:
+On Linux, use the native Bash launcher:
 
 ```bash
-cp .env.example .env       # if missing; edit the passwords
-./setup/$2              # provision core ERPNext
-./setup/$2    # install barcode, Shopify, e-invoicing, item tracking
+cp .env.example .env            # if missing; edit the passwords
+bash ./setup/up-linux.sh        # build image, restore demo site, install 7 apps, start the stack
 ```
 
-The app installer uses the repo's mounted app sources and installation helpers.
-It does not configure Shopify credentials, Node-RED, ngrok, the planner,
-Metabase, or demo data. The full integration workflow remains in
-`setup/up` / `setup/setup`.
+The seven apps are baked into the bench image at build time (there are no bind
+mounts); `bash ./setup/install-apps-linux.sh` re-ensures them on an existing site.
+It does not mint Shopify credentials, start ngrok or rewire the webhooks. The
+full integration workflow remains in `setup/up.ps1` / `setup/setup.ps1`.
 
 Notes:
 
@@ -61,16 +60,16 @@ flags.
 ### 3a. Fresh clone — one command
 
 > **Clean machine with only Docker installed?** Read [`docs/DEPLOY.md`](docs/DEPLOY.md) instead.
-> It is the P7 guide: clone → `cp .env.example .env` → fill passwords → `./setup/$2`, and it
-> explains what is built automatically, how to verify all **eight** apps
+> It is the P7 guide: clone → `cp .env.example .env` → fill passwords → `bash ./setup/up-linux.sh`, and it
+> explains what is built automatically, how to verify all **seven** apps
 > (`./sandbox/scripts/verify-deployment.sh`), and what to do when a build fails.
-> On Linux/macOS `./setup/$2` now builds the self-contained bench image *and* installs every
+> On Linux/macOS `bash ./setup/up-linux.sh` now builds the self-contained bench image *and* installs every
 > app, so no second installer step is needed.
 
 ```powershell
 git clone https://github.com/msf4-0/erpnext-v16-integrations-demo.git
 cd erpnext-v16-integrations-demo
-powershell -ExecutionPolicy Bypass -File .\setup\start
+powershell -ExecutionPolicy Bypass -File .\setup\start.ps1
 ```
 
 `setup/start` is the entry point for someone who has never seen this project:
@@ -120,7 +119,7 @@ docker compose create
 docker start comp_demo-db-1 comp_demo-redis-cache-1 comp_demo-redis-queue-1
 docker start comp_demo-seed-1          # wait until it exits 0
 docker start comp_demo-bench-1 comp_demo-node-red-1 comp_demo-metabase-1
-powershell -ExecutionPolicy Bypass -File .\setup\setup -NonInteractive -SkipTunnel
+powershell -ExecutionPolicy Bypass -File .\setup\setup.ps1 -NonInteractive -SkipTunnel
 ```
 
 `docker compose up -d` hangs on some Docker Desktop hosts; `create` + `start` is
@@ -149,7 +148,7 @@ The four integrations that need external credentials (planner API, Shopify,
 ngrok, Metabase) need one more command each, and `.\setup\setup` does the first
 three in one go.
 
-Nothing above is silent: `setup/setup -VerifyOnly` prints a per-feature health
+Nothing above is silent: `.\setup\setup.ps1 -VerifyOnly` prints a per-feature health
 report, and `setup/up` exits non-zero when an advertised feature is missing.
 
 ## 4. Configuration (.env)
@@ -174,29 +173,29 @@ All secrets live in `.env` (git-ignored). The repo ships `.env.example` with `__
 For the first build or a deliberate full reprovision:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\setup\up
+powershell -ExecutionPolicy Bypass -File .\setup\up.ps1
 ```
 
 On Linux:
 
 ```bash
-bash ./setup/$2
-bash ./setup/$2
+bash ./setup/up-linux.sh
 ```
 
-The first command provisions core ERPNext; the second installs the custom apps.
-Neither configures the optional integrations described below.
+That one command builds the image, restores the demo site, installs all seven
+apps and starts the full stack (ERPNext, Metabase, Node-RED, planner, webhook
+sink). It does not mint Shopify tokens, start ngrok or rewire the webhooks.
 
 Every other session:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\setup\setup
+powershell -ExecutionPolicy Bypass -File .\setup\setup.ps1
 ```
 
-On Linux, rerun `bash ./setup/$2` to start/reuse the core site, and
-`bash ./setup/$2` to ensure the custom apps are installed.
+On Linux, rerun `bash ./setup/up-linux.sh` to converge (the seed exits early and
+the installer is a no-op) or `bash ./setup/start.sh` to start an existing stack.
 
-Expected end state for the full PowerShell workflow: ERPNext, Planner, and Node-RED are up, and the webhooks respond locally and through the tunnel. The Linux launcher verifies only the core ERPNext site.
+Expected end state for the full PowerShell workflow: ERPNext, Planner, and Node-RED are up, and the webhooks respond locally and through the tunnel. The Linux launcher starts the same services but does not configure Shopify or the tunnel.
 
 ## 6b. Your data: what survives what
 
@@ -223,9 +222,9 @@ Two things used to destroy work silently, and both are now blocked:
 So before anything destructive:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\setup\backup            # -> backups\<timestamp>\
-powershell -ExecutionPolicy Bypass -File .\setup\backup -RefreshSeed   # also update seed/ so clones get current data
-powershell -ExecutionPolicy Bypass -File .\setup\restore -Backup 20261116-110434
+powershell -ExecutionPolicy Bypass -File .\setup\backup.ps1            # -> backups\<timestamp>\
+powershell -ExecutionPolicy Bypass -File .\setup\backup.ps1 -RefreshSeed   # also update seed/ so clones get current data
+powershell -ExecutionPolicy Bypass -File .\setup\restore.ps1 -Backup 20261116-110434
 ```
 
 `setup/setup -Full` and `setup/up -Fresh` call `setup/backup` automatically and abort
@@ -272,8 +271,8 @@ The exact menu path to your Shopify app's client ID and secret depends on how th
 ### Manual steps
 
 1. Open `.env` and fill `SHOPIFY_STORE`, `SHOPIFY_API_VERSION`, `SHOPIFY_CLIENT_ID` and `SHOPIFY_CLIENT_SECRET`. Save the file.
-2. From the repository root, run `powershell -ExecutionPolicy Bypass -File .\setup\setup`. It mints the token, rebuilds the flow and restarts Node-RED.
-3. Check the output for `FIXED Shopify token minted: shpat_… valid 24h`, then run `setup/setup -VerifyOnly` for a read-only health report.
+2. From the repository root, run `powershell -ExecutionPolicy Bypass -File .\setup\setup.ps1`. It mints the token, rebuilds the flow and restarts Node-RED.
+3. Check the output for `FIXED Shopify token minted: shpat_… valid 24h`, then run `.\setup\setup.ps1 -VerifyOnly` for a read-only health report.
 
 If you only have a ready-made `shpat_…` token and no client credentials, paste it into `SHOPIFY_ACCESS_TOKEN` and run `setup/setup -SkipShopify -ForceFlow`. That skips minting and rebuilds the flow with the token you pasted. A token pasted this way cannot renew itself, so Shopify calls will return 401 once it expires.
 
@@ -281,7 +280,7 @@ Never paste these values into the flow JSON or share them in chat. Re-run `setup
 
 ## 10. Testing each feature
 
-Run `setup/setup -VerifyOnly` first. If it is clean, test each feature below. The seeded demo records came from the `setup/up` build. Steps marked "not inspected" rely on standard ERPNext behaviour. Use new documents for tests, not the seeded ones; test data persists across Docker restarts in the `db_data` volume.
+Run `.\setup\setup.ps1 -VerifyOnly` first. If it is clean, test each feature below. The seeded demo records came from the `setup/up` build. Steps marked "not inspected" rely on standard ERPNext behaviour. Use new documents for tests, not the seeded ones; test data persists across Docker restarts in the `db_data` volume.
 
 ### Barcode scanning
 
@@ -380,7 +379,7 @@ before any shared use.
 | `setup/backup` | Snapshot the site to `backups/<timestamp>/` on the host. `-RefreshSeed` also updates the tracked dump. | ~15 s |
 | `setup/restore` | Restore a `backups/<timestamp>/` snapshot (takes a safety backup first). | ~1 min |
 | `setup/setup` | Every normal session. Converges the existing stack to match `.env` and verifies it. Safe to repeat. | 2–4 min |
-| `setup/setup -VerifyOnly` | Read-only health report. | ~30 s |
+| `.\setup\setup.ps1 -VerifyOnly` | Read-only health report. | ~30 s |
 | `setup/setup -Full` | Runs `setup/up` first, then converges. | 25–35 min |
 | `setup/setup -Full -Wipe` | Destructive: deletes volumes for a clean slate. | 25–35 min |
 | `setup/setup -SkipShopify` / `-ForceFlow` | Skip minting a Shopify token / force a Node-RED flow rebuild. | – |
@@ -431,7 +430,7 @@ containers until those passwords are changed.
 | No Scan Barcode field | Barcode Client Scripts not loaded/disabled | Hard refresh (Ctrl+F5), then `/app/client-script` — confirm the four barcode scripts are enabled |
 | Desk reloads itself forever / "the site keeps restarting" | An **active** `app_include_js` 404s. Frappe reloads the desk when one of those assets fails, so the page loops instead of showing an error | `docker logs comp_demo-bench-1 \| grep asset-check`; then `curl -o NUL -w "%{http_code}`n" http://localhost:8000/assets/barcode_shrdc/js/scanner_barcode_patch.js` → must be `200`. Fix with `docker exec comp_demo-bench-1 bash -lc "cd /home/frappe/frappe-bench && export PATH=$(ls -d /home/frappe/.nvm/versions/node/*/bin | tail -1):$PATH && bench build --app barcode_shrdc"`, then restart the container |
 | A valid barcode is not found | Barcode not in that item's Barcodes table | Open the Item and add the barcode |
-| Barcode Printing image is broken | Image-rendering deps on the server | `setup/setup -VerifyOnly`, then `docker logs comp_demo-bench-1` |
+| Barcode Printing image is broken | Image-rendering deps on the server | `.\setup\setup.ps1 -VerifyOnly`, then `docker logs comp_demo-bench-1` |
 | Everything is empty after `docker compose down -v` / `-Wipe` | volumes deleted on purpose | Run `setup/up` |
 | `AttributeError: is_ajax` in the browser | Masking error — a real exception fired inside `frappe.init()` before `frappe.local` was populated | Read the **first** traceback in `docker logs comp_demo-bench-1`, not the `is_ajax` one. Most common real cause: `ModuleNotFoundError: No module named '<app>'` |
 | `ModuleNotFoundError` for an app that `bench list-apps` shows as installed | The running server's `sys.path` predates the app | `bench install-app` only writes a `.pth` that Python reads at startup — **restart the bench** (`docker restart comp_demo-bench-1`) after installing any app |

@@ -8,10 +8,10 @@ that true in every change.
 
 ```powershell
 # 1. From a clean clone, the demo must come up
-powershell -ExecutionPolicy Bypass -File .\setup\start -NoWiring
+powershell -ExecutionPolicy Bypass -File .\setup\start.ps1 -NoWiring
 
 # 2. Health must be clean for the features you touched
-powershell -ExecutionPolicy Bypass -File .\setup\setup -VerifyOnly
+powershell -ExecutionPolicy Bypass -File .\setup\setup.ps1 -VerifyOnly
 
 # 3. The working tree must be clean (CI fails on a dirty checkout)
 git status --short
@@ -51,7 +51,7 @@ never contacts LHDN and never reports success.
    as an example.
 3. **No secrets in the tree.** `.env` is git-ignored; only `.env.example` with
    `__FILL_ME__` placeholders is committed.
-4. **A new feature is not done until `setup/setup -VerifyOnly` reports it**, or
+4. **A new feature is not done until `.\setup\setup.ps1 -VerifyOnly` reports it**, or
    the README capability table says it needs credentials.
 5. **Keep the slow path explicit.** Anything that can take minutes (images,
    seeds, builds) must print what it is doing and why.
