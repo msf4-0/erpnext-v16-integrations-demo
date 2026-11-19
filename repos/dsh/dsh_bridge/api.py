@@ -1,127 +1,162 @@
+"""HTTP surface of the DSH bridge.
+
+Exactly three whitelisted endpoints:
+
+  handle_chat        conversation: prompt -> intent -> validated tool -> card
+  execute_action     explicit tool call (buttons, confirmation, integrations)
+  handle_a2ui_action back-compat alias kept for the existing page contract
+
+All business logic lives in actions.py and is reachable only through
+registry.ACTIONS.
+"""
+
+from __future__ import annotations
+
 import frappe
 from frappe import _
 
-@frappe.whitelist(allow_guest=False)
-def handle_a2ui_action():
-    try:
-        # Parse incoming data from the request
-        data = frappe.local.form_dict
-        action = data.get("action")
-        
-        if not action:
-            frappe.throw(_("Missing required parameter: 'action'"), title=_("Invalid Request"))
-            
-        # Example business logic / plugin execution
-        result = process_action_logic(action)
-        
-        return {
-            "status": "success",
-            "message": "Action processed successfully",
-            "data": result
-        }
+from . import actions as _actions  # noqa: F401  (registers ACTIONS on import)
+from .actions import default_company
+from .registry import get_action, validate_args
+from .router import match_intent
 
-    except frappe.ValidationError as e:
-        # Catch business logic / validation failures gracefully
-        frappe.local.response["http_status_code"] = 417
-        return {
-            "status": "error",
-            "message": str(e)
-        }
-    except Exception as e:
-        # Catch unexpected server exceptions safely
-        frappe.log_error(frappe.get_traceback(), "DSH Bridge Action Error")
-        frappe.local.response["http_status_code"] = 500
-        return {
-            "status": "error",
-            "message": "An internal error occurred while processing the action."
-        }
 
-@frappe.whitelist(allow_guest=False)
+@frappe.whitelist(allow_guest=False, methods=["POST"])
 def handle_chat():
-    """
-    Receives chat prompt and ERP context from the A2UI React frontend,
-    routes it to the DSH orchestrator, and returns the response.
-    """
-    # frappe.request.data is bytes and only exists on an HTTP call; bench/RQ
-    # calls fall back to form_dict. safe_eval would choke on bytes and on JSON
-    # literals (null/true), so parse JSON properly.
-    request = getattr(frappe.local, "request", None)
-    raw = getattr(request, "data", None) if request else None
-    data = frappe.parse_json(raw.decode("utf-8")) if raw else frappe.form_dict
-    data = data or {}
-
-    prompt = (data.get("prompt") or "").strip()
-    company = data.get("company") or frappe.defaults.get_user_default("Company")
-    user = frappe.session.user
+    payload = _payload()
+    prompt = (payload.get("prompt") or "").strip()
+    company = payload.get("company") or default_company()
 
     if not prompt:
-        frappe.local.response["http_status_code"] = 417
-        return {"status": "error", "reply": "Prompt parameter is required."}
+        return _error(_("Prompt parameter is required."), 417)
 
     try:
-        # --- mock orchestrator: live stock lookup ---------------------------
-        if "inventory" in prompt.lower() or "stock" in prompt.lower():
-            rows = frappe.db.sql(
-                """
-                SELECT
-                    b.item_code,
-                    i.item_name,
-                    b.warehouse,
-                    b.actual_qty,
-                    b.stock_uom
-                FROM `tabBin` b
-                LEFT JOIN `tabItem` i ON i.name = b.item_code
-                WHERE b.actual_qty <> 0
-                ORDER BY b.actual_qty DESC
-                LIMIT 5
-                """,
-                as_dict=True,
-            )
-
+        routed = match_intent(prompt)
+        if not routed:
             return {
                 "status": "success",
-                "reply": f"Fetched live stock levels for {user}"
-                + (f" ({company})" if company else "")
-                + f": {len(rows)} item(s)",
-                "card_type": "inventory_table",
-                "columns": [
-                    ["item_code", "Item"],
-                    ["item_name", "Name"],
-                    ["warehouse", "Warehouse"],
-                    ["actual_qty", "Qty"],
-                    ["stock_uom", "UOM"],
-                ],
-                "data": rows,
+                "reply": (
+                    "Echo (no orchestrator configured): '{0}'. "
+                    "Try 'inventory' or 'create order 2 x SKU008 for Grant Plastics Ltd.'"
+                ).format(prompt),
+                "a2ui_card": None,
             }
 
-        # --- default echo (no DSH tokens configured) ------------------------
-        return {
-            "status": "success",
-            "reply": (
-                f"Echo (No AI Tokens): Received your prompt '{prompt}'. "
-                "Try typing 'inventory' to test live database fetching!"
-            ),
-            "a2ui_card": None,
-        }
+        name, args = routed
+        spec = get_action(name)
 
+        # The page sends its active company. Inject it only when the tool
+        # accepts one and the value really exists (the page falls back to the
+        # literal "Default Company").
+        if (
+            "company" in spec["params"]
+            and not args.get("company")
+            and company
+            and frappe.db.exists("Company", company)
+        ):
+            args["company"] = company
+
+        return _card(spec, _execute(spec, args))
+
+    except frappe.PermissionError as exc:
+        return _error(exc, 403)
+    except frappe.ValidationError as exc:
+        return _error(exc, 417)
     except Exception:
         frappe.log_error(frappe.get_traceback(), "DSH Bridge Chat Error")
-        frappe.local.response["http_status_code"] = 500
-        return {
-            "status": "error",
-            "reply": "Backend error while handling the chat prompt. Check Error Log.",
-        }
+        return _error(_("Backend error while handling the chat prompt. Check Error Log."), 500)
 
-def process_action_logic(action):
-    if action == "create_test_order":
-        # Example of writing a real record into ERPNext (e.g., ToDo or Sales Order)
-        todo = frappe.get_doc({
-            "doctype": "ToDo",
-            "description": "Created via DSH Assistant Action Button",
-            "status": "Open"
-        })
-        todo.insert(ignore_permissions=True)
-        frappe.db.commit()
-        return {"created_doctype": "ToDo", "name": todo.name}
-        
-    return {"processed_action": action}
+
+@frappe.whitelist(allow_guest=False, methods=["POST"])
+def execute_action():
+    """POST {"action": "create_sales_order", "args": {...}}"""
+    payload = _payload()
+    try:
+        spec = get_action(payload.get("action"))
+        return _card(spec, _execute(spec, payload.get("args") or {}))
+    except frappe.PermissionError as exc:
+        return _error(exc, 403)
+    except frappe.ValidationError as exc:
+        return _error(exc, 417)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "DSH Bridge Action Error")
+        return _error(_("An internal error occurred while processing the action."), 500)
+
+
+@frappe.whitelist(allow_guest=False)
+def handle_a2ui_action():
+    """Legacy contract: {"action": ..., ...flat args} -> {status, message, data}."""
+    payload = _payload()
+    name = payload.get("action")
+    args = payload.get("args")
+    if args is None:
+        args = {key: value for key, value in payload.items() if key != "action"}
+
+    try:
+        spec = get_action(name)
+        result = _execute(spec, args)
+        return {"status": "success", "message": spec["label"], "data": result}
+    except frappe.PermissionError as exc:
+        return _error(exc, 403)
+    except frappe.ValidationError as exc:
+        return _error(exc, 417)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "DSH Bridge Action Error")
+        return _error(_("An internal error occurred while processing the action."), 500)
+
+
+# --------------------------------------------------------------------------- #
+# internals
+# --------------------------------------------------------------------------- #
+def _execute(spec, args):
+    clean = validate_args(spec["params"], args)
+    _check_permission(spec)
+    return spec["handler"](**clean)
+
+
+def _check_permission(spec):
+    doctype = spec.get("doctype")
+    if not doctype:
+        return
+    ptype = spec.get("perm_type") or "read"
+    if not frappe.has_permission(doctype, ptype):
+        frappe.throw(
+            _("Not permitted to {0} {1}").format(ptype, doctype),
+            frappe.PermissionError,
+        )
+
+
+def _card(spec, result):
+    result = dict(result or {})
+    card = {
+        "status": "success",
+        "reply": result.pop("message", None) or spec["label"],
+    }
+    if spec.get("card_type"):
+        card["card_type"] = spec["card_type"]
+        if "columns" in result:
+            card["columns"] = result.pop("columns")
+        if "rows" in result:
+            card["data"] = result.pop("rows")
+    card.update(result)
+    return card
+
+
+def _error(message, status):
+    frappe.local.response["http_status_code"] = status
+    text = str(message)
+    return {"status": "error", "reply": text, "message": text}
+
+
+def _payload():
+    """JSON body when present, else form_dict (bench/RQ has no request)."""
+    request = getattr(frappe.local, "request", None)
+    if request is None:
+        return dict(frappe.form_dict or {})
+
+    raw = getattr(request, "data", None)
+    content_type = (getattr(request, "content_type", "") or "").lower()
+    if raw and "json" in content_type:
+        return frappe.parse_json(raw.decode("utf-8")) or {}
+
+    return dict(frappe.form_dict or {})
