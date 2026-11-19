@@ -1,0 +1,43 @@
+/* Breadcrumb separators for crumbs that are not links.
+ *
+ * Frappe draws the "/" in the desk breadcrumb from a rule that only targets
+ * anchors:
+ *
+ *     .navbar-breadcrumbs a:before { content: "/"; ... }
+ *     -- frappe/public/scss/desk/breadcrumb.scss
+ *
+ * On documents that are not saved yet, the top bar renders some (or all) of
+ * the crumbs as plain text instead of links, so no separator is drawn and the
+ * labels collapse into "StockPurchase ReceiptNew Purchase Receipt". The same
+ * page saved as a real record renders links and looks correct, which is why
+ * Purchase Order looked fine and a brand-new Purchase Receipt did not.
+ *
+ * This stylesheet is ADDITIVE: it never hides or removes the core rule, so
+ * linked crumbs keep their original separator and nothing is doubled. It only
+ * fills in the gaps where a crumb is not an anchor.
+ */
+
+.navbar-breadcrumbs li:not(:first-child):not(:has(> a))::before,
+.navbar-breadcrumbs > li > span::before {
+	content: "/";
+	display: inline-block;
+	margin-left: 6px;
+	margin-right: 6px;
+	color: var(--ink-gray-4);
+	font-size: 14px;
+	line-height: 1.15;
+	letter-spacing: 0.02em;
+	font-weight: 420;
+}
+
+/* Last resort for a header rendered without <li> wrappers at all: separate the
+ * bare children so the path still reads as a path. */
+.navbar-breadcrumbs > :not(li) + :not(li)::before {
+	content: "/";
+	display: inline-block;
+	margin-left: 6px;
+	margin-right: 6px;
+	color: var(--ink-gray-4);
+	font-size: 14px;
+	line-height: 1.15;
+}

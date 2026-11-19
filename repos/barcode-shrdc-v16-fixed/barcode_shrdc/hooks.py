@@ -16,6 +16,11 @@ app_license = "MIT"
 
 # include js, css files in header of desk.html
 # app_include_css = "/assets/barcode_shrdc/css/barcode_shrdc.css"
+# Breadcrumb "/" separators on pages whose crumbs are rendered as plain text
+# instead of links (see the comment at the top of the file).
+app_include_css = [
+	"/assets/barcode_shrdc/css/breadcrumb_separators.css",
+]
 app_include_js = [
 	"/assets/barcode_shrdc/js/scanner_barcode_patch.js",
 	"/assets/barcode_shrdc/js/barcode_create_links.js",
