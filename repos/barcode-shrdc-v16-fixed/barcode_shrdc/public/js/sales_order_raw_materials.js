@@ -6,29 +6,38 @@
 
 frappe.ui.form.on("Sales Order", {
 	refresh(frm) {
-		if (frm.__raw_material_request_patched) return;
-
-		// Patch the FORM INSTANCE, not frm.events.
+		// Where does the method actually live?
 		//
-		// Core ERPNext does:  this.make_raw_material_request_dialog(r)
-		// inside make_raw_material_request(), where `this` is the form /
-		// controller object.  An own-property on `frm` shadows the prototype
-		// method, so this is the assignment that actually takes effect.
+		// Frappe's ScriptManager does:
+		//     this.frm.cscript = extend_cscript(frm.cscript, new ControllerClass({frm}))
+		// and the Sales Order controller registers the button as
+		//     () => this.make_raw_material_request()
+		// where `this` is that controller instance (it reads `this.frm`).
+		// So the call `this.make_raw_material_request_dialog(r)` resolves on
+		// frm.cscript - NOT on frm.events (where the previous version put it)
+		// and not on the form object itself.
 		//
-		// The previous version only replaced frm.events.make_raw_material_request_dialog.
-		// That object is not what the controller resolves the call through, so the
-		// core method kept running and its confirmation
-		// (frappe.msgprint(__("Material Request {0} submitted.", [...]))) rendered
-		// as an empty "Message" dialog with no link.  Patching both the instance
-		// and frm.events keeps this working whichever path Frappe resolves.
+		// Rather than bet on one owner, shadow the method on every object that
+		// could be on that resolution path.  Re-applied on each refresh because
+		// it is cheap and idempotent, and because a form reload rebuilds cscript.
 		const patched = function (r) {
 			open_raw_material_dialog(frm, r);
 		};
-		frm.make_raw_material_request_dialog = patched;
-		if (frm.events) {
-			frm.events.make_raw_material_request_dialog = patched;
+		// Marker so the installation is checkable from the browser console:
+		//   cur_frm.cscript.make_raw_material_request_dialog.__rm_patched
+		// -> true means the override is live on this form.
+		patched.__rm_patched = true;
+
+		let installed = false;
+		for (const owner of [frm.cscript, frm.events, frm]) {
+			if (owner && typeof owner.make_raw_material_request_dialog === "function") {
+				owner.make_raw_material_request_dialog = patched;
+				installed = true;
+			}
 		}
-		frm.__raw_material_request_patched = true;
+		// If nothing matched yet, leave it: the next refresh retries.  (The old
+		// version set a "patched" flag and could stop trying for good.)
+		return installed;
 	},
 });
 
