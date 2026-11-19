@@ -56,7 +56,10 @@ def handle_chat():
         ):
             args["company"] = company
 
-        return _card(spec, _execute(spec, args))
+        clean = _prepare(spec, args)
+        if spec["mutating"]:
+            return _preview(spec, clean)
+        return _card(spec, spec["handler"](**clean))
 
     except frappe.PermissionError as exc:
         return _error(exc, 403)
@@ -69,9 +72,15 @@ def handle_chat():
 
 @frappe.whitelist(allow_guest=False, methods=["POST"])
 def execute_action():
-    """POST {"action": "create_sales_order", "args": {...}}"""
+    """POST {"confirm_token": "..."} (button) or {"action": "...", "args": {...}} (direct)."""
     payload = _payload()
     try:
+        token = payload.get("confirm_token")
+        if token:
+            pending = _consume_token(token)
+            spec = get_action(pending["action"])
+            return _card(spec, spec["handler"](**validate_args(spec["params"], pending["args"])))
+
         spec = get_action(payload.get("action"))
         return _card(spec, _execute(spec, payload.get("args") or {}))
     except frappe.PermissionError as exc:
@@ -108,11 +117,60 @@ def handle_a2ui_action():
 # --------------------------------------------------------------------------- #
 # internals
 # --------------------------------------------------------------------------- #
-def _execute(spec, args):
+def _prepare(spec, args):
     clean = validate_args(spec["params"], args)
     _check_permission(spec)
-    return spec["handler"](**clean)
+    return clean
 
+def _execute(spec, args):
+    return spec["handler"](**_prepare(spec, args))
+
+CONFIRM_KEY = "dsh:confirm:{0}"
+CONFIRM_TTL = 300  # 5 minutes
+
+
+def _preview(spec, clean):
+    """Two-phase write: return an actionable card instead of executing."""
+    token = frappe.generate_hash(length=20)
+    frappe.cache.set_value(
+        CONFIRM_KEY.format(token),
+        {"action": spec["name"], "args": clean, "user": frappe.session.user},
+        user=frappe.session.user,
+        expires_in_sec=CONFIRM_TTL,
+    )
+    details = "\n".join(
+        "{0}: {1}".format(key.replace("_", " ").capitalize(), value)
+        for key, value in clean.items()
+        if value not in (None, "")
+    )
+    return {
+        "status": "pending_confirmation",
+        "reply": "{0}?\n{1}".format(spec["label"], details),
+        "card_type": "action_confirm",
+        "actions": [
+            {
+                "label": spec["label"],
+                "action": spec["name"],
+                "args": clean,
+                "token": token,
+                "style": "primary",
+            }
+        ],
+    }
+
+
+def _consume_token(token):
+    key = CONFIRM_KEY.format(token)
+    pending = frappe.cache.get_value(key, user=frappe.session.user)
+    if not pending:
+        frappe.throw(
+            _("This action expired or was already used. Run the prompt again."),
+            frappe.ValidationError,
+        )
+    if pending.get("user") != frappe.session.user:
+        frappe.throw(_("This confirmation belongs to another session."), frappe.PermissionError)
+    frappe.cache.delete_value(key, user=frappe.session.user)   # one-shot
+    return pending
 
 def _check_permission(spec):
     doctype = spec.get("doctype")

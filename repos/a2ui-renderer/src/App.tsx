@@ -12,10 +12,19 @@ interface ChatTable {
   rows: Array<Record<string, any>>;
 }
 
+interface ChatAction {
+  label: string;
+  action: string;
+  args?: Record<string, any>;
+  token?: string;
+  style?: string;
+}
+
 interface ChatMessage {
   sender: 'user' | 'assistant';
   text: string;
   table?: ChatTable;
+  actions?: ChatAction[];
 }
 
 const DEFAULT_COLUMNS: Column[] = [
@@ -26,8 +35,6 @@ const DEFAULT_COLUMNS: Column[] = [
   ['stock_uom', 'UOM'],
 ];
 
-// Frappe returns errors as exc_type/exception (500) or _server_messages, not as
-// message.reply. Surface them instead of falling back to a generic sentence.
 function extractError(json: any): string | null {
   if (!json) return null;
   if (json.exc_type || json.exception) {
@@ -72,6 +79,46 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
   ]);
   const [loading, setLoading] = useState(false);
 
+  const sendRequest = async (path: string, body: any) => {
+    const response = await fetch(path, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Frappe-CSRF-Token': (window as any).frappe?.csrf_token || '',
+      },
+      body: JSON.stringify(body),
+    });
+    return response.json().catch(() => null);
+  };
+
+  const appendResult = (json: any) => {
+    const result = json?.message ?? json ?? {};
+    const error = extractError(json) || (result.status === 'error' ? result.reply : null);
+    if (error) {
+      setMessages(prev => [...prev, { sender: 'assistant', text: `Error: ${error}` }]);
+      return;
+    }
+
+    const isInventory = result.card_type === 'inventory_table' && Array.isArray(result.data);
+    setMessages(prev => [
+      ...prev,
+      {
+        sender: 'assistant',
+        text: result.reply || 'Received an empty response from the backend.',
+        table: isInventory
+          ? {
+              columns:
+                Array.isArray(result.columns) && result.columns.length
+                  ? result.columns
+                  : DEFAULT_COLUMNS,
+              rows: result.data,
+            }
+          : undefined,
+        actions: Array.isArray(result.actions) ? result.actions : undefined,
+      },
+    ]);
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || loading) return;
@@ -82,50 +129,11 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/method/dsh_bridge.api.handle_chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Frappe-CSRF-Token': (window as any).frappe?.csrf_token || '',
-        },
-        body: JSON.stringify({ prompt: userMessage, company }),
+      const json = await sendRequest('/api/method/dsh_bridge.api.handle_chat', {
+        prompt: userMessage,
+        company,
       });
-
-      const json = await response.json().catch(() => null);
-      const result = json?.message ?? json ?? {};
-
-      const backendError =
-        extractError(json) || (result.status === 'error' ? result.reply : null);
-      if (backendError) {
-        setMessages(prev => [
-          ...prev,
-          { sender: 'assistant', text: `Error: ${backendError}` },
-        ]);
-        return;
-      }
-
-      const replyText: string =
-        result.reply || 'Received an empty response from the backend.';
-
-      const isInventory =
-        result.card_type === 'inventory_table' && Array.isArray(result.data);
-
-      setMessages(prev => [
-        ...prev,
-        {
-          sender: 'assistant',
-          text: replyText,
-          table: isInventory
-            ? {
-                columns:
-                  Array.isArray(result.columns) && result.columns.length
-                    ? result.columns
-                    : DEFAULT_COLUMNS,
-                rows: result.data,
-              }
-            : undefined,
-        },
-      ]);
+      appendResult(json);
     } catch (err) {
       setMessages(prev => [
         ...prev,
@@ -134,6 +142,36 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const runAction = async (chatAction: ChatAction) => {
+    if (loading) return;
+    setLoading(true);
+    // buttons are single-use: drop them so a double click cannot re-fire
+    setMessages(prev => prev.map(m => ({ ...m, actions: undefined })));
+
+    try {
+      const json = await sendRequest('/api/method/dsh_bridge.api.execute_action', {
+        action: chatAction.action,
+        args: chatAction.args,
+        confirm_token: chatAction.token,
+      });
+      appendResult(json);
+    } catch (err) {
+      setMessages(prev => [
+        ...prev,
+        { sender: 'assistant', text: 'Error communicating with backend bridge.' },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const cancelAction = () => {
+    setMessages(prev => [
+      ...prev.map(m => ({ ...m, actions: undefined })),
+      { sender: 'assistant', text: 'Cancelled. Nothing was created.' },
+    ]);
   };
 
   const renderTable = (table: ChatTable) => (
@@ -196,6 +234,43 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
             <div key={idx} style={{ margin: '8px 0', padding: '10px 14px', borderRadius: '6px', background: msg.sender === 'user' ? '#e9ecef' : '#f1f3f5' }}>
               <strong>{msg.sender === 'user' ? 'You' : 'DSH Assistant'}:</strong> {msg.text}
               {msg.table && renderTable(msg.table)}
+              {msg.actions && msg.actions.length > 0 && (
+                <div style={{ display: 'flex', gap: '8px', marginTop: '12px', whiteSpace: 'normal' }}>
+                  {msg.actions.map((action, actionIdx) => (
+                    <button
+                      key={actionIdx}
+                      type="button"
+                      disabled={loading}
+                      onClick={() => runAction(action)}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '4px',
+                        border: '1px solid #007bff',
+                        background: '#007bff',
+                        color: '#fff',
+                        cursor: loading ? 'default' : 'pointer',
+                        opacity: loading ? 0.6 : 1,
+                      }}
+                    >
+                      {action.label}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={cancelAction}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: '4px',
+                      border: '1px solid #ced4da',
+                      background: '#fff',
+                      cursor: loading ? 'default' : 'pointer',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
             </div>
           ))}
           {loading && <div style={{ color: '#6c757d', fontStyle: 'italic' }}>Processing workflow...</div>}
