@@ -238,7 +238,15 @@ def clean_legacy_demo() -> dict:
 			if not frappe.db.exists("Item", code):
 				continue
 			try:
-				frappe.delete_doc("Item", code, force=1, ignore_permissions=True)
+				# force=0 on purpose.  force=1 skips link validation, which deleted
+				# items that submitted Sales Orders / Quotations still pointed at.
+				# Those rows survive as dangling references: opening the document
+				# shows a blank item, and Sales Order > Create > Request for Raw
+				# Material opens an EMPTY dialog (ERPNext checks `if (!r.message)`,
+				# and an empty JavaScript array is truthy).  With force=0 the
+				# LinkExistsError is raised, the except branch disables the item
+				# instead, and no transaction is left pointing at nothing.
+				frappe.delete_doc("Item", code, force=0, ignore_permissions=True)
 				removed_items += 1
 			except Exception:
 				try:
