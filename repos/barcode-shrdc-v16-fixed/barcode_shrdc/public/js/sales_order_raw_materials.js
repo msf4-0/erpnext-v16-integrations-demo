@@ -6,17 +6,29 @@
 
 frappe.ui.form.on("Sales Order", {
 	refresh(frm) {
-		const events = frm.events || frm;
-		if (events.__raw_material_request_patched) return;
-		if (typeof events.make_raw_material_request_dialog !== "function") return;
+		if (frm.__raw_material_request_patched) return;
 
-		// The core handlers live on the form's events object and are called as
-		// `this.make_raw_material_request_dialog(...)`, so replacing it here is
-		// enough to change what happens after the request is created.
-		events.make_raw_material_request_dialog = function (r) {
+		// Patch the FORM INSTANCE, not frm.events.
+		//
+		// Core ERPNext does:  this.make_raw_material_request_dialog(r)
+		// inside make_raw_material_request(), where `this` is the form /
+		// controller object.  An own-property on `frm` shadows the prototype
+		// method, so this is the assignment that actually takes effect.
+		//
+		// The previous version only replaced frm.events.make_raw_material_request_dialog.
+		// That object is not what the controller resolves the call through, so the
+		// core method kept running and its confirmation
+		// (frappe.msgprint(__("Material Request {0} submitted.", [...]))) rendered
+		// as an empty "Message" dialog with no link.  Patching both the instance
+		// and frm.events keeps this working whichever path Frappe resolves.
+		const patched = function (r) {
 			open_raw_material_dialog(frm, r);
 		};
-		events.__raw_material_request_patched = true;
+		frm.make_raw_material_request_dialog = patched;
+		if (frm.events) {
+			frm.events.make_raw_material_request_dialog = patched;
+		}
+		frm.__raw_material_request_patched = true;
 	},
 });
 
@@ -98,13 +110,23 @@ function open_raw_material_dialog(frm, r) {
 					dialog.hide();
 					const message = res.message;
 					if (message && message.name) {
+						// Land directly on the Material Request that was just
+						// created - the items to purchase are on that document.
+						frappe.show_alert({
+							message: __("Material Request {0} created", [message.name]),
+							indicator: "green",
+						});
 						frappe.set_route("Form", "Material Request", message.name);
 					} else {
-						// Nothing left to request: go to the requests already raised
-						// for this order instead of showing an empty message box.
-						frappe.set_route("List", "Material Request", {
-							sales_order: frm.docname,
+						// Nothing left to request (server returned no document).
+						// Say so instead of leaving an empty message box.
+						frappe.show_alert({
+							message: __(
+								"No new Material Request was created - these items are already covered by existing requests."
+							),
+							indicator: "orange",
 						});
+						frappe.set_route("List", "Material Request");
 					}
 				},
 			});
