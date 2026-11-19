@@ -23,6 +23,7 @@ no demo data at all.
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 import frappe
@@ -193,6 +194,42 @@ try:
     note("created" if made else "skipped", f"Serial No FRM-001-0001..{FRAME_SERIALS:04d} (+{made} new)")
 except Exception as exc:  # noqa: BLE001
     note("errors", f"Serial No: {type(exc).__name__}: {exc}")
+    frappe.db.rollback()
+
+# ---------------------------------------------------------------------------
+# keep the Serial No naming-series counter in step with the serials that exist
+# ---------------------------------------------------------------------------
+# Creating Serial No rows with frappe.get_doc().insert() stores the name as-is;
+# it does NOT advance tabSeries, which is what frappe.model.naming.make_autoname
+# reads.  So after inserting FRM-001-0017..0068 directly, the counter still said
+# 16 and the next auto-generated serial was FRM-001-0017 again - the
+# "naming series conflict occurred while creating serial numbers" error when
+# submitting a Purchase Receipt.  Syncing the counter here makes fresh clones
+# correct and makes this script idempotent.
+SERIAL_ITEM = "FRM-001"
+try:
+    series = frappe.db.get_value("Item", SERIAL_ITEM, "serial_no_series") or "FRM-001-.####"
+    prefix = series.rsplit(".", 1)[0]
+    used = [
+        int(m.group(1))
+        for row in frappe.get_all(
+            "Serial No", filters={"item_code": SERIAL_ITEM}, fields=["serial_no"], limit=100000
+        )
+        if (m := re.search(r"(\d+)$", row.serial_no or ""))
+    ]
+    highest = max(used) if used else 0
+    existing = frappe.db.sql("select current from tabSeries where name=%s", prefix)
+    current = existing[0][0] if existing else 0
+    if highest > current:
+        if existing:
+            frappe.db.sql("update tabSeries set current=%s where name=%s", (highest, prefix))
+        else:
+            frappe.db.sql("insert into tabSeries (name, current) values (%s, %s)", (prefix, highest))
+        note("updated", f"Sequence {prefix} -> {highest} (next serial {prefix}{highest + 1:04d})")
+    else:
+        note("skipped", f"Sequence {prefix} already at {current}")
+except Exception as exc:  # noqa: BLE001
+    note("errors", f"Sequence sync: {type(exc).__name__}: {exc}")
     frappe.db.rollback()
 
 # ---------------------------------------------------------------------------
