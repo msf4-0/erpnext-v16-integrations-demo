@@ -18,6 +18,7 @@ Component vocabulary (kept in sync with ``a2ui-renderer/src/catalog.tsx``):
     Table     {columns:[{key,label,align?}], rows:{path}}
     Badge     {text:{path}|{literalString}, tone?}
     Divider   {}
+    Link      {text, href}
     Button    {child, action:{name, context?, "x-erpnext":{args,confirm_required}}}
 
 ``x-erpnext`` is our extension: A2UI's own action ``context`` is string-only,
@@ -173,6 +174,42 @@ def build_order_preview(title, fields, action):
     ))
     return _surface(components, {"title": title, "fields": rows})
 
+def build_success_card(title, fields, badge=None, link=None):
+    """A 'done' card: optional status badge, a field list, optional link.
+
+    ``fields`` is an ordered list of ``(label, value)``. ``link`` is
+    ``(label, href)`` and the href is always emitted as a literal — see the
+    note below on why it must not go through ``_text``.
+    """
+    rows = [{"label": label, "value": "" if value is None else str(value)} for label, value in fields]
+
+    children = ["title"]
+    nodes = [_node("title", "Text", _text(title, "h3"))]
+
+    if badge:
+        children.append("badge")
+        nodes.append(_node("badge", "Badge", {"text": {"literalString": badge}}))
+
+    children.append("fields")
+    nodes.append(_node("fields", "Table", {
+        "columns": [{"key": "label", "label": "Field"}, {"key": "value", "label": "Value"}],
+        "rows": {"path": "/fields"},
+    }))
+
+    if link:
+        children.append("link")
+        # NOT _text(): hrefs start with '/', which _text() would read as a
+        # dataModel path and resolve to nothing. Force a literal.
+        nodes.append(_node("link", "Link", {
+            "text": {"literalString": link[0]},
+            "href": {"literalString": link[1]},
+        }))
+
+    components = [
+        _node("root", "Card", {"child": "col"}),
+        _node("col", "Column", {"children": {"explicitList": children}}),
+    ] + nodes
+    return _surface(components, {"title": title, "badge": badge or "", "fields": rows})
 
 def build_error_card(message):
     components = [

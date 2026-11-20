@@ -1,0 +1,52 @@
+{
+  "components": [
+    {
+      "component": {
+        "Card": {
+          "child": "col"
+        }
+      },
+      "id": "root"
+    },
+    {
+      "component": {
+        "Column": {
+          "children": {
+            "explicitList": [
+              "title",
+              "body"
+            ]
+          }
+        }
+      },
+      "id": "col"
+    },
+    {
+      "component": {
+        "Text": {
+          "text": {
+            "literalString": "Something went wrong"
+          },
+          "usageHint": "h3"
+        }
+      },
+      "id": "title"
+    },
+    {
+      "component": {
+        "Text": {
+          "text": {
+            "literalString": "This action expired or was already used. Run the prompt again."
+          }
+        }
+      },
+      "id": "body"
+    }
+  ],
+  "dataModel": {
+    "body": "This action expired or was already used. Run the prompt again.",
+    "title": "Something went wrong"
+  },
+  "protocol": "a2ui/0.9",
+  "surfaceId": "<surfaceId>"
+}

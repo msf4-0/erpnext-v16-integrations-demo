@@ -1,0 +1,52 @@
+{
+  "components": [
+    {
+      "component": {
+        "Card": {
+          "child": "col"
+        }
+      },
+      "id": "root"
+    },
+    {
+      "component": {
+        "Column": {
+          "children": {
+            "explicitList": [
+              "title",
+              "body"
+            ]
+          }
+        }
+      },
+      "id": "col"
+    },
+    {
+      "component": {
+        "Text": {
+          "text": {
+            "literalString": "DSH Assistant"
+          },
+          "usageHint": "h3"
+        }
+      },
+      "id": "title"
+    },
+    {
+      "component": {
+        "Text": {
+          "text": {
+            "literalString": "Hello from the scripted producer."
+          }
+        }
+      },
+      "id": "body"
+    }
+  ],
+  "dataModel": {
+    "body": "Hello from the scripted producer.",
+    "title": "DSH Assistant"
+  },
+  "protocol": "a2ui/0.9",
+  "surfaceId": "<surfaceId>"
+}

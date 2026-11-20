@@ -93,6 +93,19 @@ function renderNode(
     case 'Divider':
       return <hr key={node.id} style={{ border: 0, borderTop: '1px solid #f1f3f5' }} />;
 
+    case 'Link': {
+      const text = String(atom(node.props.text, dataModel) ?? '');
+      const href = String(atom(node.props.href, dataModel) ?? '');
+      // A surface is server-supplied JSON: only same-origin paths, never an
+      // absolute URL or javascript:.
+      if (!href.startsWith('/')) return null;
+      return (
+        <a key={node.id} href={href} style={{ color: '#0d6efd', fontWeight: 600, textDecoration: 'none' }}>
+          {text || href}
+        </a>
+      );
+    }
+    
     case 'Table':
       return renderTable(node, dataModel);
 

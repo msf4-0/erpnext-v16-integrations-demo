@@ -84,24 +84,30 @@ def handle_chat():
 @frappe.whitelist(allow_guest=False, methods=["POST"])
 def execute_action():
     """POST {"confirm_token": "..."} (button) or {"action": "...", "args": {...}} (direct)."""
+    started = time.monotonic()
+    trace_id = str(uuid.uuid4())
     payload = _payload()
     try:
         token = payload.get("confirm_token")
         if token:
             pending = _consume_token(token)
             spec = get_action(pending["action"])
-            return _card(spec, spec["handler"](**validate_args(spec["params"], pending["args"])))
+            result = _card(spec, spec["handler"](**validate_args(spec["params"], pending["args"])))
+            return _finish(result, started, trace_id)
 
         spec = get_action(payload.get("action"))
-        return _card(spec, _execute(spec, payload.get("args") or {}))
+        return _finish(_card(spec, _execute(spec, payload.get("args") or {})), started, trace_id)
     except frappe.PermissionError as exc:
-        return _error(exc, 403)
+        return _finish(_error(exc, 403), started, trace_id)
     except frappe.ValidationError as exc:
-        return _error(exc, 417)
+        return _finish(_error(exc, 417), started, trace_id)
     except Exception:
         frappe.log_error(frappe.get_traceback(), "DSH Bridge Action Error")
-        return _error(_("An internal error occurred while processing the action."), 500)
-
+        return _finish(
+            _error(_("An internal error occurred while processing the action."), 500),
+            started,
+            trace_id,
+        )
 
 @frappe.whitelist(allow_guest=False)
 def handle_a2ui_action():
@@ -182,8 +188,29 @@ def _surface_for(payload):
             },
         )
 
+    if payload.get("card_type") == "sales_order_created":
+        return _created_order_surface(payload.get("sales_order") or {})
+
     return a2ui.build_text_card(_("DSH Assistant"), payload.get("reply") or "")
 
+def _created_order_surface(so):
+    """The 'draft created' card. Reads only what actions.py returns."""
+    qty = so.get("qty")
+    total = so.get("grand_total")
+    currency = so.get("currency") or ""
+    fields = [
+        (_("Document"), so.get("name")),
+        (_("Customer"), so.get("customer")),
+        (_("Item"), so.get("item_code")),
+        (_("Qty"), "{0:g}".format(float(qty)) if qty else None),
+        (_("Total"), "{0} {1:,.2f}".format(currency, float(total)).strip() if total is not None else None),
+    ]
+    return a2ui.build_success_card(
+        _("Sales Order created"),
+        fields,
+        badge=_("Draft"),
+        link=(_("Open {0}").format(so.get("name") or _("document")), so.get("route")),
+    )
 
 def _prepare(spec, args):
     clean = validate_args(spec["params"], args)

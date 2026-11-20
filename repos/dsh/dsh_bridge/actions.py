@@ -173,6 +173,8 @@ def create_sales_order(customer, item_code, qty, delivery_date=None, warehouse=N
         "sales_order": {
             "name": so.name,
             "customer": so.customer,
+            "item_code": item_code,
+            "qty": qty,
             "grand_total": so.grand_total,
             "currency": so.currency,
             "docstatus": so.docstatus,
