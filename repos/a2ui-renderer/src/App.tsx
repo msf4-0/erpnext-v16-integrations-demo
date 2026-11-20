@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { SurfaceView, type SurfaceAction } from './SurfaceView';
+import type { A2UISurface } from './surface';
 
 interface AppProps {
   user: string;
@@ -25,6 +27,7 @@ interface ChatMessage {
   text: string;
   table?: ChatTable;
   actions?: ChatAction[];
+  ui?: A2UISurface | null;
 }
 
 const DEFAULT_COLUMNS: Column[] = [
@@ -72,6 +75,10 @@ function formatCell(key: string, value: any) {
   return String(value);
 }
 
+function isSurface(value: any): value is A2UISurface {
+  return Boolean(value && typeof value === 'object' && Array.isArray(value.components));
+}
+
 export const App: React.FC<AppProps> = ({ user, company }) => {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -105,6 +112,7 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
       {
         sender: 'assistant',
         text: result.reply || 'Received an empty response from the backend.',
+        ui: isSurface(result.ui) ? result.ui : undefined,
         table: isInventory
           ? {
               columns:
@@ -165,6 +173,17 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const runSurfaceAction = async (action: SurfaceAction) => {
+    // A tokenised action is one-shot: the server holds the arguments, the page
+    // only carries the token, so a replayed click cannot create a second doc.
+    const body = action.token
+      ? { confirm_token: action.token }
+      : { action: action.name, args: action.args };
+
+    const json = await sendRequest('/api/method/dsh_bridge.api.execute_action', body);
+    appendResult(json);
   };
 
   const cancelAction = () => {
@@ -233,8 +252,9 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
           {messages.map((msg, idx) => (
             <div key={idx} style={{ margin: '8px 0', padding: '10px 14px', borderRadius: '6px', background: msg.sender === 'user' ? '#e9ecef' : '#f1f3f5' }}>
               <strong>{msg.sender === 'user' ? 'You' : 'DSH Assistant'}:</strong> {msg.text}
-              {msg.table && renderTable(msg.table)}
-              {msg.actions && msg.actions.length > 0 && (
+              {msg.ui && <SurfaceView surface={msg.ui} onAction={runSurfaceAction} />}
+              {!msg.ui && msg.table && renderTable(msg.table)}
+              {!msg.ui && msg.actions && msg.actions.length > 0 && (
                 <div style={{ display: 'flex', gap: '8px', marginTop: '12px', whiteSpace: 'normal' }}>
                   {msg.actions.map((action, actionIdx) => (
                     <button

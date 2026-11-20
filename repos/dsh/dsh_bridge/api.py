@@ -12,10 +12,14 @@ registry.ACTIONS.
 
 from __future__ import annotations
 
+import time
+import uuid
+
 import frappe
 from frappe import _
 
 from . import actions as _actions  # noqa: F401  (registers ACTIONS on import)
+from . import a2ui
 from .actions import default_company
 from .registry import get_action, validate_args
 from .router import match_intent
@@ -23,24 +27,27 @@ from .router import match_intent
 
 @frappe.whitelist(allow_guest=False, methods=["POST"])
 def handle_chat():
+    started = time.monotonic()
+    trace_id = str(uuid.uuid4())
     payload = _payload()
     prompt = (payload.get("prompt") or "").strip()
     company = payload.get("company") or default_company()
 
     if not prompt:
-        return _error(_("Prompt parameter is required."), 417)
+        return _finish(_error(_("Prompt parameter is required."), 417), started, trace_id)
 
     try:
         routed = match_intent(prompt)
         if not routed:
-            return {
-                "status": "success",
-                "reply": (
-                    "Echo (no orchestrator configured): '{0}'. "
-                    "Try 'inventory' or 'create order 2 x SKU008 for Grant Plastics Ltd.'"
-                ).format(prompt),
-                "a2ui_card": None,
-            }
+            reply = (
+                "Echo (no orchestrator configured): '{0}'. "
+                "Try 'inventory' or 'create order 2 x SKU008 for Grant Plastics Ltd.'"
+            ).format(prompt)
+            return _finish(
+                {"status": "success", "reply": reply, "a2ui_card": None},
+                started,
+                trace_id,
+            )
 
         name, args = routed
         spec = get_action(name)
@@ -58,16 +65,20 @@ def handle_chat():
 
         clean = _prepare(spec, args)
         if spec["mutating"]:
-            return _preview(spec, clean)
-        return _card(spec, spec["handler"](**clean))
+            return _finish(_preview(spec, clean), started, trace_id)
+        return _finish(_card(spec, spec["handler"](**clean)), started, trace_id)
 
     except frappe.PermissionError as exc:
-        return _error(exc, 403)
+        return _finish(_error(exc, 403), started, trace_id)
     except frappe.ValidationError as exc:
-        return _error(exc, 417)
+        return _finish(_error(exc, 417), started, trace_id)
     except Exception:
         frappe.log_error(frappe.get_traceback(), "DSH Bridge Chat Error")
-        return _error(_("Backend error while handling the chat prompt. Check Error Log."), 500)
+        return _finish(
+            _error(_("Backend error while handling the chat prompt. Check Error Log."), 500),
+            started,
+            trace_id,
+        )
 
 
 @frappe.whitelist(allow_guest=False, methods=["POST"])
@@ -117,6 +128,63 @@ def handle_a2ui_action():
 # --------------------------------------------------------------------------- #
 # internals
 # --------------------------------------------------------------------------- #
+def _finish(payload, started, trace_id, mode="fallback"):
+    """Attach the frozen chat contract to a legacy payload.
+
+    `ui` + `mode` + `trace_id` + `latency_ms` are the forward contract; every
+    existing key (`card_type`, `columns`, `data`, `actions`) stays for the
+    current page until it renders surfaces directly.
+    """
+    payload = dict(payload or {})
+    payload["ui"] = _surface_for(payload)
+    payload["mode"] = mode
+    payload["trace_id"] = trace_id
+    payload["latency_ms"] = int((time.monotonic() - started) * 1000)
+    return payload
+
+
+def _surface_for(payload):
+    """Pick the card for one payload. Display-only: never raises."""
+    if payload.get("status") == "error":
+        return a2ui.build_error_card(payload.get("reply") or _("Backend error"))
+
+    if payload.get("card_type") == "inventory_table":
+        columns = []
+        for key, label in payload.get("columns") or []:
+            column = {"key": key, "label": label}
+            if key in ("actual_qty", "qty", "rate", "amount"):
+                column["align"] = "right"
+            columns.append(column)
+        return a2ui.build_inventory_table(
+            payload.get("reply") or _("Inventory"),
+            payload.get("data") or [],
+            columns or None,
+        )
+
+    if payload.get("status") == "pending_confirmation":
+        action = (payload.get("actions") or [{}])[0]
+        args = action.get("args") or {}
+        fields = [
+            (key.replace("_", " ").capitalize(), value)
+            for key, value in args.items()
+            if value not in (None, "")
+        ]
+        return a2ui.build_order_preview(
+            payload.get("reply") or action.get("label"),
+            fields,
+            {
+                # The legacy payload names the tool `action`; the surface names it `name`.
+                "name": action.get("name") or action.get("action"),
+                "label": action.get("label"),
+                "args": args,
+                "confirm_required": True,
+                "token": action.get("token"),
+            },
+        )
+
+    return a2ui.build_text_card(_("DSH Assistant"), payload.get("reply") or "")
+
+
 def _prepare(spec, args):
     clean = validate_args(spec["params"], args)
     _check_permission(spec)
