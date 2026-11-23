@@ -794,7 +794,7 @@ def run(user="Administrator"):
 	frappe.clear_cache(user=user)
 	print("MARK_TOKEN %s:%s" % (keys["api_key"], keys["api_secret"]))
 '@
-    $tmp = Join-Path $env:TEMP '_setup_mint.py'
+    $tmp = Join-Path ([IO.Path]::GetTempPath()) '_setup_mint.py'
     [System.IO.File]::WriteAllText($tmp, $mintModule, (New-Object System.Text.UTF8Encoding($false)))
     $dest = '/home/frappe/frappe-bench/apps/barcode_shrdc/barcode_shrdc/_fix_setup_mint.py'
     Invoke-Docker -Arguments @('cp', $tmp, "${BenchName}:$dest") -Capture | Out-Null

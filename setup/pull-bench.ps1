@@ -95,7 +95,7 @@ Warn '                             -> allow public packages, then package settin
 # ---------------------------------------------------------------------------
 # 2. Release bundle
 # ---------------------------------------------------------------------------
-$bundle = Join-Path $env:TEMP 'comp-demo-bench-v16-amd64.tar.gz'
+$bundle = Join-Path ([IO.Path]::GetTempPath()) 'comp-demo-bench-v16-amd64.tar.gz'
 $shaFile = "$bundle.sha256"
 try {
     Say "downloading $BundleUrl (~1 GB, one time)"

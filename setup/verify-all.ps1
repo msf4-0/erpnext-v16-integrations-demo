@@ -148,7 +148,7 @@ frappe.connect()
 rows = frappe.get_all('Webhook', fields=['name', 'webhook_doctype', 'request_url', 'enabled'])
 print('MARK_WH ' + json.dumps(rows))
 "@
-$whFile = Join-Path $env:TEMP '_wh_check.py'
+$whFile = Join-Path ([IO.Path]::GetTempPath()) '_wh_check.py'
 Set-Content -LiteralPath $whFile -Value $whScript -Encoding ASCII
 docker cp $whFile "${Bench}:/tmp/scripts/_wh_check.py" | Out-Null
 docker exec -u root $Bench bash -lc 'chown frappe:frappe /tmp/scripts/_wh_check.py' | Out-Null
