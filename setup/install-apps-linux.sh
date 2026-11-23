@@ -104,6 +104,17 @@ for app in "${apps[@]}"; do
     bash "$stage_dir/install-app.sh" "$app" @mounted "$FRAPPE_SERIES" "$recipe"
 done
 
+# install-app.sh skips an app that is already in tabInstalled Application, but
+# "installed" is not "synced": a migrate that ran while an app was missing from
+# sites/apps.txt deletes its DocTypes as orphans. The canonical installer checks
+# every DocType each app ships and re-migrates when any is missing, so running
+# it here turns this script into a repair for such a site, not just a no-op.
+echo "Checking every app DocType is present (install-all-apps.sh)..."
+docker cp sandbox/scripts/install-all-apps.sh "$bench_id:$stage_dir/"
+compose exec -T -u root bench chown frappe:frappe "$stage_dir/install-all-apps.sh"
+compose exec -T -e "SITE_NAME=$SITE_NAME" -e "SKIP_APPS=${SKIP_APPS:-}" bench \
+  bash "$stage_dir/install-all-apps.sh"
+
 for app in "${apps[@]}"; do
   if compose exec -T bench test -d \
     "/home/frappe/frappe-bench/apps/$app/$app/public"; then
