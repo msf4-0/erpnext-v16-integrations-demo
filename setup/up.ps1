@@ -319,7 +319,12 @@ if ($hostNgrok -and $script:IsWindowsHost) {
 # ---------------------------------------------------------------------------
 Write-Step '2/11  preparing the Node-RED flow file'
 $flowsPath = Join-Path $SandboxDir 'node-red/flows.json'
-if (-not (Test-Path $flowsPath)) {
+if ((Test-Path -LiteralPath $flowsPath -PathType Container) -and @(Get-ChildItem -LiteralPath $flowsPath -Force).Count -eq 0) {
+    # Docker creates an empty DIRECTORY when the bind source is missing at create time.
+    Remove-Item -LiteralPath $flowsPath -Force
+    Write-Info 'removed the empty flows.json directory Docker left behind'
+}
+if (-not (Test-Path -LiteralPath $flowsPath -PathType Leaf)) {
     Set-Content -LiteralPath $flowsPath -Value '[]' -Encoding ASCII
     Write-Info 'wrote placeholder flows.json (the real flow is built in step 8)'
 } else {
@@ -335,7 +340,7 @@ if ($Fresh) {
     $backupScript = Join-Path $PSScriptRoot 'backup.ps1'
     if (Test-Path $backupScript) {
         Write-Info 'backing up the site before removing the volumes'
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $backupScript
+        & ((Get-Process -Id $PID).Path) -NoProfile -ExecutionPolicy Bypass -File $backupScript
         if ($LASTEXITCODE -ne 0) { throw 'backup failed - refusing to delete the volumes' }
     }
     $env:ALLOW_SITE_RECREATE = '1'
@@ -356,7 +361,7 @@ if ($Fresh) {
 # the 3 GB bench image whenever its tag is missing - the 25-40 minute stall.
 $pullScript = Join-Path $PSScriptRoot 'pull-bench.ps1'
 if (Test-Path $pullScript) {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $pullScript
+    & ((Get-Process -Id $PID).Path) -NoProfile -ExecutionPolicy Bypass -File $pullScript
     if ($LASTEXITCODE -eq 2) { Write-Warn 'continuing with a local build' }
 }
 if ((Invoke-Compose @('create')) -ne 0) { throw 'docker compose create failed' }
@@ -797,9 +802,9 @@ if (-not $flowSrc -or -not (Test-Path $flowSrc)) {
     if (-not $python) { throw 'python is required to build the Node-RED flow' }
 
     & $python.Source $builder --src $flowSrc --out $flowsPath `
-        --erpnext-url 'http://bench:8000' --erpnext-token $erpToken `
-        --shopify-store $shopifyStore --shopify-version $shopifyVersion `
-        --shopify-token $shopifyToken --site $siteName
+        --erpnext-url 'http://bench:8000' "--erpnext-token=$erpToken" `
+        "--shopify-store=$shopifyStore" "--shopify-version=$shopifyVersion" `
+        "--shopify-token=$shopifyToken" "--site=$siteName"
     if ($LASTEXITCODE -ne 0) { Write-Warn "flow builder exited $LASTEXITCODE" }
 }
 

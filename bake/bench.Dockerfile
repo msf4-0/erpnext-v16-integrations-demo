@@ -91,6 +91,26 @@ RUN SP=$(dirname "$(find /home/frappe/frappe-bench/env -name 'frappe.pth' -print
     && ls -la "$SP"/*.pth
 
 # ---------------------------------------------------------------------------
+# Register every app in sites/apps.txt INSIDE the image.
+#
+# Docker seeds a fresh bench_sites volume from this directory, so the base
+# image's apps.txt (frappe + erpnext only) is what a clean clone starts with.
+# Frappe builds its module map from apps.txt, and `bench migrate` deletes every
+# DocType/Workspace/Report whose module is not on that map as an "orphan". With
+# the custom apps missing here, the seed's migrate silently removed Tracked
+# Item, Barcode Printing, etc. from the restored demo site.
+# ---------------------------------------------------------------------------
+RUN set -eu; \
+    for f in sites/apps.txt apps.txt; do \
+        [ -f "$f" ] || continue; \
+        if [ -s "$f" ] && [ -n "$(tail -c 1 "$f")" ]; then printf '\n' >> "$f"; fi; \
+        for app in barcode_shrdc shopify item_tracking metabase_integration my_invois; do \
+            grep -qx "$app" "$f" || echo "$app" >> "$f"; \
+        done; \
+    done; \
+    echo "sites/apps.txt:"; cat sites/apps.txt
+
+# ---------------------------------------------------------------------------
 # Bake the GLOBAL site config endpoints into the image.
 #
 # The base image's sites/common_site_config.json contains only `default_site`.

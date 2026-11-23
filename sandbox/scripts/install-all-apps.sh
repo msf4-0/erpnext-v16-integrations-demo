@@ -67,18 +67,75 @@ db_apps() {
         | tr -d "[]'\"" | tr ',' '\n' | tr -d ' ' | sed '/^$/d'
 }
 
+apps_txt_changed=0
 register_in_apps_txt() {
     local app="$1"
+    [ -f sites/apps.txt ] || touch sites/apps.txt
     for f in apps.txt sites/apps.txt; do
         [ -f "$f" ] || continue
         # a file written without a trailing newline would glue the new name
         # onto the previous one ('erpnextmy_invois' - seen in e2e).
         if [ -s "$f" ] && [ -n "$(tail -c 1 "$f")" ]; then printf '\n' >> "$f"; fi
-        grep -qx "$app" "$f" 2>/dev/null || echo "$app" >> "$f"
+        if ! grep -qx "$app" "$f" 2>/dev/null; then
+            echo "$app" >> "$f"
+            [ "$f" = "sites/apps.txt" ] && apps_txt_changed=1
+        fi
     done
 }
 
 is_installed() { printf '%s\n' "${db_list:-}" | grep -qx "$1"; }
+
+# ---------------------------------------------------------------------------
+# DocTypes shipped by an app's source but absent from the site's DocType table.
+#
+# "Installed" (a row in tabInstalled Application) does not mean "synced". When
+# `bench migrate` runs while an app is missing from sites/apps.txt, Frappe's
+# remove_orphan_doctypes() deletes that app's DocTypes, Workspaces and Reports,
+# yet the app still counts as installed - so a plain "is it installed?" check
+# skips it forever and the desk shows no Tracked Item / Barcode Printing.
+# ---------------------------------------------------------------------------
+missing_doctypes() {
+    env/bin/python - "$SITE" "$@" <<'PY' 2>/dev/null
+import glob
+import json
+import os
+import sys
+
+import frappe
+
+site, apps = sys.argv[1], sys.argv[2:]
+os.chdir("sites")
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+missing = []
+try:
+    for app in apps:
+        for path in sorted(glob.glob(f"../apps/{app}/{app}/*/doctype/*/*.json")):
+            stem = os.path.splitext(os.path.basename(path))[0]
+            if os.path.basename(os.path.dirname(path)) != stem:
+                continue
+            try:
+                with open(path) as handle:
+                    meta = json.load(handle)
+            except Exception:  # noqa: BLE001
+                continue
+            if meta.get("doctype") != "DocType" or not meta.get("name"):
+                continue
+            if not frappe.db.exists("DocType", meta["name"]):
+                missing.append(f"{app}:{meta['name']}")
+finally:
+    frappe.destroy()
+print("\n".join(missing))
+PY
+}
+
+custom_apps() {
+    for app in $APPS; do
+        case "$app" in frappe|erpnext) continue ;; esac
+        case " $SKIP_APPS " in *" $app "*) continue ;; esac
+        [ -d "apps/$app" ] && printf '%s ' "$app"
+    done
+}
 
 # Register every app that has source in the image, so sites/apps.txt (which
 # drives `bench version`, asset builds and `bench serve`) matches what is about
@@ -86,6 +143,7 @@ is_installed() { printf '%s\n' "${db_list:-}" | grep -qx "$1"; }
 for app in $APPS; do
     [ -d "apps/$app" ] && register_in_apps_txt "$app"
 done
+[ "$apps_txt_changed" = "1" ] && echo "-- sites/apps.txt was missing apps - a migrate will re-sync them"
 
 db_list="$(db_apps)"
 if [ -z "$db_list" ]; then
@@ -129,8 +187,24 @@ for app in $APPS; do
     fi
 done
 
-if [ -n "$to_install" ]; then
-    echo "== migrate (once, after installing:$to_install ) =="
+doctype_check_failed=0
+missing_before="$(missing_doctypes $(custom_apps))" || doctype_check_failed=1
+if [ "$doctype_check_failed" = "1" ]; then
+    echo "-- WARN: could not compare app DocTypes with the site - migrating to be safe"
+elif [ -n "$missing_before" ]; then
+    echo "-- DocTypes missing from the site (installed but never synced, or deleted as orphans):"
+    printf '%s\n' "$missing_before" | sed 's/^/     /'
+fi
+
+migrate_reason=""
+[ -n "$to_install" ] && migrate_reason="installed:$to_install"
+[ "$apps_txt_changed" = "1" ] && migrate_reason="$migrate_reason apps.txt-updated"
+[ -n "$missing_before" ] && migrate_reason="$migrate_reason missing-doctypes"
+[ "$doctype_check_failed" = "1" ] && migrate_reason="$migrate_reason doctype-check-failed"
+[ "${FORCE_MIGRATE:-0}" = "1" ] && migrate_reason="$migrate_reason FORCE_MIGRATE"
+
+if [ -n "$migrate_reason" ]; then
+    echo "== migrate (once; reason:$migrate_reason ) =="
     # A single migrate after the installs is enough and much faster than
     # migrating per app; --skip-search-index keeps it bounded on a demo site.
     if ! bench --site "$SITE" migrate --skip-search-index; then
@@ -140,7 +214,16 @@ if [ -n "$to_install" ]; then
     bench --site "$SITE" clear-cache || true
     bench --site "$SITE" clear-website-cache || true
 else
-    echo "== no new apps to install - migrate skipped =="
+    echo "== apps installed, registered and synced - migrate skipped =="
+fi
+
+missing_after="$(missing_doctypes $(custom_apps))" || missing_after="(DocType check could not run)"
+if [ -n "$missing_after" ]; then
+    echo "ERROR: these app DocTypes are still missing from '$SITE' after migrate:" >&2
+    printf '%s\n' "$missing_after" | sed 's/^/     /' >&2
+    failed="$failed doctypes"
+else
+    echo "-- every DocType shipped by:$(printf ' %s' $(custom_apps)) is present on the site"
 fi
 
 # ---------------------------------------------------------------------------

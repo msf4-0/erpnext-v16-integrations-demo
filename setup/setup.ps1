@@ -401,8 +401,7 @@ $shopifyVer   = if ($cfg['SHOPIFY_API_VERSION']) { $cfg['SHOPIFY_API_VERSION'] }
 
 $shopifyConfigured = $shopifyStore -and ($shopifyStore -notmatch '^_*FILL_ME_*$') -and
                     $cfg['SHOPIFY_CLIENT_ID'] -and $cfg['SHOPIFY_CLIENT_ID'] -notmatch '_*FILL_ME_*$'
-if (-not $shopifyStore) { Write-Fail 'SHOPIFY_STORE missing from .env' }
-elseif (-not $shopifyConfigured) { Write-Skip 'Shopify not configured - the Shopify bridge stays off (core demo unaffected)' }
+if (-not $shopifyConfigured) { Write-Skip 'Shopify not configured - the Shopify bridge stays off (core demo unaffected)' }
 if (-not $cfg['SHOPIFY_CLIENT_ID'] -or -not $cfg['SHOPIFY_CLIENT_SECRET']) {
     Write-Warn 'SHOPIFY_CLIENT_ID / SHOPIFY_CLIENT_SECRET missing - the Shopify token cannot be minted'
 }
@@ -419,13 +418,13 @@ if ($Full) {
     $backupScript = Join-Path $PSScriptRoot 'backup.ps1'
     if (Test-Path $backupScript) {
         Write-Info 'backing up the site before the rebuild'
-        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $backupScript
+        & ((Get-Process -Id $PID).Path) -NoProfile -ExecutionPolicy Bypass -File $backupScript
         if ($LASTEXITCODE -ne 0) { Write-Warn 'backup failed - continuing, but a wipe will lose data' }
     }
     $upArgs = @('-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'up.ps1'))
     if ($Wipe) { $upArgs += '-Fresh' }
     Write-Info 'this pulls the prebuilt image (~8 min) or builds it (25-40 min) and streams up.ps1 output'
-    $rc = Invoke-Native -Exe 'powershell.exe' -Arguments $upArgs
+    $rc = Invoke-Native -Exe ((Get-Process -Id $PID).Path) -Arguments $upArgs
     if ($rc -ne 0) { Write-Fail "up.ps1 exited $rc" } else { Write-Ok 'up.ps1 completed' }
 }
 
@@ -502,9 +501,41 @@ if ($siteCheck.Code -ne 0 -or -not $siteCheck.Output.Trim()) {
     Write-Fail "site '$siteName' is missing - the sites volume is empty; run with -Full"
 } else {
     Write-Ok "site '$siteName' present"
+    # Listed in apps.txt is not the same as installed AND synced: a migrate that
+    # ran while an app was missing from apps.txt deletes that app's DocTypes as
+    # orphans, and the app still looks installed. The canonical installer checks
+    # every DocType each app ships and re-migrates when any is missing, so run
+    # the checkout's copy (newer than whatever the image baked) on every pass.
     $apps = (Invoke-Bench 'cat /home/frappe/frappe-bench/sites/apps.txt' -Capture).Output
+    $appsMissing = @()
     foreach ($app in @('frappe', 'erpnext', 'barcode_shrdc', 'shopify', 'item_tracking', 'metabase_integration', 'my_invois')) {
-        if ($apps -match "(?m)^\s*$([regex]::Escape($app))\s*$") { Write-Ok "app $app" } else { Write-Warn "app $app not installed" }
+        if ($apps -match "(?m)^\s*$([regex]::Escape($app))\s*$") { Write-Ok "app $app listed in apps.txt" } else { Write-Warn "app $app missing from apps.txt"; $appsMissing += $app }
+    }
+    $installerSrc = Join-Path $SandboxDir 'scripts\install-all-apps.sh'
+    if (Test-Path $installerSrc) {
+        Invoke-Docker -Arguments @('cp', $installerSrc, "${BenchName}:/tmp/install-all-apps.sh") -Capture | Out-Null
+        Invoke-BenchRoot 'chown frappe:frappe /tmp/install-all-apps.sh' -Capture | Out-Null
+        if ($VerifyOnly) {
+            # hex literals: quoted strings do not survive PowerShell -> bash -lc
+            $dtNames = '0x547261636b6564204974656d, 0x426172636f6465205072696e74696e67'   # Tracked Item, Barcode Printing
+            $dtSql = "select count(*) from tabDocType where name in ($dtNames)"
+            $dtRaw = (Invoke-Bench ("cd /home/frappe/frappe-bench && bench --site $siteName mariadb -N -B -e '" + $dtSql + "'") -Capture).Output
+            $dtCount = if ($dtRaw -match '(?m)^\s*(\d+)\s*$') { [int]$Matches[1] } else { -1 }
+            if ($dtCount -eq 2) { Write-Ok 'custom app DocTypes present (Tracked Item, Barcode Printing)' }
+            else { Write-Fail "custom app DocTypes missing ($dtCount/2 of Tracked Item, Barcode Printing) - run .\setup.ps1 without -VerifyOnly to re-sync them" }
+        } else {
+            Write-Info 'ensuring every app is installed AND its DocTypes are synced (install-all-apps.sh)'
+            $inst = Invoke-Bench "cd /home/frappe/frappe-bench && SITE_NAME=$siteName bash /tmp/install-all-apps.sh" -Capture
+            $inst.Output -split "`n" | Where-Object { $_ -match 'migrate|missing|ERROR|present on the site|reason' } | ForEach-Object { Write-Info $_.Trim() }
+            if ($inst.Code -eq 0) {
+                if ($inst.Output -match '== migrate') { Write-Change 'apps re-synced (missing DocTypes restored by bench migrate)' }
+                else { Write-Ok 'all apps installed and every app DocType present' }
+            } else {
+                Write-Fail "install-all-apps.sh exited $($inst.Code) - run it by hand to see the full log"
+            }
+        }
+    } elseif ($appsMissing.Count -gt 0) {
+        Write-Fail ("apps missing from apps.txt: " + ($appsMissing -join ', '))
     }
     # frappe's logger needs this; a recreated container loses it
     $logs = (Invoke-BenchRoot 'test -d /home/frappe/logs && echo yes || echo no' -Capture).Output.Trim()
@@ -858,9 +889,9 @@ if ($VerifyOnly) {
     } elseif ($rebuildFlow) {
         if (-not $shopifyToken) { Write-Warn 'no Shopify token - the flow will bake an empty value' }
         & $py.Source $Builder --src $FlowSrc --out $FlowPath `
-            --erpnext-url 'http://bench:8000' --erpnext-token $erpToken `
-            --shopify-store $shopifyStore --shopify-version $shopifyVer `
-            --shopify-token $shopifyToken --site $siteName | Out-Null
+            --erpnext-url 'http://bench:8000' "--erpnext-token=$erpToken" `
+            "--shopify-store=$shopifyStore" "--shopify-version=$shopifyVer" `
+            "--shopify-token=$shopifyToken" "--site=$siteName" | Out-Null
 
         if ($LASTEXITCODE -ne 0) { Write-Fail "flow builder exited $LASTEXITCODE" }
         elseif (-not (Test-Path $FlowPath)) { Write-Fail 'flow builder produced no file' }

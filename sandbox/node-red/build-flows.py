@@ -40,6 +40,12 @@ RE_LOCAL_ERPNEXT = re.compile(r"https?://(?:localhost|127\.0\.0\.1):8000")
 RE_SHOPIFY_BASE = re.compile(r"https://[A-Za-z0-9-]+\.myshopify\.com/admin/api/[0-9A-Za-z-]+")
 RE_ERPNEXT_TOKEN = re.compile(r"token\s+[0-9A-Za-z]{6,}:[0-9A-Za-z]{6,}")
 RE_SHOPIFY_TOKEN = re.compile(r"shpat_[0-9A-Za-z]+")
+# The committed source flow carries a dummy token (shpat_aaaa...) so no real
+# secret lives in git. A token made of one repeated character is that kind of
+# placeholder: it is blanked when no real token is given, never a hard error.
+RE_PLACEHOLDER_TOKEN = re.compile(r"shpat_([0-9A-Za-z])\1+(?![0-9A-Za-z])")
+DEFAULT_SHOPIFY_STORE = "4e1075.myshopify.com"
+DEFAULT_SHOPIFY_VERSION = "2026-04"
 RE_EMPTY_SHOPIFY_HEADER = re.compile(r'("X-Shopify-Access-Token"\s*:\s*)""')
 
 SHOPIFY_HEADER = "x-shopify-access-token"
@@ -78,6 +84,9 @@ def transform_string(value: str, cfg: dict) -> str:
         # 5. The empty-token bug inside function 16.
         out, n = RE_EMPTY_SHOPIFY_HEADER.subn(r'\1"%s"' % cfg["shopify_token"], out)
         stats.add("empty_shopify_token_fixed", n)
+    else:
+        out, n = RE_PLACEHOLDER_TOKEN.subn("", out)
+        stats.add("placeholder_shopify_token_blanked", n)
 
     return out
 
@@ -123,8 +132,8 @@ def main() -> int:
     ap.add_argument("--out", required=True, help="flows.json to write")
     ap.add_argument("--erpnext-url", default="http://bench:8000")
     ap.add_argument("--erpnext-token", default="", help="api_key:api_secret")
-    ap.add_argument("--shopify-store", default="4e1075.myshopify.com")
-    ap.add_argument("--shopify-version", default="2026-04")
+    ap.add_argument("--shopify-store", default=DEFAULT_SHOPIFY_STORE)
+    ap.add_argument("--shopify-version", default=DEFAULT_SHOPIFY_VERSION)
     ap.add_argument("--shopify-token", default="")
     ap.add_argument("--site", default="frontend", help="ERPNext site name (for --site)")
     ap.add_argument(
@@ -138,7 +147,10 @@ def main() -> int:
         "erpnext_url": args.erpnext_url.rstrip("/"),
         "erpnext_token": args.erpnext_token.strip(),
         "shopify_base": "https://%s/admin/api/%s"
-        % (args.shopify_store, args.shopify_version),
+        % (
+            (args.shopify_store or "").strip() or DEFAULT_SHOPIFY_STORE,
+            (args.shopify_version or "").strip() or DEFAULT_SHOPIFY_VERSION,
+        ),
         "shopify_token": args.shopify_token.strip(),
     }
 
@@ -155,7 +167,10 @@ def main() -> int:
     blob = json.dumps(built)
     if "localhost:8000" in blob or "127.0.0.1:8000" in blob:
         problems.append("a Node-RED node still targets localhost:8000")
-    stray = sorted(set(RE_SHOPIFY_TOKEN.findall(blob)))
+    stray = sorted(
+        tok for tok in set(RE_SHOPIFY_TOKEN.findall(blob))
+        if not RE_PLACEHOLDER_TOKEN.fullmatch(tok)
+    )
     if cfg["shopify_token"]:
         stray = [tok for tok in stray if tok != cfg["shopify_token"]]
     if stray:

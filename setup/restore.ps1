@@ -57,7 +57,7 @@ if ($answer -ne 'RESTORE') { Write-Host 'aborted'; exit 1 }
 
 if (-not $SkipSafetyBackup) {
     Write-Host '  ...   taking a safety backup first'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'backup.ps1')
+    & ((Get-Process -Id $PID).Path) -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'backup.ps1')
     if ($LASTEXITCODE -ne 0) { Write-Host 'safety backup failed - aborting' -ForegroundColor Red; exit 1 }
 }
 

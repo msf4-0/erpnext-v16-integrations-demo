@@ -16,7 +16,7 @@ Building a standalone external web application for scheduling and rescheduling W
 - **Frontend**: React + FullCalendar library
 - **Database Integration**: ERPNext v16 API
 - **Configuration**: Environment variables (.env files)
-- **Port**: Backend on 3500, Frontend on 3001 (user preference)
+- **Port**: one Express server serves the UI and the API; it listens on 3000 inside the container and is published as http://localhost:3001 (the UI calls the API at the relative path `/api`). Port 3500 below is the pre-compose history and is no longer used.
 
 ### Project Structure
 ```

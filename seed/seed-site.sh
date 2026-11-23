@@ -58,10 +58,20 @@ mkdir -p logs
 mkdir -p frontend/logs
 mkdir -p sites/assets
 mkdir -p sites
-if [ ! -f sites/apps.txt ]; then
-    echo "seed: writing sites/apps.txt"
-    printf 'frappe\nerpnext\nbarcode_shrdc\nshopify\nitem_tracking\nmetabase_integration\nmy_invois\n' > sites/apps.txt
-fi
+# sites/apps.txt MUST list every app before the first `bench migrate` below.
+# Docker copies the image's sites/ into a fresh volume, so the file always
+# exists - usually with only frappe + erpnext - and the old "write it only if
+# missing" guard never fired. Frappe's migrate then treats every DocType of an
+# app missing from apps.txt as an orphan and DELETES it (Tracked Item, Barcode
+# Printing, ...). Merge the full list unconditionally instead.
+echo "seed: ensuring every app is listed in sites/apps.txt"
+touch sites/apps.txt
+if [ -s sites/apps.txt ] && [ -n "$(tail -c 1 sites/apps.txt)" ]; then printf '\n' >> sites/apps.txt; fi
+for app in frappe erpnext barcode_shrdc shopify item_tracking metabase_integration my_invois; do
+    [ -d "apps/${app}" ] || continue
+    grep -qx "${app}" sites/apps.txt || echo "${app}" >> sites/apps.txt
+done
+echo "seed: sites/apps.txt -> $(tr '\n' ' ' < sites/apps.txt)"
 
 # --- db/redis endpoints in the GLOBAL config ---------------------------------
 # The base image ships a sites/common_site_config.json containing only
@@ -142,8 +152,15 @@ bench --site "${SITE}" clear-website-cache || true
 # this whole package exists to remove.
 #   SKIP_APPS="my_invois" opts a conflicting LHDN layer out for one site.
 echo "seed: installing all apps (idempotent; the dump covers most of them)"
+# Prefer the checkout's copy (mounted read-only at /sandbox-scripts): a prebuilt
+# image published before an installer fix would otherwise keep running the
+# old, buggy logic on every fresh clone.
 INSTALLER=/usr/local/bin/install-all-apps.sh
-if [ ! -x "${INSTALLER}" ]; then
+if [ -f /sandbox-scripts/install-all-apps.sh ]; then
+    INSTALLER=/sandbox-scripts/install-all-apps.sh
+fi
+echo "seed: installer -> ${INSTALLER}"
+if [ ! -f "${INSTALLER}" ]; then
     echo "seed: ERROR - ${INSTALLER} is missing from the bench image." >&2
     echo "      The image is older than P7; rebuild with: docker compose build bench" >&2
     exit 1

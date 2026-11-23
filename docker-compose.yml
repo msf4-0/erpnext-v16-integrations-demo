@@ -258,7 +258,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 60s
+      # First boot on an empty db_data volume runs the entrypoint's datadir
+      # initialisation with TCP disabled, so every ping fails until it ends.
+      # That took 4.5 min on an HDD-backed host; with a 60 s start period the
+      # container was already marked "unhealthy" and the launchers aborted.
+      # Failures inside start_period do not count, and the first passing ping
+      # still flips it to healthy at once, so a warm start is not slowed down.
+      start_period: 600s
     restart: unless-stopped
 
   redis-cache:

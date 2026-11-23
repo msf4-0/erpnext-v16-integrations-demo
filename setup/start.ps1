@@ -33,6 +33,10 @@
     Recreate the stateless containers (node-red, metabase, planner). Volumes are
     never deleted by this script.
 
+.PARAMETER NoBuild
+    Use the local/pulled bench image even when it is older than this checkout
+    (by default a stale image is rebuilt once, 25-40 minutes).
+
 .EXAMPLE
     powershell -ExecutionPolicy Bypass -File .\setup\start
 
@@ -43,14 +47,23 @@ param(
     [switch]$NoWiring,
     [switch]$Pull,
     [switch]$NoPull,
-    [switch]$Recreate
+    [switch]$Recreate,
+    [switch]$NoBuild
 )
 
-$ErrorActionPreference = 'Stop'
+# 'Continue', not 'Stop': under Windows PowerShell 5.1 a native command's stderr
+# redirected with 2>&1 becomes an ErrorRecord, and with 'Stop' the very first
+# harmless docker message ("No such container", pull progress) aborts the whole
+# run. Every native call below checks $LASTEXITCODE explicitly instead.
+$ErrorActionPreference = 'Continue'
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $Root
-$ComposeFile = Join-Path $Root 'docker-compose.yml'
-$EnvPath     = Join-Path $Root '.env'
+$ComposeFile  = Join-Path $Root 'docker-compose.yml'
+$EnvPath      = Join-Path $Root '.env'
+$VersionsPath = Join-Path $Root 'versions.env'
+# Re-launch child scripts with the SAME PowerShell that runs this one (pwsh 7 or
+# Windows PowerShell 5.1), never a hard-coded powershell.exe.
+$HostExe = (Get-Process -Id $PID).Path
 
 function Say([string]$m)  { Write-Host "  ...   $m" }
 function Ok([string]$m)   { Write-Host "  OK    $m" -ForegroundColor Green }
@@ -86,11 +99,16 @@ if ($LASTEXITCODE -ne 0) {
 Ok "docker engine $v"
 
 if (-not (Test-Path $EnvPath)) {
-    Copy-Item (Join-Path $Root '.env.example') $EnvPath -Force
+    Copy-Item (Join-Path $Root '.env.example') $EnvPath -Force -ErrorAction Stop
     Ok '.env created from .env.example (no secrets needed for the local demo)'
 } else {
     Ok '.env present'
 }
+if (-not (Test-Path $VersionsPath)) { Fail "no versions.env in $Root - it pins ERPNEXT_BASE / MARIADB / NODE_RED / METABASE"; exit 1 }
+# Every compose call needs BOTH env files: docker-compose.yml requires
+# ERPNEXT_BASE, MARIADB, NODE_RED and METABASE from versions.env and aborts with
+# "required variable ERPNEXT_BASE is missing" without it.
+$Compose = @('compose', '--project-directory', $Root, '--env-file', $EnvPath, '--env-file', $VersionsPath, '-f', $ComposeFile)
 $cfg = Read-Env $EnvPath
 $Project  = if ($cfg['COMPOSE_PROJECT_NAME']) { $cfg['COMPOSE_PROJECT_NAME'] } else { 'comp_demo' }
 $ErpPort  = if ($cfg['ERPNEXT_PORT'])  { $cfg['ERPNEXT_PORT'] }  else { '8000' }
@@ -117,7 +135,7 @@ $pullScript = Join-Path $PSScriptRoot 'pull-bench.ps1'
 if (-not $NoPull -and (-not $haveImage -or $Pull)) {
     $pullArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $pullScript)
     if ($Pull) { $pullArgs += '-Force' }
-    & powershell.exe @pullArgs
+    & $HostExe @pullArgs
     $pullRc = $LASTEXITCODE
     & docker image inspect $LocalTag *> $null
     if ($LASTEXITCODE -eq 0) { $haveImage = $true; Ok 'bench image ready' }
@@ -126,6 +144,73 @@ if (-not $NoPull -and (-not $haveImage -or $Pull)) {
     Ok "bench image present locally ($LocalTag)"
 } else {
     Say 'skipping the image fetch (-NoPull) - a local build will be used'
+}
+
+# A pulled or long-lived local image can predate this checkout (the published
+# v16.3 image fails the seed of current main). Compare the files the seed and
+# the site depend on; a mismatch means "rebuild", not "hope".
+function Get-StaleImageReasons {
+    $reasons = @()
+    $pairs = [ordered]@{ '/usr/local/bin/install-all-apps.sh' = 'sandbox/scripts/install-all-apps.sh' }
+    $appDirs = [ordered]@{
+        barcode_shrdc = 'repos/barcode-shrdc-v16-fixed'; shopify = 'repos/shopify-shrdc-v16-fixed'
+        item_tracking = 'repos/item_tracking'; metabase_integration = 'repos/metabase_integration'; my_invois = 'repos/my_invois'
+    }
+    foreach ($app in $appDirs.Keys) {
+        foreach ($f in @('hooks.py', '__init__.py')) {
+            $pairs["/home/frappe/frappe-bench/apps/$app/$app/$f"] = "$($appDirs[$app])/$app/$f"
+        }
+    }
+    $inImage = @{}
+    $listing = (& docker run --rm --entrypoint sh $LocalTag -c ("sha256sum " + (($pairs.Keys) -join ' ') + " 2>/dev/null; echo apps.txt:; cat /home/frappe/frappe-bench/sites/apps.txt") 2>&1)
+    foreach ($line in $listing) {
+        if ("$line" -match '^([0-9a-f]{64})\s+(\S+)$') { $inImage[$Matches[2]] = $Matches[1] }
+    }
+    foreach ($imgPath in $pairs.Keys) {
+        $repoPath = Join-Path $Root $pairs[$imgPath]
+        if (-not (Test-Path $repoPath)) { continue }
+        $want = (Get-FileHash -LiteralPath $repoPath -Algorithm SHA256).Hash.ToLower()
+        if (-not $inImage.ContainsKey($imgPath)) { $reasons += "missing in image: $imgPath" }
+        elseif ($inImage[$imgPath] -ne $want) { $reasons += "differs from checkout: $($pairs[$imgPath])" }
+    }
+    if (-not (($listing -join "`n") -match '(?m)^item_tracking\s*$')) { $reasons += 'image sites/apps.txt does not list the custom apps' }
+    return $reasons
+}
+
+if ($haveImage) {
+    $stale = @(Get-StaleImageReasons)
+    if ($stale.Count -eq 0) {
+        Ok 'bench image matches this checkout'
+    } elseif ($NoBuild) {
+        Warn "bench image is older than this checkout ($($stale.Count) differences) - kept because of -NoBuild"
+        $stale | Select-Object -First 5 | ForEach-Object { Warn "  $_" }
+    } else {
+        Warn "bench image is older than this checkout ($($stale.Count) differences) - rebuilding it once (25-40 min)"
+        $stale | Select-Object -First 5 | ForEach-Object { Warn "  $_" }
+        & docker @Compose build bench
+        if ($LASTEXITCODE -ne 0) { Fail 'docker compose build bench failed - see the output above (rerun with -NoBuild to keep the old image)'; exit 1 }
+        Ok 'bench image rebuilt from this checkout'
+    }
+}
+
+# Node-RED bind-mounts the flow FILE. If it does not exist when the container is
+# created, Docker creates a DIRECTORY with that name and every later start fails
+# with "not a directory". Make sure a real file is there before any create.
+$cfgFlows = $cfg['FLOWS_PATH']
+$FlowsFile = if ($cfgFlows) { $cfgFlows } else { Join-Path $Root 'sandbox/node-red/flows.json' }
+if (-not [IO.Path]::IsPathRooted($FlowsFile)) { $FlowsFile = Join-Path $Root $FlowsFile }
+if (Test-Path -LiteralPath $FlowsFile -PathType Container) {
+    if (@(Get-ChildItem -LiteralPath $FlowsFile -Force).Count -eq 0) {
+        Remove-Item -LiteralPath $FlowsFile -Force
+        Warn "removed the empty directory Docker created at $FlowsFile"
+    } else {
+        Fail "$FlowsFile is a non-empty directory - move it away so the Node-RED flow file can be created"; exit 1
+    }
+}
+if (-not (Test-Path -LiteralPath $FlowsFile -PathType Leaf)) {
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $FlowsFile) | Out-Null
+    [IO.File]::WriteAllText($FlowsFile, "[]`n")
+    Ok 'wrote a placeholder flows.json (setup.ps1 builds the real flow)'
 }
 
 # If the containers are gone but host backups exist, this run will restore the
@@ -146,14 +231,14 @@ if (-not ($existing -match [regex]::Escape($BenchName))) {
         Warn 'the bench image is still not on this machine - the first run builds it once (25-40 minutes, ~3 GB)'
     }
     Say 'docker compose create'
-    & docker compose --project-directory $Root create
+    & docker @Compose create
     if ($LASTEXITCODE -ne 0) { Fail 'docker compose create failed - see the output above'; exit 1 }
 }
 
 if ($Recreate) {
     Say 'recreating node-red and planner (volumes untouched)'
-    & docker compose --project-directory $Root rm -sf node-red scheduler 2>&1 | Out-Null
-    & docker compose --project-directory $Root create node-red scheduler | Out-Null
+    & docker @Compose rm -sf node-red scheduler 2>&1 | Out-Null
+    & docker @Compose create node-red scheduler | Out-Null
 }
 
 # Already serving? Then this is a restart, not a first run.
@@ -168,7 +253,10 @@ if (-not $already) {
     Say 'starting database and redis'
     & docker start "$Project-db-1" "$Project-redis-cache-1" "$Project-redis-queue-1" 2>&1 | Out-Null
 
-    $deadline = (Get-Date).AddSeconds(150)
+    # A first boot initialises the MariaDB datadir before it accepts TCP; that
+    # took 4.5 min on an HDD, so 150 s aborted perfectly healthy fresh installs.
+    Say 'waiting for the database (first boot: up to ~10 min on a slow disk)'
+    $deadline = (Get-Date).AddSeconds(600)
     do {
         Start-Sleep -Seconds 3
         $health = (& docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$Project-db-1") 2>&1
@@ -182,13 +270,17 @@ if (-not $already) {
     if ("$seedState" -match '^exited 0') {
         Ok 'seed already completed - site data present'
     } else {
-        Say 'seeding the demo database (one time, ~5-6 minutes)'
+        Say 'seeding the demo database (one time: ~5-6 min on an SSD, 30+ min on an HDD)'
         & docker start "$Project-seed-1" 2>&1 | Out-Null
-        $deadline = (Get-Date).AddSeconds(900)
+        $deadline = (Get-Date).AddSeconds(3600)
         do {
             Start-Sleep -Seconds 5
             $seedState = (& docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "$Project-seed-1" 2>$null) 2>&1
         } while ((Get-Date) -lt $deadline -and "$seedState" -match '^(running|created|restarting)')
+        if ("$seedState" -match '^running') {
+            Fail "seed is still running after 60 min - it has not failed; rerun this script to keep waiting (docker logs -f $Project-seed-1)"
+            exit 1
+        }
         if ("$seedState" -notmatch '^exited 0') {
             Fail "seed did not finish cleanly ($seedState). Inspect: docker logs $Project-seed-1"
             exit 1
@@ -232,7 +324,7 @@ Ok "ERPNext answers on http://localhost:$ErpPort"
 # ---------------------------------------------------------------------------
 if (-not $NoWiring) {
     Say 'wiring tokens and background jobs (setup.ps1 -NonInteractive -SkipTunnel)'
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'setup.ps1') -NonInteractive -SkipTunnel
+    & $HostExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'setup.ps1') -NonInteractive -SkipTunnel
     if ($LASTEXITCODE -ne 0) {
         Warn "setup.ps1 reported problems (exit $LASTEXITCODE). The site still runs; see 'outstanding' above."
     }

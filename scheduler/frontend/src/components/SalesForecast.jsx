@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import './SalesForecast.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3500/api';
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 
 const TREND_CONFIG = {
   growing:  { icon: '↑', label: 'Growing',  color: '#16a34a', bg: '#dcfce7' },
@@ -194,7 +194,7 @@ export default function SalesForecast() {
       {/* ─── Error ─── */}
       {error && (
         <div className="sf-error-banner">
-          ⚠️ Failed to load forecast: {error}. Make sure the backend is running on port 3500.
+          ⚠️ Failed to load forecast: {error}. Make sure the planner service is running (http://localhost:3001).
         </div>
       )}
 

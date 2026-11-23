@@ -131,9 +131,9 @@ compose create
 echo "Starting MariaDB and Redis..."
 docker start "${PROJECT}-db-1" "${PROJECT}-redis-cache-1" "${PROJECT}-redis-queue-1" >/dev/null 2>&1 || true
 
-echo "Waiting for MariaDB..."
+echo "Waiting for MariaDB (a first boot initialises the datadir: up to ~10 min on a slow disk)..."
 db_ready=false
-for _ in $(seq 1 60); do
+for _ in $(seq 1 200); do
   db_state="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
     "${PROJECT}-db-1" 2>/dev/null || true)"
   if [[ "$db_state" == "healthy" ]]; then
@@ -154,9 +154,11 @@ seed_state="$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "${PROJE
 if [[ "$seed_state" == "exited 0" ]]; then
   echo "Demo site already restored (seed exited 0) - nothing to do."
 else
-  echo "Restoring the demo site (one-shot seed, ~5-7 min)..."
+  echo "Restoring the demo site (one-shot seed, ~5-7 min on an SSD, 30+ min on an HDD)..."
   docker start "${PROJECT}-seed-1" >/dev/null 2>&1 || true
-  seed_deadline=$((SECONDS + 900))
+  # 15 min aborted a seed that was still making progress on an HDD-backed host;
+  # the seed has its own failure exits, so a long wait only costs time.
+  seed_deadline=$((SECONDS + 3600))
   while (( SECONDS < seed_deadline )); do
     seed_state="$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "${PROJECT}-seed-1" 2>/dev/null || true)"
     case "$seed_state" in
@@ -164,6 +166,10 @@ else
       *) break ;;
     esac
   done
+  if [[ "$seed_state" == running* ]]; then
+    echo "ERROR: seed is still running after 60 min - it has not failed; rerun this script to keep waiting." >&2
+    exit 1
+  fi
   if [[ "$seed_state" != "exited 0" ]]; then
     echo "ERROR: seed did not finish cleanly (state: ${seed_state:-missing})." >&2
     docker logs --tail 40 "${PROJECT}-seed-1" >&2 2>&1 || true
