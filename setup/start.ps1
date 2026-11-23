@@ -270,15 +270,15 @@ if (-not $already) {
     if ("$seedState" -match '^exited 0') {
         Ok 'seed already completed - site data present'
     } else {
-        Say 'seeding the demo database (one time: ~5-6 min on an SSD, 30+ min on an HDD)'
+        Say 'seeding the demo database (one time: ~5-6 min on an SSD, 90+ min on an HDD)'
         & docker start "$Project-seed-1" 2>&1 | Out-Null
-        $deadline = (Get-Date).AddSeconds(3600)
+        $deadline = (Get-Date).AddSeconds(10800)
         do {
             Start-Sleep -Seconds 5
             $seedState = (& docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "$Project-seed-1" 2>$null) 2>&1
         } while ((Get-Date) -lt $deadline -and "$seedState" -match '^(running|created|restarting)')
         if ("$seedState" -match '^running') {
-            Fail "seed is still running after 60 min - it has not failed; rerun this script to keep waiting (docker logs -f $Project-seed-1)"
+            Fail "seed is still running after 3 h - it has not failed; rerun this script to keep waiting (docker logs -f $Project-seed-1)"
             exit 1
         }
         if ("$seedState" -notmatch '^exited 0') {

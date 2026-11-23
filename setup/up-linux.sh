@@ -154,11 +154,12 @@ seed_state="$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "${PROJE
 if [[ "$seed_state" == "exited 0" ]]; then
   echo "Demo site already restored (seed exited 0) - nothing to do."
 else
-  echo "Restoring the demo site (one-shot seed, ~5-7 min on an SSD, 30+ min on an HDD)..."
+  echo "Restoring the demo site (one-shot seed, ~5-7 min on an SSD, 90+ min on an HDD)..."
   docker start "${PROJECT}-seed-1" >/dev/null 2>&1 || true
-  # 15 min aborted a seed that was still making progress on an HDD-backed host;
-  # the seed has its own failure exits, so a long wait only costs time.
-  seed_deadline=$((SECONDS + 3600))
+  # A full seed measured ~90 min on an HDD-backed host (new-site ~23 min,
+  # restore ~55 min), so 15 min aborted a seed that was still progressing.
+  # The seed has its own failure exits; this cap only stops an endless hang.
+  seed_deadline=$((SECONDS + 10800))
   while (( SECONDS < seed_deadline )); do
     seed_state="$(docker inspect -f '{{.State.Status}} {{.State.ExitCode}}' "${PROJECT}-seed-1" 2>/dev/null || true)"
     case "$seed_state" in
@@ -167,7 +168,7 @@ else
     esac
   done
   if [[ "$seed_state" == running* ]]; then
-    echo "ERROR: seed is still running after 60 min - it has not failed; rerun this script to keep waiting." >&2
+    echo "ERROR: seed is still running after 3 h - it has not failed; rerun this script to keep waiting." >&2
     exit 1
   fi
   if [[ "$seed_state" != "exited 0" ]]; then
