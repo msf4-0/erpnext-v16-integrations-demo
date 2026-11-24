@@ -141,6 +141,8 @@ services:
       # deliberately with the three commands in docs/ARCHITECTURE.md.
       - ./repos/my_invois:/home/frappe/frappe-bench/apps/my_invois
       - ./repos/dsh:/home/frappe/frappe-bench/apps/dsh_bridge
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       # A fresh clone has an empty bench_sites volume, so bench would serve
       # "404 localhost does not exist". `seed` restores the demo DB first, then
@@ -154,6 +156,7 @@ services:
       redis-queue:
         condition: service_healthy
     environment:
+      - DSH_SIDECAR_URL=http://host.docker.internal:8099
       - PYTHONUNBUFFERED=1
       - SITE_NAME=${SITE_NAME:-frontend}
       - DB_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin}
@@ -355,6 +358,26 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    restart: unless-stopped
+
+  # The DSH agent runtime. Beside the bench rather than on the host: the
+  # container network carries the hop, so no firewall rule and no host port.
+  # Read-only — it holds a read credential and no write path at all (D1).
+  dsh-sidecar:
+    image: ${DSH_SIDECAR_IMAGE:-node:24-bookworm-slim}
+    working_dir: /work
+    command: ["node", "packages/dsh-erpnext-sidecar/lib/main.js"]
+    volumes:
+      # Built on the host with `pnpm --filter @shrdc/dsh-erpnext-sidecar build`;
+      # pnpm's node_modules links are relative, so the mount point is free.
+      - ../dsh_deepseek-harness:/work:ro
+    environment:
+      - DSH_SIDECAR_PORT=8099
+      - DSH_PROVIDER=${DSH_PROVIDER:-scripted}
+      - DSH_MODEL=${DSH_MODEL:-scripted}
+      - ERPNEXT_BASE_URL=http://bench:8000
+      - ERPNEXT_USER=${DSH_ERPNEXT_USER:-Administrator}
+      - ERPNEXT_PASSWORD=${DSH_ERPNEXT_PASSWORD:-admin}
     restart: unless-stopped
 
 volumes:

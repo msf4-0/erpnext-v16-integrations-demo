@@ -12,6 +12,7 @@ registry.ACTIONS.
 
 from __future__ import annotations
 
+import os
 import time
 import uuid
 
@@ -35,6 +36,19 @@ def handle_chat():
 
     if not prompt:
         return _finish(_error(_("Prompt parameter is required."), 417), started, trace_id)
+    
+    mode = _dsh_mode(payload)
+    if mode in ("auto", "dsh"):
+        dsh = _dsh_turn(prompt, payload)
+        if dsh is not None:
+            return _finish(dsh, started, trace_id, mode="dsh")
+        if mode == "dsh":
+            return _finish(
+                _error(_("The DSH sidecar did not answer. Check Error Log."), 502),
+                started,
+                trace_id,
+            )
+        # auto: the sidecar is down, so the deterministic router answers.
 
     try:
         routed = match_intent(prompt)
@@ -134,6 +148,78 @@ def handle_a2ui_action():
 # --------------------------------------------------------------------------- #
 # internals
 # --------------------------------------------------------------------------- #
+#: How long one DSH turn may take before the page falls back to the router.
+DSH_TIMEOUT = 90
+
+
+def _sidecar_url():
+    """Where the DSH sidecar listens, or "" when it is not configured.
+
+    `bench set-config dsh_sidecar_url http://dsh-sidecar:8099` is the normal
+    way in; the env var covers a host-run sidecar during development. Both are
+    absent by default, which leaves this app exactly as it was.
+    """
+    configured = frappe.conf.get("dsh_sidecar_url") or os.environ.get("DSH_SIDECAR_URL") or ""
+    return configured.rstrip("/")
+
+
+def _dsh_mode(payload):
+    """`dsh` requires the sidecar, `auto` prefers it, `off` never uses it.
+
+    With a sidecar configured the default is `auto`: a prompt still works when
+    the sidecar is down, and the response says which producer answered.
+    """
+    explicit = str(payload.get("dsh_mode") or frappe.conf.get("dsh_mode") or "").strip().lower()
+    if explicit:
+        return explicit
+    return "auto" if _sidecar_url() else "off"
+
+
+def _dsh_turn(prompt, payload):
+    """One DSH turn, or None when the sidecar is unreachable or misbehaving.
+
+    Nothing here can create a document: the sidecar holds no write credential,
+    so a pending confirmation comes back as a surface whose button posts
+    `{action, args}` to execute_action, where this user's own session decides.
+    """
+    url = _sidecar_url()
+    if not url:
+        return None
+
+    session_id = payload.get("session_id") or "desk:{0}".format(frappe.session.user)
+    try:
+        import requests
+
+        response = requests.post(
+            "{0}/chat".format(url),
+            json={
+                "session_id": session_id,
+                "text": prompt,
+                "company": payload.get("company"),
+            },
+            timeout=DSH_TIMEOUT,
+        )
+        if response.status_code >= 400:
+            frappe.log_error(
+                "DSH sidecar {0}: {1}".format(response.status_code, response.text[:500]),
+                "DSH Sidecar Error",
+            )
+            return None
+        body = response.json()
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "DSH Sidecar Unreachable")
+        return None
+
+    if not isinstance(body, dict) or not isinstance(body.get("status"), str):
+        return None
+
+    ui = body.get("ui")
+    return {
+        "status": body["status"],
+        "reply": body.get("reply") or "",
+        "ui": ui if isinstance(ui, dict) and isinstance(ui.get("components"), list) else None,
+    }
+
 def _finish(payload, started, trace_id, mode="fallback"):
     """Attach the frozen chat contract to a legacy payload.
 
@@ -142,7 +228,8 @@ def _finish(payload, started, trace_id, mode="fallback"):
     current page until it renders surfaces directly.
     """
     payload = dict(payload or {})
-    payload["ui"] = _surface_for(payload)
+    # A DSH turn already carries its surface; only the fallback needs one built
+    payload["ui"] = payload.get("ui") or _surface_for(payload)
     payload["mode"] = mode
     payload["trace_id"] = trace_id
     payload["latency_ms"] = int((time.monotonic() - started) * 1000)
