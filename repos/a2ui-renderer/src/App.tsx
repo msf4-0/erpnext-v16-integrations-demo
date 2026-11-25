@@ -28,6 +28,7 @@ interface ChatMessage {
   table?: ChatTable;
   actions?: ChatAction[];
   ui?: A2UISurface | null;
+  mode?: string;
 }
 
 const DEFAULT_COLUMNS: Column[] = [
@@ -86,6 +87,12 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
   ]);
   const [loading, setLoading] = useState(false);
 
+  // One session per page load. A permanent desk:<user> session let rehearsal
+  // turns steer the live answer; a fresh id makes every load reproducible.
+  const [sessionId] = useState(
+    () => `desk:${user}:${Math.random().toString(36).slice(2, 10)}`,
+  );
+
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -118,6 +125,7 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
       {
         sender: 'assistant',
         text: result.reply || 'Received an empty response from the backend.',
+        mode: typeof result.mode === 'string' ? result.mode : undefined,
         ui: isSurface(result.ui) ? result.ui : undefined,
         table: isInventory
           ? {
@@ -146,6 +154,7 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
       const json = await sendRequest('/api/method/dsh_bridge.api.handle_chat', {
         prompt: userMessage,
         company,
+        session_id: sessionId,
       });
       appendResult(json);
     } catch (err) {
@@ -300,7 +309,23 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
                 background: msg.sender === 'user' ? '#e9ecef' : '#f1f3f5',
               }}
             >
-              <strong>{msg.sender === 'user' ? 'You' : 'DSH Assistant'}:</strong> {msg.text}
+              <strong>{msg.sender === 'user' ? 'You' : 'DSH Assistant'}:</strong>{' '}
+              {msg.mode && (
+                <span
+                  style={{
+                    fontSize: '11px',
+                    padding: '1px 6px',
+                    borderRadius: '10px',
+                    marginRight: '6px',
+                    background: msg.mode === 'dsh' ? '#d1e7dd' : '#fff3cd',
+                    color: msg.mode === 'dsh' ? '#0f5132' : '#664d03',
+                  }}
+                >
+                  {msg.mode === 'dsh' ? 'model' : 'fallback'}
+                </span>
+              )}
+              {msg.text}
+
               {msg.ui && <SurfaceView surface={msg.ui} onAction={runSurfaceAction} />}
               {!msg.ui && msg.table && renderTable(msg.table)}
               {!msg.ui && msg.actions && msg.actions.length > 0 && (
