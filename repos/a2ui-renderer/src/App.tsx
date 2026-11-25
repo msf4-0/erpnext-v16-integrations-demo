@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { SurfaceView, type SurfaceAction } from './SurfaceView';
 import type { A2UISurface } from './surface';
 
@@ -85,6 +85,12 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
     { sender: 'assistant', text: 'Chat interface is ready. Type a prompt to test the dsh bridge backend.' }
   ]);
   const [loading, setLoading] = useState(false);
+
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
 
   const sendRequest = async (path: string, body: any) => {
     const response = await fetch(path, {
@@ -242,15 +248,58 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
     </table>
   );
 
-  return (
-    <div style={{ padding: '24px', fontFamily: 'sans-serif', maxWidth: '800px', margin: '0 auto' }}>
-      <h2>DSH Assistant Active Workspace</h2>
-      <p><strong>Logged in User:</strong> {user} | <strong>Active Company:</strong> {company}</p>
+ return (
+    <div
+      style={{
+        padding: '16px 24px',
+        fontFamily: 'sans-serif',
+        width: '100%',
+        height: '100%',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <div style={{ flexShrink: 0 }}>
+        <h2 style={{ margin: '0 0 4px 0' }}>DSH Assistant Active Workspace</h2>
+        <p style={{ margin: 0 }}>
+          <strong>Logged in User:</strong> {user} | <strong>Active Company:</strong> {company}
+        </p>
+      </div>
 
-      <div style={{ marginTop: '20px', border: '1px solid #dee2e6', borderRadius: '8px', padding: '16px', background: '#fff', minHeight: '300px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-        <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', maxHeight: '400px', whiteSpace: 'pre-wrap' }}>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          marginTop: '16px',
+          border: '1px solid #dee2e6',
+          borderRadius: '8px',
+          padding: '16px',
+          background: '#fff',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+        }}
+      >
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            marginBottom: '16px',
+            whiteSpace: 'pre-wrap',
+          }}
+        >
           {messages.map((msg, idx) => (
-            <div key={idx} style={{ margin: '8px 0', padding: '10px 14px', borderRadius: '6px', background: msg.sender === 'user' ? '#e9ecef' : '#f1f3f5' }}>
+            <div
+              key={idx}
+              style={{
+                margin: '8px 0',
+                padding: '10px 14px',
+                borderRadius: '6px',
+                background: msg.sender === 'user' ? '#e9ecef' : '#f1f3f5',
+              }}
+            >
               <strong>{msg.sender === 'user' ? 'You' : 'DSH Assistant'}:</strong> {msg.text}
               {msg.ui && <SurfaceView surface={msg.ui} onAction={runSurfaceAction} />}
               {!msg.ui && msg.table && renderTable(msg.table)}
@@ -293,10 +342,13 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
               )}
             </div>
           ))}
-          {loading && <div style={{ color: '#6c757d', fontStyle: 'italic' }}>Processing workflow...</div>}
+          {loading && (
+            <div style={{ color: '#6c757d', fontStyle: 'italic' }}>Processing workflow...</div>
+          )}
+          <div ref={messagesEndRef} />
         </div>
 
-        <form onSubmit={handleSend} style={{ display: 'flex', gap: '8px' }}>
+        <form onSubmit={handleSend} style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
           <input
             type="text"
             value={input}
@@ -304,7 +356,18 @@ export const App: React.FC<AppProps> = ({ user, company }) => {
             placeholder="Type a workflow prompt..."
             style={{ flex: 1, padding: '10px', borderRadius: '4px', border: '1px solid #ced4da' }}
           />
-          <button type="submit" disabled={loading} style={{ padding: '10px 20px', background: '#007bff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              padding: '10px 20px',
+              background: '#007bff',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
             Send
           </button>
         </form>
