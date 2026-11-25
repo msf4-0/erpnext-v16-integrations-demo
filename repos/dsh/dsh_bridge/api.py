@@ -41,7 +41,12 @@ def handle_chat():
     if mode in ("auto", "dsh"):
         dsh = _dsh_turn(prompt, payload)
         if dsh is not None:
-            return _finish(dsh, started, trace_id, mode="dsh")
+            try:
+                return _finish(dsh, started, trace_id, mode="dsh")
+            except frappe.PermissionError as exc:
+                return _finish(_error(exc, 403), started, trace_id, mode="dsh")
+            except frappe.ValidationError as exc:
+                return _finish(_error(exc, 417), started, trace_id, mode="dsh")
         if mode == "dsh":
             return _finish(
                 _error(_("The DSH sidecar did not answer. Check Error Log."), 502),
@@ -104,9 +109,24 @@ def execute_action():
     try:
         token = payload.get("confirm_token")
         if token:
+            # The token doubles as the idempotency key: a second click replays the
+            # first result instead of erroring with "already used" — and never
+            # writes a second document.
+            done = frappe.cache.get_value(
+                CONFIRM_RESULT_KEY.format(token), user=frappe.session.user
+            )
+            if done:
+                return _finish(dict(done), started, trace_id)
+
             pending = _consume_token(token)
             spec = get_action(pending["action"])
             result = _card(spec, spec["handler"](**validate_args(spec["params"], pending["args"])))
+            frappe.cache.set_value(
+                CONFIRM_RESULT_KEY.format(token),
+                dict(result),
+                user=frappe.session.user,
+                expires_in_sec=CONFIRM_TTL,
+            )
             return _finish(result, started, trace_id)
 
         spec = get_action(payload.get("action"))
@@ -230,11 +250,38 @@ def _finish(payload, started, trace_id, mode="fallback"):
     payload = dict(payload or {})
     # A DSH turn already carries its surface; only the fallback needs one built
     payload["ui"] = payload.get("ui") or _surface_for(payload)
+    if payload.get("status") == "pending_confirmation" and isinstance(payload["ui"], dict):
+        payload["ui"] = _tokenise(payload["ui"])
     payload["mode"] = mode
     payload["trace_id"] = trace_id
     payload["latency_ms"] = int((time.monotonic() - started) * 1000)
     return payload
 
+def _tokenise(ui):
+    """Mint a one-shot token for a DSH preview button.
+
+    The sidecar cannot mint one — it holds no write credential — so the bridge
+    does. The button then posts `{confirm_token}` and the arguments stay
+    server-side, which is what makes a second click a replay instead of a second
+    document. The router path already minted one, so it is left alone.
+    """
+    for component in ui.get("components") or []:
+        action = ((component.get("component") or {}).get("Button") or {}).get("action") or {}
+        ext = action.get("x-erpnext") or {}
+        if ext.get("token") or not ext.get("confirm_required"):
+            continue
+        spec = get_action(action.get("name"))
+        clean = validate_args(spec["params"], ext.get("args") or {})
+        _check_permission(spec)
+        token = frappe.generate_hash(length=20)
+        frappe.cache.set_value(
+            CONFIRM_KEY.format(token),
+            {"action": spec["name"], "args": clean, "user": frappe.session.user},
+            user=frappe.session.user,
+            expires_in_sec=CONFIRM_TTL,
+        )
+        ext["token"] = token
+    return ui
 
 def _surface_for(payload):
     """Pick the card for one payload. Display-only: never raises."""
@@ -308,6 +355,7 @@ def _execute(spec, args):
     return spec["handler"](**_prepare(spec, args))
 
 CONFIRM_KEY = "dsh:confirm:{0}"
+CONFIRM_RESULT_KEY = "dsh:confirm-result:{0}"
 CONFIRM_TTL = 300  # 5 minutes
 
 
