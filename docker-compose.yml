@@ -376,6 +376,7 @@ services:
       - DSH_PROVIDER=${DSH_PROVIDER:-scripted}
       - DSH_MODEL=${DSH_MODEL:-}
       - DSH_API_KEY_ENV=${DSH_API_KEY_ENV:-OPENAI_API_KEY}
+      - DSH_SHARED_SECRET=${DSH_SHARED_SECRET:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ERPNEXT_BASE_URL=http://bench:8000
       - ERPNEXT_USER=${DSH_ERPNEXT_USER:-Administrator}

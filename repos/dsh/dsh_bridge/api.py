@@ -12,6 +12,7 @@ registry.ACTIONS.
 
 from __future__ import annotations
 
+import json
 import os
 import time
 import uuid
@@ -120,7 +121,11 @@ def execute_action():
 
             pending = _consume_token(token)
             spec = get_action(pending["action"])
-            result = _card(spec, spec["handler"](**validate_args(spec["params"], pending["args"])))
+            clean = _prepare(spec, pending["args"])
+            log = _audit_start(spec, clean, trace_id, "button")
+            raw = spec["handler"](**clean)
+            _audit_finish(log, raw)
+            result = _card(spec, raw)
             frappe.cache.set_value(
                 CONFIRM_RESULT_KEY.format(token),
                 dict(result),
@@ -130,7 +135,11 @@ def execute_action():
             return _finish(result, started, trace_id)
 
         spec = get_action(payload.get("action"))
-        return _finish(_card(spec, _execute(spec, payload.get("args") or {})), started, trace_id)
+        clean = _prepare(spec, payload.get("args") or {})
+        log = _audit_start(spec, clean, trace_id, "direct")
+        raw = spec["handler"](**clean)
+        _audit_finish(log, raw)
+        return _finish(_card(spec, raw), started, trace_id)
     except frappe.PermissionError as exc:
         return _finish(_error(exc, 403), started, trace_id)
     except frappe.ValidationError as exc:
@@ -195,6 +204,21 @@ def _dsh_mode(payload):
     return "auto" if _sidecar_url() else "off"
 
 
+def _sidecar_headers():
+    """The shared secret, when one is configured.
+
+    Site config wins over the environment, like `_sidecar_url`. That matters
+    operationally: `bench set-config dsh_shared_secret ...` needs no container
+    restart, and this site is on tmpfs, so a bench restart wipes it.
+    """
+    secret = (
+        frappe.conf.get("dsh_shared_secret")
+        or os.environ.get("DSH_SHARED_SECRET")
+        or ""
+    ).strip()
+    return {"X-DSH-Secret": secret} if secret else {}
+
+
 def _dsh_turn(prompt, payload):
     """One DSH turn, or None when the sidecar is unreachable or misbehaving.
 
@@ -217,6 +241,7 @@ def _dsh_turn(prompt, payload):
                 "text": prompt,
                 "company": payload.get("company"),
             },
+            headers=_sidecar_headers(),
             timeout=DSH_TIMEOUT,
         )
         if response.status_code >= 400:
@@ -401,6 +426,58 @@ def _consume_token(token):
         frappe.throw(_("This confirmation belongs to another session."), frappe.PermissionError)
     frappe.cache.delete_value(key, user=frappe.session.user)   # one-shot
     return pending
+
+
+AUDIT_DOCTYPE = "DSH Action Log"
+
+
+def _audit_start(spec, args, trace_id, confirmed):
+    """Write the audit row *before* the handler runs.
+
+    Fail-closed on purpose: if the row cannot be written, the action does not
+    happen, because an unaudited write is the one outcome this log exists to
+    prevent. The row shares the request transaction with the document (handlers
+    do not commit), so a handler that throws leaves neither behind.
+    """
+    log = frappe.get_doc({
+        "doctype": AUDIT_DOCTYPE,
+        "action": spec["name"],
+        "confirmation": confirmed,
+        "status": "pending",
+        "document_type": spec.get("doctype"),
+        "trace_id": trace_id,
+        "arguments": json.dumps(args, default=str, sort_keys=True),
+    })
+    log.insert(ignore_permissions=True)
+    return log
+
+
+def _document_name(result):
+    """The created document's name, wherever the handler chose to put it."""
+    if result.get("name"):
+        return result["name"]
+    for value in result.values():
+        if isinstance(value, dict) and value.get("name"):
+            return value["name"]
+    return None
+
+
+def _audit_finish(log, result):
+    """Mark the row done. Never raises.
+
+    The document already exists here, so an error must not reach the user:
+    telling them it failed would invite a retry and a second document.
+    """
+    try:
+        frappe.db.set_value(
+            AUDIT_DOCTYPE,
+            log.name,
+            {"status": "success", "document_name": _document_name(result or {})},
+            update_modified=False,
+        )
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), "DSH Audit Update Failed")
+
 
 def _check_permission(spec):
     doctype = spec.get("doctype")
