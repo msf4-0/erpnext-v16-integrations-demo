@@ -37,6 +37,15 @@ def handle_chat():
 
     if not prompt:
         return _finish(_error(_("Prompt parameter is required."), 417), started, trace_id)
+
+    if _chat_rate_limited():
+        # Before the sidecar, so a loop costs nothing: no model call, no ERPNext
+        # read. `_error` sets 429 on the response, so the page shows the reason.
+        return _finish(
+            _error(_("Too many prompts. Wait a minute and try again."), 429),
+            started,
+            trace_id,
+        )
     
     mode = _dsh_mode(payload)
     if mode in ("auto", "dsh"):
@@ -179,6 +188,19 @@ def handle_a2ui_action():
 # --------------------------------------------------------------------------- #
 #: How long one DSH turn may take before the page falls back to the router.
 DSH_TIMEOUT = 90
+#: Attempts per turn. Retries exist for connect failures and 502/503/504 only:
+#: a read timeout is final, because the model may still be working and a retry
+#: would double both the spend and the page's wait.
+DSH_MAX_ATTEMPTS = 3
+DSH_BACKOFF_SEC = (0.25, 0.75)
+#: Consecutive transient failures that stop calling a broken sidecar at all.
+DSH_BREAKER_THRESHOLD = 3
+DSH_BREAKER_COOLDOWN = 30
+DSH_BREAKER_KEY = "dsh:sidecar-breaker:{0}"
+DSH_TRANSIENT_STATUS = frozenset({502, 503, 504})
+#: Per-user prompt budget. Generous for a person, fatal to a loop.
+DSH_RATE_LIMIT = 30
+DSH_RATE_WINDOW = 60
 
 
 def _sidecar_url():
@@ -190,6 +212,33 @@ def _sidecar_url():
     """
     configured = frappe.conf.get("dsh_sidecar_url") or os.environ.get("DSH_SIDECAR_URL") or ""
     return configured.rstrip("/")
+
+
+def _chat_rate_limited():
+    """True when this user has spent their prompt budget for the window.
+
+    INCRBY is atomic, so the count holds even with several bench workers
+    racing. The window is fixed, not sliding, so a burst straddling a boundary
+    can get up to twice the limit: fine for cost control, not fine as an SLA.
+    Calling it a token bucket would be a lie.
+
+    Override per site with `dsh_chat_rate` = {"limit": n, "window": seconds}.
+    """
+    limit, window = DSH_RATE_LIMIT, DSH_RATE_WINDOW
+    override = frappe.conf.get("dsh_chat_rate")
+    if isinstance(override, dict):
+        limit = int(override.get("limit") or limit)
+        window = int(override.get("window") or window)
+
+    bucket = int(time.time()) // window
+    key = frappe.cache.make_key(
+        "dsh:chat-rate:{0}:{1}".format(frappe.session.user, bucket)
+    )
+    count = frappe.cache.incr(key)
+    # Always set a TTL. A counter that outlives its bucket is a counter nobody
+    # can clear, and extend-by-window is harmless because the key is per-window.
+    frappe.cache.expire(key, window + 5)
+    return count > limit
 
 
 def _dsh_mode(payload):
@@ -219,40 +268,127 @@ def _sidecar_headers():
     return {"X-DSH-Secret": secret} if secret else {}
 
 
+def _breaker_open(url):
+    """True while the sidecar is inside its cooldown window."""
+    state = frappe.cache.get_value(DSH_BREAKER_KEY.format(url)) or {}
+    return float(state.get("open_until") or 0) > time.time()
+
+
+def _breaker_record(url, ok):
+    """One failure counter per sidecar URL, shared by every bench worker.
+
+    Read-modify-write is not atomic across workers. That is fine for a breaker:
+    an extra probe, or an open that is one request late, costs one request.
+    """
+    key = DSH_BREAKER_KEY.format(url)
+    if ok:
+        frappe.cache.delete_value(key)
+        return
+
+    state = frappe.cache.get_value(key) or {}
+    fails = int(state.get("fails") or 0) + 1
+    if fails >= DSH_BREAKER_THRESHOLD:
+        # Pinned at the threshold while open, so a failed half-open probe
+        # re-opens instead of starting the count again from zero.
+        frappe.cache.set_value(
+            key,
+            {"fails": DSH_BREAKER_THRESHOLD, "open_until": time.time() + DSH_BREAKER_COOLDOWN},
+            expires_in_sec=DSH_BREAKER_COOLDOWN * 4,
+        )
+    else:
+        frappe.cache.set_value(
+            key,
+            {"fails": fails, "open_until": 0},
+            expires_in_sec=DSH_BREAKER_COOLDOWN * 4,
+        )
+
+
+def _dsh_post(url, prompt, payload):
+    """POST one turn, retrying only what a retry can actually fix.
+
+    Called from _dsh_turn and nowhere else: execute_action must never retry,
+    because a retried write is a second document.
+    """
+    import requests
+
+    request_body = {
+        "session_id": payload.get("session_id") or "desk:{0}".format(frappe.session.user),
+        "text": prompt,
+        "company": payload.get("company"),
+    }
+    last = "no attempt made"
+
+    for attempt in range(DSH_MAX_ATTEMPTS):
+        try:
+            response = requests.post(
+                "{0}/chat".format(url),
+                json=request_body,
+                headers=_sidecar_headers(),
+                timeout=DSH_TIMEOUT,
+            )
+        except requests.exceptions.ConnectTimeout:
+            last = frappe.get_traceback()
+        except requests.exceptions.ReadTimeout:
+            # The model may still be working. A retry doubles the spend and
+            # blows the page's patience, so this failure is final.
+            frappe.log_error(frappe.get_traceback(), "DSH Sidecar Read Timeout")
+            _breaker_record(url, ok=False)
+            return None
+        except requests.exceptions.RequestException:
+            last = frappe.get_traceback()
+        else:
+            if response.status_code in DSH_TRANSIENT_STATUS:
+                last = "HTTP {0}: {1}".format(response.status_code, response.text[:300])
+            elif response.status_code >= 400:
+                # A 400/401/404 is our configuration or our contract, not a
+                # blip. It must not trip the breaker, or a wrong secret would
+                # look like a dead sidecar and every prompt would silently fall
+                # back to the router.
+                frappe.log_error(
+                    "DSH sidecar {0}: {1}".format(response.status_code, response.text[:500]),
+                    "DSH Sidecar Error",
+                )
+                return None
+            else:
+                _breaker_record(url, ok=True)
+                try:
+                    return response.json()
+                except ValueError:
+                    frappe.log_error(
+                        "DSH sidecar returned non-JSON: {0}".format(response.text[:300]),
+                        "DSH Sidecar Error",
+                    )
+                    return None
+
+        if attempt + 1 < DSH_MAX_ATTEMPTS:
+            time.sleep(DSH_BACKOFF_SEC[min(attempt, len(DSH_BACKOFF_SEC) - 1)])
+
+    frappe.log_error(last, "DSH Sidecar Unreachable")
+    _breaker_record(url, ok=False)
+    return None
+
+
 def _dsh_turn(prompt, payload):
     """One DSH turn, or None when the sidecar is unreachable or misbehaving.
 
     Nothing here can create a document: the sidecar holds no write credential,
     so a pending confirmation comes back as a surface whose button posts
     `{action, args}` to execute_action, where this user's own session decides.
+
+    Retries and the breaker live here and only here.
     """
     url = _sidecar_url()
     if not url:
         return None
 
-    session_id = payload.get("session_id") or "desk:{0}".format(frappe.session.user)
-    try:
-        import requests
+    if _breaker_open(url):
+        # Fail fast for the cooldown instead of making every prompt pay the
+        # timeout. The router answers meanwhile, and the breaker reopens
+        # itself after DSH_BREAKER_COOLDOWN.
+        return None
 
-        response = requests.post(
-            "{0}/chat".format(url),
-            json={
-                "session_id": session_id,
-                "text": prompt,
-                "company": payload.get("company"),
-            },
-            headers=_sidecar_headers(),
-            timeout=DSH_TIMEOUT,
-        )
-        if response.status_code >= 400:
-            frappe.log_error(
-                "DSH sidecar {0}: {1}".format(response.status_code, response.text[:500]),
-                "DSH Sidecar Error",
-            )
-            return None
-        body = response.json()
-    except Exception:
-        frappe.log_error(frappe.get_traceback(), "DSH Sidecar Unreachable")
+    body = _dsh_post(url, prompt, payload)
+    if body is None:
         return None
 
     if not isinstance(body, dict) or not isinstance(body.get("status"), str):
