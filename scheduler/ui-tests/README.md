@@ -6,7 +6,7 @@ drag-and-drop actually persists Ã¢â‚¬â€ not that a button exists.
 | Script | What it proves |
 |---|---|
 | `ui-diagnostic.mjs` | what the page rendered: selector counts, console errors, a screenshot. Use this first when the UI looks empty. |
-| `ui-drag-matrix.mjs` | a **Job Card** card exists in the Workstation Matrix and dragging it to another day issues `PUT /api/schedule/sync-reschedule {type:"jobcard"}` Ã¢â€ â€™ 2xx |
+| `ui-drag-matrix.mjs` | a **Job Card** card exists in the Workstation Matrix and dragging it to another day issues `PUT /api/schedule/sync-reschedule {type:"jobcard"}` â†’ 2xx |
 | `ui-drag-calendar.mjs` | the same for the **Calendar** view (different handler: FullCalendar `eventDrop`) |
 
 They only read the UI; the drag itself mutates the schedule, so put the demo back
@@ -15,7 +15,7 @@ afterwards (see below).
 ## Run
 
 ```powershell
-cd F:\ERPNEXT\erpnext-build\scheduler\ui-tests
+cd .\scheduler\ui-tests
 npm i playwright-core          # uses the system Chrome, downloads no browser
 node ui-cards.mjs              # read-only: are Job Cards rendered + draggable?
 node ui-drag-matrix.mjs        # -> {"ok":true, ...} and exit 0
@@ -41,7 +41,7 @@ docker exec -e JC=PO-JOB00002 -e START="2026-10-27 14:10:00" -e END="2026-10-29 
 `jc-shift.py` lives in `comp_demo/sandbox/scripts/`. Copy it in first:
 
 ```powershell
-docker cp F:\ERPNEXT\erpnext-build\sandbox\scripts\jc-shift.py comp_demo-bench-1:/tmp/scripts/
+docker cp .\sandbox\scripts\jc-shift.py comp_demo-bench-1:/tmp/scripts/
 ```
 
 ## Why this exists

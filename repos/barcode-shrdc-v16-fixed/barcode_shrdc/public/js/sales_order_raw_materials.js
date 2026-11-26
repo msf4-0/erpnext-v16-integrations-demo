@@ -6,17 +6,38 @@
 
 frappe.ui.form.on("Sales Order", {
 	refresh(frm) {
-		const events = frm.events || frm;
-		if (events.__raw_material_request_patched) return;
-		if (typeof events.make_raw_material_request_dialog !== "function") return;
-
-		// The core handlers live on the form's events object and are called as
-		// `this.make_raw_material_request_dialog(...)`, so replacing it here is
-		// enough to change what happens after the request is created.
-		events.make_raw_material_request_dialog = function (r) {
+		// Where does the method actually live?
+		//
+		// Frappe's ScriptManager does:
+		//     this.frm.cscript = extend_cscript(frm.cscript, new ControllerClass({frm}))
+		// and the Sales Order controller registers the button as
+		//     () => this.make_raw_material_request()
+		// where `this` is that controller instance (it reads `this.frm`).
+		// So the call `this.make_raw_material_request_dialog(r)` resolves on
+		// frm.cscript - NOT on frm.events (where the previous version put it)
+		// and not on the form object itself.
+		//
+		// Rather than bet on one owner, shadow the method on every object that
+		// could be on that resolution path.  Re-applied on each refresh because
+		// it is cheap and idempotent, and because a form reload rebuilds cscript.
+		const patched = function (r) {
 			open_raw_material_dialog(frm, r);
 		};
-		events.__raw_material_request_patched = true;
+		// Marker so the installation is checkable from the browser console:
+		//   cur_frm.cscript.make_raw_material_request_dialog.__rm_patched
+		// -> true means the override is live on this form.
+		patched.__rm_patched = true;
+
+		let installed = false;
+		for (const owner of [frm.cscript, frm.events, frm]) {
+			if (owner && typeof owner.make_raw_material_request_dialog === "function") {
+				owner.make_raw_material_request_dialog = patched;
+				installed = true;
+			}
+		}
+		// If nothing matched yet, leave it: the next refresh retries.  (The old
+		// version set a "patched" flag and could stop trying for good.)
+		return installed;
 	},
 });
 
@@ -98,13 +119,23 @@ function open_raw_material_dialog(frm, r) {
 					dialog.hide();
 					const message = res.message;
 					if (message && message.name) {
+						// Land directly on the Material Request that was just
+						// created - the items to purchase are on that document.
+						frappe.show_alert({
+							message: __("Material Request {0} created", [message.name]),
+							indicator: "green",
+						});
 						frappe.set_route("Form", "Material Request", message.name);
 					} else {
-						// Nothing left to request: go to the requests already raised
-						// for this order instead of showing an empty message box.
-						frappe.set_route("List", "Material Request", {
-							sales_order: frm.docname,
+						// Nothing left to request (server returned no document).
+						// Say so instead of leaving an empty message box.
+						frappe.show_alert({
+							message: __(
+								"No new Material Request was created - these items are already covered by existing requests."
+							),
+							indicator: "orange",
 						});
+						frappe.set_route("List", "Material Request");
 					}
 				},
 			});

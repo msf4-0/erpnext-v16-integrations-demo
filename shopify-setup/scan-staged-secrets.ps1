@@ -7,6 +7,8 @@ param(
     [string]$RepoRoot = (Split-Path $PSScriptRoot -Parent)
 )
 
+if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent $PSScriptRoot }
+
 $envFiles = @(
     (Join-Path $RepoRoot '.env')
     (Join-Path $RepoRoot 'sandbox\.env.fix')

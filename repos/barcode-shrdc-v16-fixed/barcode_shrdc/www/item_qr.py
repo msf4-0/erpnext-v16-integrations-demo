@@ -7,6 +7,11 @@ from frappe.utils import cstr, flt, cint, nowdate, add_days, comma_and, now_date
 no_cache = 1
 
 def get_context(context):
+    # A printed label is scanned by a phone that has no ERPNext session, and a
+    # Guest got 403 here before. The page is intentionally readable without
+    # login: it exposes only the item name/image, stock by warehouse and the
+    # serial tracking table - never rates, customers or documents.
+    frappe.flags.ignore_permissions = True
     barcode = frappe.form_dict.barcode
     item_code = frappe.form_dict.item_code
     item = frappe.get_doc("Item",item_code)

@@ -1,0 +1,96 @@
+{
+ "actions": [],
+ "autoname": "field:title",
+ "creation": "2026-11-18 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "title",
+  "dashboard_id",
+  "metabase_url",
+  "column_break_main",
+  "embed_mode",
+  "enabled",
+  "description"
+ ],
+ "fields": [
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "dashboard_id",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Metabase Dashboard ID",
+   "description": "The number in /dashboard/<id> in Metabase. The seed dump ships dashboard 1."
+  },
+  {
+   "fieldname": "metabase_url",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Embed URL",
+   "options": "URL",
+   "reqd": 1,
+   "description": "Full URL the /metabase page embeds, e.g. http://localhost:3005/public/dashboard/<uuid> or http://localhost:3005/dashboard/1"
+  },
+  {
+   "fieldname": "column_break_main",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "embed_mode",
+   "fieldtype": "Select",
+   "label": "Embed Mode",
+   "options": "iframe\nlink",
+   "default": "iframe"
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-18 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "metabase_integration",
+ "name": "Metabase Dashboard",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "All"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "title",
+ "track_changes": 1
+}

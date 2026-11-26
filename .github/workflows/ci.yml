@@ -42,22 +42,26 @@ jobs:
           exit $fail
       - name: No machine-specific absolute paths in the onboarding path
         # Executable/config surface only. .github is excluded because the
-        # workflow names the patterns it searches for, and .opencode because
-        # its agent permission globs are machine-bound by design. Prose docs
-        # still describe this machine and are not onboarding blockers.
+        # workflow names the patterns it searches for, .opencode because its
+        # agent permission globs are machine-bound by design, and
+        # bake/move-docker-admin.ps1 because it is a one-off host migration
+        # helper whose whole job is moving THIS machine's Docker disk - it is
+        # not an onboarding path. Prose docs still describe this machine and are
+        # not onboarding blockers.
         run: |
           if grep -rnE "F:[\\/]|C:\\\\Users|erpnext-build" \
                --include='*.ps1' --include='*.yml' --include='*.sh' \
                --include='.env.example' \
                --exclude-dir=.github --exclude-dir=.git --exclude-dir=.opencode \
-               --exclude-dir=__pycache__ . ; then
+               --exclude-dir=__pycache__ \
+               --exclude=move-docker-admin.ps1 . ; then
             echo "::error::machine-specific path in the onboarding path"
             exit 1
           fi
       - name: The retired sandbox/up.ps1 must not come back
         run: |
           if [ -e sandbox/up.ps1 ]; then
-            echo "::error::sandbox/up.ps1 belongs to the retired erpnext-fix project"
+            echo "::error::sandbox/up.ps1 belonged to the retired erpnext-fix project (removed 2026-11-17)"
             exit 1
           fi
 
@@ -69,7 +73,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Docker Compose file is valid
-        run: docker compose --env-file .env.example -f docker-compose.yml config -q
+        # versions.env carries the required pins (ERPNEXT_BASE, MARIADB,
+        # METABASE, NODE_RED). Without it the compose file's :? guards abort
+        # `config`, so this step failed on every push.
+        run: docker compose --env-file .env.example --env-file versions.env -f docker-compose.yml config -q
       - name: PowerShell scripts parse
         shell: pwsh
         run: |
@@ -107,63 +114,47 @@ jobs:
           exit $fail
 
   # ---------------------------------------------------------------------------
-  # Build the bench image. On main / tags this also pushes to GHCR, which is what
-  # lets a colleague `docker compose up` without a 25-35 minute build.
+  # Build the bench image and smoke-test it, WITHOUT pushing anywhere.
+  #
+  # CI must not depend on GHCR: that package is private, and publishing is a
+  # separate, deliberate action (publish-image.yml on tags / manual dispatch).
+  # The image is loaded into this runner so the import smoke test runs in-job.
   # ---------------------------------------------------------------------------
   build-bench-image:
     runs-on: ubuntu-latest
     needs: [repository-hygiene, validate]
+    timeout-minutes: 60
     permissions:
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      - name: Log in to GHCR
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build (and push on main)
+      - name: Read the pinned base image
+        # versions.env is the single source of truth. ERPNEXT_BASE has no
+        # default in bake/bench.Dockerfile, so omitting the build-arg made the
+        # image build fail with a blank FROM (never surfaced: this job was
+        # always skipped behind the two failing prerequisite jobs).
+        run: |
+          base="$(sed -n 's/^ERPNEXT_BASE=//p' versions.env | head -1)"
+          if [ -z "$base" ]; then
+            echo "::error::ERPNEXT_BASE missing from versions.env"
+            exit 1
+          fi
+          echo "ERPNEXT_BASE=$base" >> "$GITHUB_ENV"
+      - name: Build the bench image (no push)
         uses: docker/build-push-action@v6
         with:
           context: .
           file: bake/bench.Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ghcr.io/msf4-0/comp-demo-bench:v16
-            ghcr.io/msf4-0/comp-demo-bench:${{ github.sha }}
+          build-args: ERPNEXT_BASE=${{ env.ERPNEXT_BASE }}
+          push: false
+          load: true
+          tags: comp_demo-bench:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  # ---------------------------------------------------------------------------
-  # Smoke test: the image must at least import the apps it claims to ship.
-  # A full provision is too slow for every push, so this checks the things that
-  # broke silently before: import path, render deps, barcode templates.
-  # ---------------------------------------------------------------------------
-  smoke:
-    runs-on: ubuntu-latest
-    needs: build-bench-image
-    # The GHCR package is private by default, so a fresh runner must authenticate
-    # before it can pull what the previous job just pushed.
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - uses: actions/checkout@v4
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Pull the image built above
-        run: docker pull ghcr.io/msf4-0/comp-demo-bench:${{ github.sha }}
       - name: Apps import and render deps are present
         # One-line python: a heredoc terminator cannot start at column 0 inside a
         # YAML block scalar, and indented terminators do not work in bash.
         run: |
-          docker run --rm ghcr.io/msf4-0/comp-demo-bench:${{ github.sha }} \
-            /home/frappe/frappe-bench/env/bin/python -c "import importlib; mods=('frappe','erpnext','barcode_shrdc','shopify','eu_einvoice','reportlab','qrcode','PIL','drafthorse','saxonche'); [print('OK', m) for m in (importlib.import_module(x) and x for x in mods)]"
+          docker run --rm comp_demo-bench:ci \
+            /home/frappe/frappe-bench/env/bin/python -c "import importlib; mods=('frappe','erpnext','barcode_shrdc','shopify','reportlab','qrcode','PIL'); [print('OK', m) for m in (importlib.import_module(x) and x for x in mods)]"

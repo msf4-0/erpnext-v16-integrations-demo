@@ -15,9 +15,17 @@ a freshly provisioned site end up with exactly the same small dataset.
 from __future__ import annotations
 
 import frappe
+from frappe.utils import flt
 
 ITEM_GROUP_ROOT = "All Item Groups"
 UOM = "Nos"
+
+# BOM cost basis.  "Valuation Rate" leaves every demo BOM at zero because the
+# demo items never have a stock transaction, so the BOMs are priced from a
+# price list instead: one Item Price per demo item, seeded from the same rate
+# as the item's `standard_rate`.
+PRICE_LIST_CANDIDATES = ("Standard Buying", "Standard Selling")
+FALLBACK_PRICE_LIST = "Standard Buying"
 
 # code, name, group, standard_rate
 DEMO_ITEMS = (
@@ -86,17 +94,18 @@ DEMO_BOMS = (
 	),
 )
 
-# Everything created by the retired Go-Kart / Planner demo.  BOMs are removed
-# first; items that are still referenced by submitted transactions are disabled
-# rather than force-deleted so the cleanup can never corrupt a live site.
+# Everything created by the retired Planner demo, plus the retired *barcode*
+# go-kart (GKRT-001 and friends).  BOMs are removed first; items that are still
+# referenced by submitted transactions are disabled rather than force-deleted so
+# the cleanup can never corrupt a live site.
 LEGACY_ITEM_PREFIXES = ("PLN-", "GKRT-")
-LEGACY_ITEM_CODES = (
-	"FRM-001",
-	"WHL-001",
-	"STR-001",
-	"HST-001",
-	"SET-001",
-)
+# FRM-001 / WHL-001 / STR-001 / HST-001 / SET-001 used to be listed here as
+# "go-kart" leftovers.  They are NOT leftovers any more: the Go-Kart demo
+# (sandbox/scripts/seed-gokart-demo.py) reuses those exact codes for its Frame,
+# Wheel, Steering Wheel, and Seat.  Listing them here made every `bench migrate`
+# delete the go-kart BOM and its components, which is why the demo kept losing
+# the kart after a rebuild.  Kept empty on purpose - see docs/DEPLOY.md.
+LEGACY_ITEM_CODES: tuple[str, ...] = ()
 
 
 def _ensure_item_group(group_name: str, parent: str) -> None:
@@ -229,7 +238,15 @@ def clean_legacy_demo() -> dict:
 			if not frappe.db.exists("Item", code):
 				continue
 			try:
-				frappe.delete_doc("Item", code, force=1, ignore_permissions=True)
+				# force=0 on purpose.  force=1 skips link validation, which deleted
+				# items that submitted Sales Orders / Quotations still pointed at.
+				# Those rows survive as dangling references: opening the document
+				# shows a blank item, and Sales Order > Create > Request for Raw
+				# Material opens an EMPTY dialog (ERPNext checks `if (!r.message)`,
+				# and an empty JavaScript array is truthy).  With force=0 the
+				# LinkExistsError is raised, the except branch disables the item
+				# instead, and no transaction is left pointing at nothing.
+				frappe.delete_doc("Item", code, force=0, ignore_permissions=True)
 				removed_items += 1
 			except Exception:
 				try:
@@ -271,7 +288,85 @@ def _ensure_items(company: str) -> None:
 		).insert(ignore_permissions=True)
 
 
-def _ensure_boms(company: str, warehouse: str | None) -> None:
+def _ensure_price_lists(company: str) -> str:
+	"""Ensure the buying and selling price lists exist; return the buying one.
+
+	A restored demo database normally has "Standard Buying" and "Standard
+	Selling" from the setup wizard, but a minimal restore can have only one (or
+	neither).  The BOM cost basis needs a buying list, and the finished goods need
+	a selling list to be quotable, so both are created on demand.
+	"""
+	currency = frappe.db.get_value("Company", company, "default_currency") or "USD"
+	specs = (("Standard Buying", 1, 0), ("Standard Selling", 0, 1))
+	for name, buying, selling in specs:
+		if frappe.db.exists("Price List", name):
+			continue
+		frappe.get_doc(
+			{
+				"doctype": "Price List",
+				"price_list_name": name,
+				"buying": buying,
+				"selling": selling,
+				"enabled": 1,
+				"currency": currency,
+			}
+		).insert(ignore_permissions=True)
+
+	return FALLBACK_PRICE_LIST
+
+
+def _ensure_item_prices() -> dict:
+	"""One Item Price per demo item per existing price list, priced at standard_rate.
+
+	Buying prices drive the BOM cost; selling prices make the finished goods
+	quotable in the demo.  Idempotent: an existing row has its rate corrected
+	rather than duplicated.
+	"""
+	created = 0
+	updated = 0
+	lists = [name for name in PRICE_LIST_CANDIDATES if frappe.db.exists("Price List", name)]
+
+	for price_list in lists:
+		for code, _name, _group, rate in DEMO_ITEMS:
+			if not frappe.db.exists("Item", code):
+				continue
+			existing = frappe.get_all(
+				"Item Price",
+				filters={"item_code": code, "price_list": price_list},
+				pluck="name",
+				limit=1,
+			)
+			if existing:
+				current = frappe.db.get_value("Item Price", existing[0], "price_list_rate")
+				if flt(current) != flt(rate):
+					frappe.db.set_value(
+						"Item Price", existing[0], "price_list_rate", rate, update_modified=False
+					)
+					updated += 1
+				continue
+			frappe.get_doc(
+				{
+					"doctype": "Item Price",
+					"item_code": code,
+					"price_list": price_list,
+					"price_list_rate": rate,
+					"uom": UOM,
+				}
+			).insert(ignore_permissions=True)
+			created += 1
+
+	return {
+		"created": created,
+		"updated": updated,
+		"lists": lists,
+		"prices_per_list": {
+			name: frappe.db.count("Item Price", {"price_list": name}) for name in lists
+		},
+	}
+
+
+def _ensure_boms(company: str, warehouse: str | None, price_list: str | None = None) -> None:
+	basis = "Price List" if price_list else "Valuation Rate"
 	for parent, components in DEMO_BOMS:
 		existing = frappe.get_all(
 			"BOM",
@@ -293,11 +388,13 @@ def _ensure_boms(company: str, warehouse: str | None) -> None:
 					"is_active": 1,
 					"is_default": 1,
 					"with_operations": 0,
-					"rm_cost_as_per": "Valuation Rate",
+					"rm_cost_as_per": basis,
+					"buying_price_list": price_list,
 				}
 			)
 			for component, qty in components:
 				uom = frappe.db.get_value("Item", component, "stock_uom") or UOM
+				component_rate = flt(frappe.db.get_value("Item", component, "standard_rate"))
 				bom.append(
 					"items",
 					{
@@ -307,6 +404,10 @@ def _ensure_boms(company: str, warehouse: str | None) -> None:
 						"stock_uom": uom,
 						"conversion_factor": 1,
 						"source_warehouse": warehouse,
+						"rate": component_rate,
+						"amount": component_rate * flt(qty),
+						"base_rate": component_rate,
+						"base_amount": component_rate * flt(qty),
 					},
 				)
 			bom.flags.ignore_permissions = True
@@ -323,6 +424,19 @@ def _ensure_boms(company: str, warehouse: str | None) -> None:
 				pluck="name",
 			):
 				frappe.db.set_value("BOM Item", row, "source_warehouse", warehouse, update_modified=False)
+
+		# BOMs created before the price-list basis existed are costed from the
+		# (zero) valuation rate.  Move them onto the price list and recompute, so
+		# the demo never shows a BOM whose cost is 0.00.
+		doc = frappe.get_doc("BOM", bom_name)
+		if doc.rm_cost_as_per != basis or (price_list and doc.buying_price_list != price_list):
+			doc.rm_cost_as_per = basis
+			doc.buying_price_list = price_list
+			if doc.docstatus == 1:
+				doc.flags.ignore_validate_update_after_submit = True
+			doc.flags.ignore_permissions = True
+			doc.db_update()
+		doc.update_cost(save=True)
 
 
 def _ensure_metabase_shortcut() -> None:
@@ -349,8 +463,10 @@ def ensure_demo_manufacturing(company: str | None = None) -> dict:
 	company = company or _company()
 	cleanup = clean_legacy_demo()
 	_ensure_items(company)
+	price_list = _ensure_price_lists(company)
+	prices = _ensure_item_prices()
 	warehouse = _ensure_warehouse(company)
-	_ensure_boms(company, warehouse)
+	_ensure_boms(company, warehouse, price_list)
 	_ensure_metabase_shortcut()
 	frappe.db.commit()
 
@@ -359,6 +475,19 @@ def ensure_demo_manufacturing(company: str | None = None) -> dict:
 		"items": len(DEMO_ITEMS),
 		"boms": len(DEMO_BOMS),
 		"warehouse": warehouse,
+		"price_list": price_list,
+		"item_prices_created": prices["created"],
+		"item_prices_updated": prices["updated"],
+		"item_prices_per_list": prices["prices_per_list"],
+		"bom_costs": {
+			row.item: flt(row.total_cost)
+			for row in frappe.get_all(
+				"BOM",
+				filters={"item": ("in", [parent for parent, _ in DEMO_BOMS]), "docstatus": 1},
+				fields=["item", "total_cost"],
+				order_by="item asc",
+			)
+		},
 		**cleanup,
 	}
 

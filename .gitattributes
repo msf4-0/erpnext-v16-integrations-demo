@@ -15,6 +15,9 @@ Dockerfile text eol=lf
 
 *.env.example text eol=lf
 .env      text eol=lf
+# Sourced by the Linux launchers (up-linux.sh / install-apps-linux.sh). A CRLF
+# checkout makes "16\r" fail the FRAPPE_SERIES regex, so pin it to LF.
+versions.env text eol=lf
 
 *.ps1   text eol=crlf
 *.cmd   text eol=crlf

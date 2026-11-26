@@ -19,7 +19,7 @@ Checks:
 | 0-1 | clone succeeds; `.env.example` boots after only port/project edits |
 | 2-3 | compose create; db healthy; seeder exits 0 (it fails if the restore is empty) |
 | 5-6 | `/api/method/ping` 200; desk, both barcode scripts and the item-tracking script return 200 |
-| 7 | barcode_shrdc, shopify, eu_einvoice, item_tracking installed; planner health |
+| 7 | barcode_shrdc, shopify, item_tracking installed; planner health |
 
 Run it before tagging a release, and after any change to `docker-compose.yml`,
 `seed/`, or the `bench` startup block. It takes ~9 minutes because it exercises
@@ -42,7 +42,7 @@ needs read/select on `Account` and `Cost Center` just to write a Delivery Note.
 this after any change to `sandbox/scripts/create-demo-user.py` or to a doctype's
 permissions.
 
-Requires: a running stack (any of `start.ps1` / `up.ps1` / `setup.ps1`) and the
+Requires: a running stack (any of `setup/start` / `setup/up` / `setup/setup`) and the
 `ERPNEXT_API_TOKEN` line in `.env` for cleanup.
 
 ## Requirements for the clone gate

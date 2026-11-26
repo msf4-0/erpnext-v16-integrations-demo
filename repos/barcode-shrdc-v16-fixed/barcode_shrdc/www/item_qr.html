@@ -1,102 +1,89 @@
 {% extends "templates/web.html" %}
 
-{% block title %}{{ _('Item Details (QR Code Scanning)') }}{% endblock %}
-{% block header %}
-<h1>Item Details (QR Code Scanning)</h1>
-{% endblock header %}
+{% block title %}{{ item_name }} - {{ _("Item QR") }}{% endblock %}
+
 {% block page_content %}
+{#
+  Controller: barcode_shrdc/www/item_qr.py
+  This template was MISSING from the app until P8: the route
+  /item_qr?item_code=... raised jinja2.TemplateNotFound and returned HTTP 500,
+  so the QR/barcode scan page the demo advertises could not be opened at all.
+  The context keys below are exactly the ones get_context() returns.
+#}
 <style>
-    {% include "templates/item_qr/item_qr.css" %}
+  .qr-page { max-width: 900px; margin: 0 auto; padding: 1rem; }
+  .qr-card { display: flex; gap: 1.5rem; flex-wrap: wrap; align-items: flex-start; }
+  .qr-card img.item-image { max-width: 180px; border: 1px solid #d1d8dd; border-radius: 6px; }
+  .qr-meta dt { font-weight: 600; float: left; clear: left; width: 9rem; }
+  .qr-meta dd { margin-left: 9rem; }
+  .qr-barcode img { background: #fff; padding: 4px; border: 1px solid #d1d8dd; }
+  .qr-table { width: 100%; border-collapse: collapse; margin-top: .4rem; }
+  .qr-table th, .qr-table td { border: 1px solid #d1d8dd; padding: 4px 8px; text-align: left; font-size: .9rem; }
+  .qr-table th { background: #f5f7fa; }
+  .qr-scan-url { word-break: break-all; font-size: .85rem; }
 </style>
 
+<div class="qr-page">
+  <h2>{{ item_name }}</h2>
 
-<div class="card">
-    <div class = "image"><img src="{{ image }}" alt="Image Not Found" style="width:100%"></div>
-       
-        <p class="name">{{item_code}} : {{item_name}}</p>    
-    <div class = "details"> 
-        <table>
-            <tr>
-                <td> Barcode: </td>
-                <td> {{barcode}}</td>
-            </tr>
-            <tr>
-                <td> Serial No.:: </td>
-                <td> {{serial_no}}</td>
-            </tr>
-            <tr>
-                <td> Batch No.: </td>
-                <td> {{batch_no}}</td>
-            </tr>
-            <tr>
-                <td> Manufacturing Date: </td>
-                <td> {{mfg_date}}</td>
-            </tr>
-            <tr>
-                <td> Expiry Date: </td>
-                <td> {{exp_date}}</td>
-            </tr>
-            <tr>
-                <td> Warranty Expiry Date: </td>
-                <td> {{warranty_exp_date}}</td>
-            </tr>
-            <tr>
-                <td> AMC Expiry Date: </td>
-                <td> {{amc_exp_date}}</td>
-            </tr>
-            
-            <tr>
-                <td> Creation Document No.: </td>
-                <td> {{creation_doc}}</td>
-            </tr>
-            <tr>
-                <td> Creation Date: </td>
-                <td> {{creation_date}}</td>
-            </tr>
-            <tr>
-                <td> Delivery Document No.: </td>
-                <td> {{delivery_doc}}</td>
-            </tr>
-            <tr>
-                <td> Delivery Date: </td>
-                <td> {{delivery_date}}</td>
-            </tr>
-        </table>
-        <div class = "table">
-            <p>Quantity of items in each warehouse: </p>
-            <!-- from stock summary -->
+  <div class="qr-card">
+    <img class="item-image" src="{{ image }}" alt="{{ item_name }}">
 
-            <table>
-                <tr>
-                    <!-- {{warehouses}} -->
-                    <th>Warehouse</th>
-                    <th>Actual Quantity</th>
-                </tr>
-                {{warehouse_table}}
-            </table>
-        </div>
-        <br>
-        <div class="table">
-            <p>Serial No. Tracking Table: </p>
-            <!-- from stock ledger entry -->
-            <table>
-                <tr>
-                    <!-- {{warehouses}} -->
-                    <th>Datetime</th>
-                    <th>Warehouse</th>
-                    <th>Quantity</th>
-                    <th>Incoming Rate</th>
-                    <th>Voucher Type</th>
-                    <th>Voucher No.</th>
-                </tr>
-                {{serial_tracking_table}}
-            </table>
-        </div>
+    <dl class="qr-meta">
+      <dt>{{ _("Item") }}</dt><dd>{{ item_code }}</dd>
+      {% if barcode %}<dt>{{ _("Barcode") }}</dt><dd>{{ barcode }}</dd>{% endif %}
+      {% if serial_no %}<dt>{{ _("Serial No") }}</dt><dd>{{ serial_no }}</dd>{% endif %}
+      {% if batch_no %}<dt>{{ _("Batch") }}</dt><dd>{{ batch_no }}</dd>{% endif %}
+      {% if mfg_date %}<dt>{{ _("Manufactured") }}</dt><dd>{{ mfg_date }}</dd>{% endif %}
+      {% if exp_date %}<dt>{{ _("Expires") }}</dt><dd>{{ exp_date }}</dd>{% endif %}
+      {% if warranty_exp_date %}<dt>{{ _("Warranty until") }}</dt><dd>{{ warranty_exp_date }}</dd>{% endif %}
+      {% if amc_exp_date %}<dt>{{ _("AMC until") }}</dt><dd>{{ amc_exp_date }}</dd>{% endif %}
+      {% if creation_doc %}<dt>{{ _("Purchased on") }}</dt><dd>{{ creation_doc }} ({{ creation_date }})</dd>{% endif %}
+      {% if delivery_doc %}<dt>{{ _("Delivered on") }}</dt><dd>{{ delivery_doc }} ({{ delivery_date }})</dd>{% endif %}
+      <dt>{{ _("Open in Desk") }}</dt><dd><a href="{{ route }}">{{ item_code }}</a></dd>
+    </dl>
+
+    <div class="qr-barcode">
+      {# get_barcode_image is registered in hooks.py jinja.methods. It returns a
+         public file URL; QR codes are not a reportlab symbology, so the page
+         shows the scannable CODE128 of the item code and the QR target URL. #}
+      <img alt="barcode {{ item_code }}"
+           src="{{ get_barcode_image(barcode=item_code, barcode_type='CODE128', width=2, height=40) }}">
+      <div class="qr-scan-url">
+        <a href="{{ route }}">{{ _("Scan target") }}: {{ frappe.utils.get_url() }}/item_qr?item_code={{ item_code }}{% if serial_no %}&amp;serial_no={{ serial_no }}{% endif %}</a>
+      </div>
     </div>
-    <hr>
-    <p><button onclick="location.href='{{route}}'">Login & go to Item (for Employee)</button></p>
   </div>
-  {% endblock %}
 
+  <h4>{{ _("Stock by warehouse") }}</h4>
+  <table class="qr-table">
+    <thead><tr><th>{{ _("Warehouse") }}</th><th>{{ _("Qty") }}</th></tr></thead>
+    <tbody>
+      {% if warehouse_table %}
+        {{ warehouse_table }}
+      {% else %}
+        <tr><td colspan="2">{{ _("No stock records for this item.") }}</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
 
-  
+  {% if serial_no %}
+  <h4>{{ _("Serial tracking") }}</h4>
+  <table class="qr-table">
+    <thead>
+      <tr>
+        <th>{{ _("When") }}</th><th>{{ _("Warehouse") }}</th><th>{{ _("Qty") }}</th>
+        <th>{{ _("Rate") }}</th><th>{{ _("Voucher type") }}</th><th>{{ _("Voucher") }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if serial_tracking_table %}
+        {{ serial_tracking_table }}
+      {% else %}
+        <tr><td colspan="6">{{ _("No stock ledger entries for this serial.") }}</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

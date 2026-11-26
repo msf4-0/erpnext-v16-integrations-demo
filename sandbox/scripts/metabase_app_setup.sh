@@ -24,7 +24,7 @@ else
 fi
 
 # 4. PyJWT 2.x compat: jwt.encode() returns str, the code calls token.decode()
-F=$BB/apps/metabase_integration/metabase_integration/metabase_integration/doctype/metabase_dashboard/__init__.py
+F=$BB/apps/metabase_integration/metabase_integration/metabase_integration/doctype/metabase/__init__.py
 if grep -q "token.decode('utf8')" "$F"; then
   python3 - "$F" <<'PY'
 import sys

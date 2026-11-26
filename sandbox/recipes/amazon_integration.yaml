@@ -2,8 +2,8 @@
 #
 # Source of truth is ./repos/amazon-integration (gitignored, local-only). The
 # app is NOT a git repo with a remote, so install from the DIRECTORY:
-#   docker compose -p erpnext-sandbox cp ./repos/amazon-integration bench:/tmp/amazon-integration
-#   docker compose -p erpnext-sandbox exec bench bash -lc \
+#   docker compose -p comp_demo cp ./repos/amazon-integration bench:/tmp/amazon-integration
+#   docker compose -p comp_demo exec bench bash -lc \
 #     "/tmp/scripts/install-app.sh amazon_integration /tmp/amazon-integration 16 /tmp/recipes/amazon_integration.yaml"
 #
 # Scaffolded with `bench new-app amazon_integration` so the v16 boilerplate is

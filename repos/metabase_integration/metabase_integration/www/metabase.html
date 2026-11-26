@@ -14,8 +14,19 @@
     <iframe class="mb-frame" src="{{ dashboard_url }}" title="ERPNext Monitoring dashboard" loading="lazy" allowfullscreen></iframe>
   </div>
   <p class="mb-note">Data source: the ERPNext MariaDB database. The dashboard refreshes when the page is reloaded.</p>
+  {% if dashboards and dashboards|length > 1 %}
+  <ul class="mb-list">
+    {% for d in dashboards %}
+    <li><a href="{{ d.metabase_url }}" target="_blank" rel="noopener">{{ d.title }}</a>{% if d.description %} — {{ d.description }}{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
   {% else %}
-  <div class="alert alert-warning">Metabase is not configured yet. Run <code>sandbox/scripts/ensure_metabase.ps1</code>, then reload this page.</div>
+  <div class="alert alert-warning">
+    Metabase is not configured yet. Either set <code>metabase_dashboard_url</code> in the site
+    config, or add an enabled <b>Metabase Dashboard</b> record (Desk → Metabase Dashboard).
+    The demo seed normally restores both the Metabase metadata and this setting.
+  </div>
   {% endif %}
 </div>
 <style>

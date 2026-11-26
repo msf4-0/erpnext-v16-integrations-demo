@@ -120,6 +120,21 @@ jobs:
           docker compose logs --tail=100 scheduler
           exit 1
 
+      # The canonical acceptance check, run exactly as an operator would run it
+      # on a cold machine. It decides app installation from the database
+      # (`frappe.get_installed_apps`), not from `bench list-apps`, which
+      # under-reports on this bench build. Before this step existed, CI seeded a
+      # site and pinged it but never ran the thing DEPLOY.md tells users to run,
+      # so a regression in the verifier itself could not be caught here.
+      - name: Acceptance verifier (7 checks, DB-truth)
+        env:
+          PROJECT: comp_demo
+          SITE_NAME: frontend
+          ERPNEXT_PORT: 8000
+        run: |
+          bash sandbox/scripts/verify-deployment.sh | tee /tmp/verify.log
+          grep -q 'ALL CHECKS PASSED' /tmp/verify.log
+
       - name: Dump logs on failure
         if: failure()
         run: |

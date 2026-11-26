@@ -116,14 +116,12 @@ step-0 backup.
    - `bench version` inside the container matches the intended tag (e.g. v16).
    - No `apps/<app>` directory remains.
 
-> **Apps that are legitimately kept.** If the workspace ships an intentional app
-> (e.g. `chat_widget` here), exclude it by name in step 2 — the goal is "base
+> **Apps that are legitimately kept.** If the workspace ships an intentional app,
+> exclude it by name in step 2 — the goal is "base
 > **plus the agreed apps**", not "delete everything". Confirm the keep-list with
 > the user before deleting any app.
 
-Helper: `sandbox/scripts/cx_rollback.sh` implements exactly this (backup →
-uninstall → remove → drop leftovers → migrate → verify). Run it with the app name
-argument, or `--all` to remove every non-core app. See `erpnext-test-sandbox`.
+There is **no rollback script in this repository** (none has ever been committed). Do it by hand, in this order: `bench --site <site> backup --with-files`, `bench --site <site> uninstall-app <app> --yes`, remove the app dir, drop leftover doctypes/`tabSingles` rows, `bench --site <site> migrate`, then `bench --site <site> list-apps` to verify. Take a backup first and confirm with the user.
 
 ## Data-loss warnings (say these out loud in the rollback note)
 - Submitted **GL / Stock** entries are real accounting events: you **cancel +
@@ -141,5 +139,5 @@ Verified by: <test name>
 
 - Tier 1 = disable · Tier 2 = remove the one app/field · Tier 3 = restore backup ·
   Tier 4 = full return to base ERPNext (all non-core apps + customisations gone).
-- For Tier 4 name the exact keep-list (e.g. "base v16 + chat_widget") and the
+- For Tier 4 name the exact keep-list (e.g. "base v16 + the explicitly retained apps") and the
   backup filename recorded in step 0.

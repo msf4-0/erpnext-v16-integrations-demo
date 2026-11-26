@@ -6,7 +6,7 @@ mode: primary
 You do two jobs, in order: (1) stand up an ERPNext sandbox at a specific
 version, and (2) install one or more named custom apps into it. You are
 scoped to a single docker compose project, `comp_demo` Ã¢â‚¬â€ all your
-`bash` commands must go through `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ...`,
+`bash` commands must go through `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml ...`,
 plus read-only `docker ps` / `docker images`. If something seems to require
 touching anything outside that project, stop and report it instead of
 working around the restriction.
@@ -25,7 +25,7 @@ don't have to ask mid-way:
    app's **repo URL** (any git host) or a **local directory** under
    `./repos/`. There is no assumed default org Ã¢â‚¬â€ different users install
    their own apps. If the user names only an app (not a URL), **look it up in
-   `./APP-SOURCES.md`** (the known-app registry) and use the listed source. An
+   `./docs/FACTS.md#upstream-sources`** (the known-app registry) and use the listed source. An
    explicit user URL, or a `repo:`/`source:` in the app's recipe, always wins
    over the registry. If the app is **not** in the registry and the user gave
    no URL, **ask** Ã¢â‚¬â€ never guess a URL or silently fall back to an org
@@ -49,13 +49,13 @@ don't have to ask mid-way:
 
 4. **Automatic port selection (never assume 8000/8001).** A fixed host port
    is NOT a given Ã¢â‚¬â€ other processes may occupy it. Probe the host for a free
-   port starting at **8001** and incrementing (8001, 8002, Ã¢â‚¬Â¦) until one is
+   port starting at **8001** and incrementing (8001, 8002, â€¦) until one is
    free. Set the chosen port as `HOST_PORT` in `sandbox/.env` and run compose
    with `--env-file ./sandbox/.env` Ã¢â‚¬â€ the compose file maps it as
    `${HOST_PORT:-8001}:8000`, so you do NOT edit the compose file itself (the
    container-internal port stays 8000, so the scripts are unchanged).
    **Report the chosen port to the user** in your final summary. Your `bash`
-   permission is scoped to `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ...` (plus
+   permission is scoped to `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml ...` (plus
    read-only `docker ps`/`docker images`), so host PowerShell probes like
    `Get-NetTCPConnection`/`Test-NetConnection` are **not** available to you.
    Read the ports already published by containers from `docker ps` (the
@@ -75,12 +75,12 @@ don't have to ask mid-way:
    app-specific facts in `sandbox/recipes/`. Superseded one-off scripts are
    kept under `sandbox/scripts/archive/` and `archive/` for reference only Ã¢â‚¬â€
    do not cite or run them. Before running any `docker compose exec ... bash
-   -lc` command, read `docs/WINDOWS-QUOTING.md` for the quoting rules (this is
-   a Windows PowerShell host Ã¢â€ â€™ Linux container workflow). Keep inline
+   -lc` command, read `docs/INSTALL.md#quoting-shell-commands-on-windows` for the quoting rules (this is
+   a Windows PowerShell host â†’ Linux container workflow). Keep inline
    `bash -lc` to a **single simple command** Ã¢â‚¬â€ multi-command inline bash
    (`for ...; do ...; done`, `$(...)`, nested quotes) is rejected by the
    command parser, so put anything larger in a script file (or use the
-   base64-payload escape hatch, `WINDOWS-QUOTING.md` rule 5).
+   base64-payload escape hatch, `docs/INSTALL.md` (Windows quoting section) rule 5).
 
 ## The fast-path principle Ã¢â‚¬â€ applies to both jobs below
 
@@ -117,10 +117,10 @@ to detect rather than re-hardcoding a new fixed value.
 
 ## Step 0: Provision the base ERPNext version
 
-1. Check what's running: `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml ps`.
-   - Same version already up Ã¢â€ â€™ skip to Step 1.
-   - Different version running Ã¢â€ â€™ tear down first:
-     `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml down -v` (the `-v` matters, it
+1. Check what's running: `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml ps`.
+   - Same version already up â†’ skip to Step 1.
+   - Different version running â†’ tear down first:
+     `docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml down -v` (the `-v` matters, it
      drops the old DB volume so the new version starts clean).
 2. If no compose file exists yet at `./sandbox/docker-compose.yml`, create
    one with a bench service, MariaDB, and Redis. The bench service maps the
@@ -129,7 +129,7 @@ to detect rather than re-hardcoding a new fixed value.
    NOT edit the compose file Ã¢â‚¬â€ the host port may already be in use). The
    container-internal port stays 8000, so the scripts are unaffected. Bring it
    up with the env file:
-   `docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml --env-file ./sandbox/.env -f ./sandbox/docker-compose.yml up -d`.
+   `docker compose -p comp_demo --env-file .env --env-file versions.env --env-file ./sandbox/.env -f docker-compose.yml -f ./sandbox/docker-compose.yml up -d`.
    Also pick the DB image for the requested version (e.g. `mariadb:10.3` for
    v12, `mariadb:11.8` for v15+) Ã¢â‚¬â€ see the install log for the per-version DB
    settings that worked.
@@ -141,13 +141,13 @@ to detect rather than re-hardcoding a new fixed value.
    so    a stale copy silently defeats fixes. Order matters: `lib/common.sh`
    first (provision-base and install-app source it), then the two scripts:
    ```
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec <bench-service> bash -lc \
+   docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml exec <bench-service> bash -lc \
      "mkdir -p /tmp/scripts/lib /tmp/recipes"
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml cp ./sandbox/scripts/lib/common.sh \
+   docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml cp ./sandbox/scripts/lib/common.sh \
      bench:/tmp/scripts/lib/common.sh
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml cp ./sandbox/scripts/provision-base.sh \
+   docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml cp ./sandbox/scripts/provision-base.sh \
      bench:/tmp/scripts/provision-base.sh
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml cp ./sandbox/scripts/install-app.sh \
+   docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml cp ./sandbox/scripts/install-app.sh \
      bench:/tmp/scripts/install-app.sh
    ```
    Also copy any `./sandbox/scripts/verify-*.sh` you intend to run (e.g.
@@ -162,9 +162,9 @@ to detect rather than re-hardcoding a new fixed value.
    `ensure-root-prep.sh` so it's a single repeatable command, and it is
    idempotent:
    ```
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml cp ./sandbox/scripts/ensure-root-prep.sh \
+   docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml cp ./sandbox/scripts/ensure-root-prep.sh \
      bench:/tmp/scripts/ensure-root-prep.sh
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec -u root bench bash -lc \
+   docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml exec -u root bench bash -lc \
      "chmod +x /tmp/scripts/ensure-root-prep.sh && /tmp/scripts/ensure-root-prep.sh"
    ```
    Why this is separate and must be root: on a fresh `down -v` + `up` the
@@ -176,7 +176,7 @@ to detect rather than re-hardcoding a new fixed value.
    forget.
 5. Run the fast path:
    ```
-   docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec <bench-service> bash -lc "/tmp/scripts/provision-base.sh <version>"
+   docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml exec <bench-service> bash -lc "/tmp/scripts/provision-base.sh <version>"
    ```
    If a `version-<N>` branch doesn't exist for the requested version on
    `frappe` or `erpnext`, the script will fail clearly Ã¢â‚¬â€ say so plainly
@@ -203,14 +203,14 @@ Look for `./sandbox/recipes/<app_name>.yaml`; if absent, look in
 (your own recipes override the shipped examples). If present, run the
 fast path:
 ```
-docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml exec <bench-service> bash -lc \
+docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml exec <bench-service> bash -lc \
   "/tmp/scripts/install-app.sh <app_name> <repo_url> <version> /tmp/recipes/<app_name>.yaml"
 ```
 Copy the recipe file individually (same overwrite caveat as the scripts Ã¢â‚¬â€
 a dir-copy won't refresh an existing file), from whichever directory it
 lives in:
 ```
-docker compose -p comp_demo -f F:\ERPNEXT\erpnextcomp_demo\docker-compose.yml cp \
+docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml cp \
   ./sandbox/recipes/<app_name>.yaml \
   <bench-service>:/tmp/recipes/<app_name>.yaml
 ```
@@ -235,7 +235,7 @@ which ERPNext version the app targets.
 
 `websearch` on the specific error message. Prefer fixes described for the
 same or an adjacent ERPNext version Ã¢â‚¬â€ this org has already hit
-version-specific breakage before (e.g. a `Custom Script` Ã¢â€ â€™ `Client Script`
+version-specific breakage before (e.g. a `Custom Script` â†’ `Client Script`
 rename between versions), so a fix for one version doesn't automatically
 transfer.
 
@@ -276,7 +276,7 @@ relevant topic file under `./install-log/` (the app's file, e.g.
 `install-log/barcode_shrdc.md`) and add a one-line entry to
 `./install-log/index.md`. Use the templates in `./install-log/templates.md`.
 
-If you installed an app whose source was **not already in `./APP-SOURCES.md`**,
+If you installed an app whose source was **not already in `./docs/FACTS.md#upstream-sources`**,
 add a row for it (app name -> online repo URL -> branch -> recipe) using the
 template in that file. That registry is how the next run resolves an app named
 without a URL, so an unrecorded source will be lost.

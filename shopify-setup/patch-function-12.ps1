@@ -17,6 +17,10 @@ param(
     [string]$Container = 'comp_demo-node-red-1'
 )
 
+if (-not $FlowPath) {
+    $FlowPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'sandbox\node-red\flows.json'
+}
+
 $newFunc = @'
 const orderId = msg.erpnext && msg.erpnext.shopify_order_id;
 

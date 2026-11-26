@@ -24,6 +24,7 @@ $ProgressPreference = 'SilentlyContinue'
 $DemoDir  = $PSScriptRoot | Split-Path -Parent
 $Compose  = Join-Path $DemoDir 'docker-compose.yml'
 $EnvPath  = Join-Path $DemoDir '.env'
+$VersionsPath = Join-Path $DemoDir 'versions.env'
 $Cache    = Join-Path $DemoDir '.cache'
 $Project  = 'comp_demo'
 $Dump     = Join-Path $Cache 'comp_demo-site.sql'
@@ -32,9 +33,9 @@ $AllDump  = Join-Path $Cache 'comp_demo-site-dump.sql'   # full all-databases sa
 New-Item -ItemType Directory -Force -Path $Cache | Out-Null
 
 $compose = if (Get-Command docker-compose -ErrorAction SilentlyContinue) {
-    @('docker-compose', '-p', $Project, '--env-file', $EnvPath, '-f', $Compose)
+    @('docker-compose', '-p', $Project, '--env-file', $EnvPath, '--env-file', $VersionsPath, '-f', $Compose)
 } else {
-    @('docker', 'compose', '-p', $Project, '--env-file', $EnvPath, '-f', $Compose)
+    @('docker', 'compose', '-p', $Project, '--env-file', $EnvPath, '--env-file', $VersionsPath, '-f', $Compose)
 }
 function Run($exe, $args) { & $exe @args 2>&1 | ForEach-Object { "$_" } }
 

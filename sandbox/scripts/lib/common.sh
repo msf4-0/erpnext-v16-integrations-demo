@@ -221,7 +221,7 @@ filter_missing_custom_field_dts() {
   # Query the DB via the venv's pymysql and the site's own config, NOT via
   # frappe.init/connect: a raw frappe connect needs a full bench context and
   # dies with FileNotFoundError '/home/frappe/logs/database.log' when run
-  # outside it (docs/WINDOWS-QUOTING.md rule 7). We only need to know which
+  # outside it (docs/INSTALL.md#quoting-shell-commands-on-windows rule 7). We only need to know which
   # DocTypes exist, so a direct information_schema query is sufficient and
   # has no such dependency.
   "$BENCH_DIR/env/bin/python" - "$f" <<'PYEOF'
@@ -314,17 +314,26 @@ install_local_app_dir() {
   sudo chown -R "$(id -un):$(id -gn)" "$dest" 2>/dev/null || true
   rm -rf "$dest/.git"
 
-  # 4) verify: exactly one hooks.py must exist
-  local hooks_count hooks_path
-  hooks_count=$(find "$dest" -maxdepth 3 -name hooks.py 2>/dev/null | wc -l | tr -d ' ')
-  if [ "$hooks_count" != "1" ]; then
-    log "ERROR: expected exactly 1 hooks.py under apps/$app, found $hooks_count"
+  # 4) verify: the app PACKAGE must carry exactly one hooks.py.
+  # bench resolves an app by import name, i.e. apps/<app>/<app>/hooks.py. Copies
+  # of the tree at other depths are ignored by frappe - repos/item_tracking
+  # ships two of them - so a global count was too strict: it refused a layout
+  # that `bench install-app` installs fine. Fail only when the package is
+  # missing; warn about the strays so the mess stays visible.
+  local pkg_hooks="$dest/$app/hooks.py"
+  if [ ! -f "$pkg_hooks" ]; then
+    log "ERROR: no importable app package at apps/$app/$app/hooks.py"
     find "$dest" -maxdepth 3 -name hooks.py 2>/dev/null | sed 's/^/  /' >&2
-    log "  Refusing to continue (the tree is likely nested)."
+    log "  Refusing to continue (this app has no package to import)."
     return 1
   fi
-  hooks_path=$(find "$dest" -maxdepth 3 -name hooks.py 2>/dev/null | head -n1)
-  log "placed app at apps/$app (hooks.py: ${hooks_path#$BENCH_DIR/})"
+  local strays
+  strays=$(find "$dest" -maxdepth 3 -name hooks.py ! -path "$pkg_hooks" 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$strays" -gt 0 ]; then
+    log "WARN: $strays extra hooks.py copy/copies under apps/$app are ignored"
+    find "$dest" -maxdepth 3 -name hooks.py ! -path "$pkg_hooks" 2>/dev/null | sed 's/^/  ignored: /'
+  fi
+  log "placed app at apps/$app (hooks.py: ${pkg_hooks#$BENCH_DIR/})"
   return 0
 }
 
@@ -347,7 +356,7 @@ restart_bench_serve() {
   # Must be DETACHED: a plain `( … &)` dies when the exec session ends, and
   # `nohup … &` without a stdin redirect can hold the exec pipe open so the
   # tool call appears to hang. `setsid nohup … < /dev/null & disown` is the
-  # documented-good form (docs/WINDOWS-QUOTING.md rule 8).
+  # documented-good form (docs/INSTALL.md#quoting-shell-commands-on-windows rule 8).
   ( cd "$BENCH_DIR" && setsid nohup bench serve --port 8000 > /tmp/bench-serve.log 2>&1 < /dev/null & disown )
 }
 

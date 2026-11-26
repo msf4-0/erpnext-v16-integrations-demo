@@ -119,7 +119,7 @@ Add a `doc_events` hook in the existing **`item_tracking`** app (it already owns
        }
    }
    ```
-2. `repos/item_tracking/item_tracking/events/stock_entry.py`:
+2. `repos/item_tracking/item_tracking/item_tracking/doctype/stock_entry_tracked_item/stock_entry_tracked_item.py`:
    ```python
    import frappe
    from frappe.utils import cint
@@ -164,7 +164,7 @@ tier **1** (disable) — simply remove the `doc_events` entry.
 Metabase keeps its metadata in the **`metabase` schema of the `db` MariaDB**
 (no volume of its own). Recreating `db_data` therefore wipes the admin account,
 the `ERPNext` data source and every saved question/dashboard — which is what
-happened here. `up.ps1` now starts the `metabase` container and runs
+happened here. `setup/up` now starts the `metabase` container and runs
 `sandbox/scripts/ensure_metabase.ps1`, which is idempotent and does:
 
 1. `CREATE DATABASE metabase` + `metabase_user` + `GRANT SELECT, SHOW VIEW` on
@@ -172,7 +172,7 @@ happened here. `up.ps1` now starts the `metabase` container and runs
    this guide's old `_35e1999d62da474b` is gone; the current one is
    `_3b87344c91a8f6dd`)
 2. waits for `http://localhost:3005/api/health`
-3. admin (`admin@demo.local`) + `ERPNext` data source via `metabase-seed.ps1`
+3. admin (`admin@demo.local`) + `ERPNext` data source via `setup/metabase-seed`
 4. the 4 questions + `ERPNext Monitoring` dashboard, only if absent
 
 Current dashboard: id 2, 4 cards (Sales Order pie, Purchase Order bar,

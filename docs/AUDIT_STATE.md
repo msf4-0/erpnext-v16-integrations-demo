@@ -1,0 +1,831 @@
+# Cleanup audit state — 2026-11-17
+
+Branch `fix/cleanup-Adji`. Executed against the working tree and the running `comp_demo` stack.
+Status vocabulary: **Implemented / Tested / Verified / Blocked / Not started**.
+"Verified" = a command transcript in this file.
+
+Commits: `ad19680` (P0), `076bb1f` (P1+P2), plus the P3 doc-fact commit.
+
+---
+
+## P0 — Repair
+
+| # | Change | Status |
+|---|---|---|
+| 1 | `repos/metabase_integration/metabase_integration/__init__.py` had **no** `__version__` → added | Implemented |
+| 1b | **New defect found:** `repos/my_invois/my_invois/__init__.py` shipped `__version__ = " 0.0.1` — an **unterminated string**, so the module failed to import. Rewritten | Implemented |
+| 3 | `.env` line 68 (corrupted comment) truncated: **250,318 → 3,954 bytes**, 79 lines preserved | Implemented |
+| 7 | `versions.env text eol=lf` added to `.gitattributes`; `env_value()` now does `sub(/\r$/,"")` | Implemented |
+
+**Verified transcript**
+
+```
+$ docker exec comp_demo-bench-1 bash -lc "cd /home/frappe/frappe-bench && bench --site frontend version"
+barcode_shrdc 0.0.2  ()
+erpnext 16.35.0  ()
+eu_einvoice 16.3.0  ()
+frappe 16.35.0  ()
+item_tracking 0.0.2  ()
+metabase_integration 0.0.1  ()
+my_invois 0.0.1  ()
+shopify 0.0.1  ()
+exit=0
+
+$ docker compose -p comp_demo --env-file .env --env-file versions.env -f docker-compose.yml config -q
+exit=0
+```
+
+Note: the container's `my_invois` app is **baked into the image**, not bind-mounted (only 4 app
+dirs are mounted), so the live fix was applied with `docker cp` and the host tree was fixed for
+the next build. A rebuild will carry it.
+
+## P1 — Dead-code sweep
+
+| Change | Status |
+|---|---|
+| 108 of 160 `sandbox/scripts/*` moved to `sandbox/scripts/_legacy/` (proven unreferenced) | Implemented / Verified |
+| Deleted `sandbox/up.ps1`, `sandbox/scheduler-setup/up`, `sandbox/docker-compose.yml`, `sandbox/docker-compose.erpnext-fix.yml`, `sandbox/rebuild.sh`, `sandbox/scripts/rebuild-sandbox.sh`, `adji`, `SETUP-GUIDE.docx` | Implemented |
+| `.cache/` — 2 ngrok log files still open by a running process; not deleted, now gitignored | Partial |
+
+Reference proof method: every tracked text file (572) was loaded and searched for each script's
+basename, skipping the file itself; files with zero hits were quarantined. Result: **52 remain**
+(18 launcher-referenced + 34 referenced from docs/agents), 108 dead, 68 pre-existing archived.
+
+`MANIFEST.md` (root) was **deleted**: its counts were stale, it documented the removed
+`sandbox/.env.ai-fix`, and it was the last carrier of an `ai-fix` reference. This differs from the
+prompt's "regenerate last or delete" only in choosing delete.
+
+## P2 — Kill the ai-fix generation
+
+13 files pointed at the deleted launcher; all rewritten to the canonical root `setup/up`.
+`sandbox/.env.ai-fix` / `.env.fix` mentions removed; `ai-fix-*.sh` → `fix-*.sh`.
+
+**Verified**
+
+```
+$ git grep -c -E 'ai-fix' -- .                    # 0 files
+$ git grep -c -E '/metabase_dashboard' -- .       # 0 files
+$ Test-Path on all 23 keep-list paths             # missing=0
+```
+
+**Regression caught and fixed:** the blanket path rewrite also turned the CI guard
+"the retired `setup/up` must not come back" into a guard against the **canonical** root launcher
+(`.github/workflows/ci.yml`), and reworded `setup/up`'s own help so it described itself as dead.
+Both were corrected: the guard now checks `sandbox/up.ps1` again, and the help text names the
+retired file explicitly.
+
+**Second regression caught and fixed:** replacing the literal `4041` repo-wide corrupted
+`repos/shopify-shrdc-v16-fixed/shopify/orders.json` (the substring sat inside a Shopify order
+token) and two legitimate ngrok port-probe lists. All four files were reverted with
+`git checkout --`; the data file is byte-identical to `HEAD` again. Only the two genuinely wrong
+doc claims were changed.
+
+## P3 (partial) — One source of truth for facts
+
+| Fact | Change |
+|---|---|
+| ngrok API port | `AGENTS.md` 4041 → **4040** |
+| Metabase route | `Customisations.md` `/metabase_dashboard` → **`/metabase`** |
+| Frappe/ERPNext versions | `MILESTONES.md:51` 16.53.0/16.52.1 and `ASSESSMENT-einvoicing-barcode.md:16` 16.53/16.54 → **16.35.0** |
+
+Remaining `4041` occurrences are intentional: a fallback default in `setup/up:236` and two
+"probe both ports" loops (`setup/verify-all`, `shopify-setup/setup-shopify-erpnext.ps1`), plus
+`orders.json`, which is vendored third-party data.
+
+## Not started — and why
+
+| Item | Reason / status |
+|---|---|
+| Defect 2 — `.env` regeneration | **Done** — see Round 2 below. |
+| Defect 5 — bench container on untagged image | **Done differently** — see Round 2: retagged, pinned, recreated. |
+| Defect 6 — Node-RED on `:latest` vs pinned 5.0.9 | **Done** — see Round 2. |
+| Defect 8/11/16 — divergent launchers, service counts, `up-linux.sh` pull-then-build | Out of the executed scope (P4/P5). |
+| P4 — EOL hardening beyond `versions.env` | Only the two `env_value`/`.gitattributes` pieces landed. |
+| P5 — consolidate 74 docs to ~12 | Not attempted; large, and would conflict with the un-repaired `.env`/counts. |
+| P6 — structural move | Explicitly out of bounds without a direct request. |
+| Verification harness (`up-linux.sh` with stubbed docker on WSL) | No usable Linux shell confirmed on this host; the compose-config and keep-list checks were used instead. |
+
+## Count corrections to the prompt's ground truth
+
+| Claim | Measured |
+|---|---|
+| `sandbox/scripts/*` non-archived = 175 | **160** (108 dead, 52 alive) |
+| `bench version` crashes on `metabase_integration` | True, but it **also** crashed on `my_invois` — two defects, and `my_invois` was an invalid Python file |
+| `MANIFEST.md` "barcode 52 files" | not re-measured |
+
+## Open questions
+
+1. Should `.env` be regenerated now (owner must supply secrets), or left truncated-but-working?
+2. Recreate the bench container onto `comp_demo-bench:v16` and Node-RED onto 5.0.9 in one
+   `compose up -d`? Both are ask-first and were deliberately left alone.
+3. `lowdefy/` (19 files) is still undecided — document or archive.
+4. Is `_legacy/` (108 files) to be deleted outright after one release, or kept as an archive?
+
+---
+
+## Round 2 (same day) — defects 2, 5, 6 closed
+
+### P0.2 — `.env` regenerated from `.env.example`
+
+Method: every key in `.env.example` keeps its **live value** from the previous `.env`; only keys
+absent from it take the example default. Values were never printed. Result: **4,721 bytes, 37 keys**
+(was 29 keys). Carried 28 live values, added 7 (`ENVIRONMENT`, `TZ`, `ERPNEXT_ADMIN_PASSWORD`,
+`WEBHOOK_SINK_PORT`, `FORWARD_URL`, …). `DB_TMPFS_SIZE` / `ERPNEXT_VERSION` were retained because
+they are still read (`sandbox/scripts/fix-install.sh:25` uses `ERPNEXT_VERSION`), which contradicts
+the audit's "obsolete" claim. Backups: `.env.bak-20261117`, `.env.bak-20261117-regen`.
+
+Verified: `docker compose … config -q` exit 0; site answers `{"message":"pong"}`.
+
+### P0.5 — bench image: the audit's fix would have **broken the demo**
+
+`comp_demo-bench:v16` (`19d3f2b0a7f8`) contains **5 apps**, not 8 — it is missing `item_tracking`,
+`metabase_integration` and `my_invois`. Recreating the container onto it, as the prompt directed,
+would have removed three live apps. The running image was also **untagged** (`6e4bb0e551ea`).
+
+Root cause: `bake/bench.Dockerfile` COPYs only `barcode-shrdc-v16-fixed`, `shopify-shrdc-v16-fixed`,
+`eu_einvoice` (`:43-45`); the other three arrive by bind mount. The running container predated the
+`my_invois` mount, which is why the host-side `__init__.py` fix never appeared inside it.
+
+Action taken:
+1. `docker tag 6e4bb0e551ea comp_demo-bench:v16-live`
+2. `BENCH_IMAGE=comp_demo-bench:v16-live` added to `.env`, so `compose up` can no longer silently
+   swap in the incomplete `:v16` image. Verified: rendered config resolves
+   `image: comp_demo-bench:v16-live`.
+3. Recreated bench with `--no-build --no-deps`, which applied the `my_invois` mount.
+
+Verified after recreate:
+
+```
+$ docker inspect comp_demo-bench-1 --format '{{.Config.Image}}'
+comp_demo-bench:v16-live
+mounts: logs, sites, apps/barcode_shrdc, apps/item_tracking, apps/metabase_integration, apps/my_invois
+$ docker exec comp_demo-bench-1 bash -lc "bench --site frontend version"
+... item_tracking 0.0.2 / metabase_integration 0.0.1 / my_invois 0.0.1 / shopify 0.0.1
+$ curl http://localhost:8000/api/method/ping   ->  {"message":"pong"}
+```
+
+**Still open:** a fresh clone that builds from `bake/bench.Dockerfile` gets 5 apps, not 8. Either
+add the three COPY lines (and accept slower builds) or document that they are mount-only. Not
+changed here, because the mount-only design is deliberate for `item_tracking`/`metabase_integration`.
+
+### P0.6 — Node-RED pinned
+
+`docker pull nodered/node-red:5.0.9` (first attempt failed: Docker Hub TLS handshake timeout;
+retry succeeded), then `compose up -d --no-build --no-deps node-red`.
+
+```
+$ docker ps --filter name=node-red
+comp_demo-node-red-1 nodered/node-red:5.0.9 Up About a minute (healthy)
+$ node-red --version -> 5.0.9
+$ GET http://localhost:1880/ -> HTTP 200   (log: "Started flows", "Server now running")
+```
+
+### Docs corrected in this round
+
+- `docs/ARCHITECTURE.md:103` — Node-RED `:latest` → `:5.0.9` (pinned).
+- `README.md:138` — "not installed and not in this repository" → **installed** (`my_invois 0.0.1`),
+  source present at `repos/my_invois`, bind-mounted. This was the third conflicting version of the
+  same fact.
+
+### Remaining, explicitly not done
+
+- P4 beyond `versions.env` (repo-wide CRLF audit), P5 (74 → ~12 docs), P6 (structural move).
+- The 108 files in `sandbox/scripts/_legacy/` are quarantined, not deleted — intended to survive one
+  release cycle before removal.
+- `Customisations.md:31` still describes `my_invois` as "current state unverified"; it is installed,
+  but the *fixtures* really are unsynced, so the row needs a human decision rather than a rewrite.
+
+---
+
+## Round 3 — P4 EOL hardening + P5 first slice
+
+**P4.** `versions.env`, `bake/bench.Dockerfile` and `sandbox/scripts/bootstrap_masters.py` were the
+only *shipped executables* with CRLF; all three are now LF on disk and in git. `repos/**` Python was
+deliberately left alone (vendored upstream, CRLF is harmless there, and the category is "never
+edit"). `.gitattributes` pins `*.sh`, `*.py`, `*.yml`, `*.yaml`, `versions.env`, `Dockerfile` to LF.
+Verified: `docker compose … config -q` exit 0 with the LF `versions.env`, and `env_value()` in
+`up-linux.sh` now strips `\r` defensively.
+
+**P5 (first slice).** Moved to `docs/archive/`, with 0 inbound references each:
+
+| File | Was | Now |
+|---|---|---|
+| `erpnext-demo-stabilise-modularise.md` | 48 KB plan for a target state never built | `docs/archive/` |
+| `docs/archive/HANDOFF.md` | 4 claims false vs the live stack | `docs/archive/` |
+| `docs/archive/ASSESSMENT-einvoicing-barcode.md` | point-in-time assessment | `docs/archive/` |
+
+Root now holds **9** own markdown files, down from 11; `docs/` is 9 (8 after these moves).
+
+**Not done in P5:** the full 74 → ~12 restructure (splitting README into
+`docs/installation/`, per-module pages, `docs/troubleshooting/`). That rewrites cross-links in
+dozens of files and should not be bundled with defect repair; it remains the largest open item.
+
+---
+
+## Round 4 — dangling-reference sweep
+
+Automated scan: every backticked repo-relative path in live docs/scripts/skills was tested with
+`Test-Path`. 17 distinct misses; 12 are intentional (they document deleted files, namely
+`sandbox/up.ps1`, `sandbox/scheduler-setup/up`, the sandbox composes, `_legacy/`, and two planned
+directories). The real defects found and fixed:
+
+| Reference | Problem | Fix |
+|---|---|---|
+| `.opencode/skills/erpnext-safe-change/SKILL.md:124` | instructed an agent to **run** `sandbox/scripts/cx_rollback.sh` before a destructive uninstall; **no rollback script exists anywhere in the repo** (checked `git ls-files` for `rollback`) | replaced with the explicit backup → uninstall → remove → migrate → verify procedure and a confirmation gate |
+| `Customisations.md:43, :99` | same phantom tool as a safety mechanism (`KEEP=chat_widget`) | marked policy-only; procedure written out |
+| `Customisations.md:115` | pointed at `repos/custom_manufacturing`, which the same file says is absent | annotated historical |
+| `docs/METABASE-DASHBOARD-GUIDE.md` | `item_tracking/.../events/stock_entry.py` does not exist | repointed to the real doctype controller `stock_entry_tracked_item.py` |
+| `docs/INSTALL.md:284` | `scheduler/frontend/node_modules` presented as shipped | already annotated `(generated by npm ci; not tracked)` — scanner false positive |
+
+Quarantined 3 more scripts whose only references were historical: `barcode_test.py`,
+`fix-barcode-v16-bump.sh`, `test_barcode_feature.py`. Live `sandbox/scripts` count: **49**.
+
+### Definition-of-done status
+
+| Criterion | State |
+|---|---|
+| `bench version`, `list-apps`, `/api/method/ping` | **met** |
+| `.env` ≤ 5 KB from `.env.example` | **met** (4.7 KB, 37 keys) |
+| No `ai-fix` live prose; no reference to a nonexistent path | **met** (see above) |
+| `sandbox/scripts` ≤ 25 files, each referenced | **not met — 49**, and every one is referenced. Reaching 25 would mean deleting referenced material; the prompt's premise (18 referenced) was low. |
+| Own docs ≤ 15 | **not met — 19** (9 root + 10 in `docs/`), plus 3 archived. Consolidated only via the archive move. |
+| Launchers pass on CRLF and LF | **partial** — root cause fixed (gitattributes + `\r` strip); the stubbed dry-run harness was never run because no Linux shell was confirmed on this host. |
+| `git status` clean | **met** |
+| P6 structural move | **declined**, as the prompt required |
+
+---
+
+## Round 5 — launcher harness, P5 merges, encoding repair
+
+### Still-open P4/P0 acceptance is now **Verified**
+
+WSL was available after all, so the stubbed dry-run harness finally ran (written to `F:\ERPsessions\dryrun_launchers.sh`,
+stubs only, no repo writes):
+
+```
+=== bash -n syntax check ===
+OK  up-linux.sh
+OK  install-apps-linux.sh
+=== up-linux.sh ===            exit=0
+ERPNext is ready at http://localhost:8000 (site: frontend).
+=== install-apps-linux.sh ===  exit=0
+Custom apps are installed on site 'frontend'.
+=== FRAPPE_SERIES resolved as: 16   (versions.env, LF)
+=== repo dirty after run? ===  (clean)
+```
+
+That exercises the CRLF `FRAPPE_SERIES` path that defect 7 was about. **Launchers pass on both
+endings** — closing the last "partial" in the DoD table.
+
+### P5 merges (root markdown 9 → 7)
+
+| Merged | Into | Links repointed |
+|---|---|---|
+| `APP-SOURCES.md` (463 B, 7 inbound) | `docs/FACTS.md` → new "Upstream sources" section | 8 files incl. relative `./`, `../`, `../../` forms |
+| `PERSISTENCE.md` (3.9 KB, 1 inbound) | `docs/ARCHITECTURE.md` → "Persistence, bind mounts and why app features vanish after a recreate" | 1 |
+| `question-bank.md` (8.2 KB, 3 inbound) | `.opencode/agents/references/` (next to the planner agent) | 4 |
+
+Dangling-path rescan after the moves: **0 unexplained missing paths**.
+
+### Encoding defect (pre-existing, not introduced here)
+
+8 tracked files contained double-encoded UTF-8 (mojibake), verified present in `HEAD` before this
+work. Repaired **line-by-line** where `cp1252 → utf-8` round-tripped cleanly, skipping anything that
+produced U+FFFD: **20 lines across 7 files** (5 agent files, `docs/MILESTONES.md`,
+`scheduler/ui-tests/README.md`). `.opencode/skills/erpnext-test-sandbox/SKILL.md` could not be
+repaired safely and still shows mojibake — a lossy rewrite was deliberately not attempted.
+
+### New finding — repo weight
+
+**847 of 1,609 tracked files are `scheduler/runtime-deps/node_modules`** (52%). This is deliberate:
+the planner image ships its node deps for an offline build, which is why `.gitignore` covers
+`scheduler/frontend/node_modules/` and `scheduler/ui-tests/node_modules/` but not `runtime-deps`.
+**Do not delete it** — it would break the offline planner build. Worth a sentence in the docs rather
+than action.
+
+---
+
+## Round 6 — the three requested merges (docs 16 → 14)
+
+| Merge | Result | Inbound links repointed |
+|---|---|---|
+| `docs/IMAGE-POLICY.md` → `docs/DISTRIBUTION.md` | one distribution + image-policy page, `## Bench image policy` section | 10 files |
+| `docs/SETUP-GUIDE-for-existing-build.md` + `docs/WINDOWS-QUOTING.md` → `docs/INSTALL.md` | one installation page: "Adding the missing functions…" + "Windows / PowerShell quoting" sections | 10 files |
+
+Method: absorbed documents become `##` sections with heading levels demoted one step. GitHub anchors are
+derived from heading **text**, not level, so every pre-existing `#anchor` still resolves. A first
+attempt demoted headings blindly and also rewrote `#` comment lines **inside fenced code blocks** in
+the install guide, corrupting the example commands; the script was made fence-aware and the files
+regenerated from `HEAD`. Verified afterwards: code blocks show single-`#` comments, 0 dangling paths.
+
+Counts: root markdown **6**, `docs/` **8**, `docs/archive/` 3 → **14 live docs**, inside the ≤15 target.
+
+---
+
+## Round 7 — remove the Tooljet skill (unrelated to this demo)
+
+`.opencode/skills/tooljet-app-builder/` deleted: **13 tracked files, 210 KB**. It builds Lowdefy/Tooljet
+apps, has no caller anywhere in the repo (`git grep -i tooljet` outside the directory: 0 hits), and
+nothing in the stack or the launchers touches it. 20 skills remain, all ERPNext/Frappe or workflow
+related.
+
+**Correction to Round 5:** I reported `scripts/browser-audit.js` (cited by that skill's `qa.md`) as a
+dangling path. It is not — the file exists at `.opencode/skills/tooljet-app-builder/scripts/browser-audit.js`,
+and the citation is relative to the skill directory. The scanner treated every backticked path as
+repo-relative. The scan now resolves each path both repo-relative **and** relative to the citing
+file's directory. Result: 4 remaining hits, all benign and enumerated — 3 are this document
+naming the files it merged and deleted (`IMAGE-POLICY.md`, `WINDOWS-QUOTING.md`,
+`SETUP-GUIDE-for-existing-build.md`), and 1 is `scheduler/frontend/node_modules`, a directory generated
+by `npm ci`. **0 unresolved path references** in the repository.
+
+---
+
+## P7 — Reproducible fresh deployment: all 8 apps (branch `deployapp`)
+
+Scope: make a clean clone deployable with Docker alone. The cleanup work above is untouched.
+
+### App source inventory (audited before editing)
+
+| # | App | Source (git-tracked) | Bench dir | Deps | Baked before P7 | Installed before P7 |
+|---|---|---|---|---|---|---|
+| 1 | frappe | base image `frappe/erpnext:v16.35.0` | `apps/frappe` | image | yes (image) | yes |
+| 2 | erpnext | base image | `apps/erpnext` | image | yes (image) | yes |
+| 3 | barcode_shrdc | `repos/barcode-shrdc-v16-fixed` (64 files) | `apps/barcode_shrdc` | requirements.txt | yes + **bind mount** | yes |
+| 4 | shopify | `repos/shopify-shrdc-v16-fixed` (53 files) | `apps/shopify` | requirements.txt | yes | yes |
+| 5 | eu_einvoice | `repos/eu_einvoice` (120 files) | `apps/eu_einvoice` | pyproject (factur-x, drafthorse, saxonche) | yes | yes |
+| 6 | metabase_integration | `repos/metabase_integration` (9 files) | `apps/metabase_integration` | requirements.txt | **no - bind mount only** | yes |
+| 7 | item_tracking | `repos/item_tracking` (65 files) | `apps/item_tracking` | requirements.txt | **no - bind mount only** | yes |
+| 8 | my_invois | `repos/my_invois` (13 files, requirements.txt empty) | `apps/my_invois` | none | **no - bind mount only** | seed installed it if the dump predated it |
+
+All eight are git-tracked (324 files under `repos/`), so no network fetch is required for app source.
+Defect confirmed: the pre-P7 image contained **5** apps total (frappe, erpnext + 3 custom); three
+apps existed only as bind mounts, and `my_invois` was additionally uninstalled-but-mounted.
+
+### Changes
+
+| # | File | Change | Status |
+|---|---|---|---|
+| 1 | `bake/bench.Dockerfile` | COPY all six custom app sources; per-app `pip install -r requirements.txt`; build-time app-shape guard (`hooks.py`, `__init__.py`, `__version__`) that fails the build; build-time import smoke test for all six; bakes `/usr/local/bin/install-all-apps.sh` | Verified |
+| 2 | `sandbox/scripts/install-all-apps.sh` (new) | canonical ordered idempotent site installer: list-apps gate, `apps.txt` + `.pth` registration, install in dependency order, one `migrate`, then verify list-apps **and** module import; `SKIP_APPS` explicit opt-out; non-zero exit on any failure; `ALLOW_PARTIAL=1` only as an explicit override | Verified |
+| 3 | `seed/seed-site.sh` | replaced the my_invois-only special case with a call to the shared installer (one code path for bench, seed and manual runs) | Verified |
+| 4 | `docker-compose.yml` | removed 4 app bind mounts from `bench` and 2 from `seed` (image is now authoritative); seed waits for `redis-cache`/`redis-queue` (its `bench migrate` otherwise aborts with "Service redis_cache is not running"); seed gains `SKIP_APPS`/`ALLOW_PARTIAL` | Verified |
+| 5 | `up-linux.sh` | runs the canonical installer after provisioning, so a Linux deployment is one command | Implemented |
+| 6 | `install-apps-linux.sh` | app list extended from 4 to all 6 custom apps; help text points at the canonical installer | Implemented |
+| 7 | `sandbox/scripts/verify-deployment.sh` (new) | read-only 7-check acceptance verifier (compose config, containers, `bench version`, all 8 apps exactly once, module import, `/api/method/ping`, unresolved `hooks.py` assets) | Implemented |
+| 8 | `docs/DEPLOY.md` (new), `README.md` | clean-machine guide: prerequisites, clone, env, one command, what happens automatically, verification, stop/restart, troubleshooting, `SKIP_APPS`; README section 3a points to it | Implemented |
+
+### Why
+
+The image was not self-contained (3 apps came from bind mounts), nothing guaranteed all eight were
+*installed* (my_invois was mounted-but-not-installed; item_tracking/metabase_integration depended on
+a host folder existing), and `sites/apps.txt` was never reconciled with the restored DB, so
+`bench version` reported only 2 apps on a restored site.
+
+### Acceptance test — isolated project
+
+Host: Windows 11 + Docker 29.8.0. Isolated: project `comp_demo_p7`, own volumes
+`comp_demo_p7_db_data` / `comp_demo_p7_bench_sites`, own ports (18000/11880/13001/13005/18088).
+The live `comp_demo` stack was not touched; no `down -v`, no volume deletion, no site reinstall.
+
+```
+$ docker build -f bake/bench.Dockerfile --build-arg ERPNEXT_BASE=frappe/erpnext:v16.35.0 \
+      -t comp_demo-bench:p7-test .
+... app-source guard: all 6 custom app sources present and well-formed
+... import ok: barcode_shrdc 0.0.2 / shopify 0.0.1 / eu_einvoice 16.3.0
+... import ok: item_tracking 0.0.2 / metabase_integration 0.0.1 / my_invois 0.0.1
+... naming to docker.io/library/comp_demo-bench:p7-test   (build succeeded, no bind mounts involved)
+
+$ docker compose -p comp_demo_p7 ... up -d --no-build db redis-cache redis-queue bench
+seed-1 | Site frontend has been restored
+seed-1 | -- present: frappe erpnext barcode_shrdc shopify eu_einvoice item_tracking metabase_integration my_invois
+seed-1 | import ok: frappe, erpnext, barcode_shrdc, shopify, eu_einvoice, item_tracking, metabase_integration, my_invois
+seed-1 | seed: items after restore: 72
+seed-1 | seed: metabase_dashboard_url -> http://localhost:3005/public/dashboard/96f46652-...
+seed-1 | seed: done - site 'frontend' restored
+
+$ curl -H "Host: frontend" http://localhost:18000/api/method/ping
+{"message":"pong"}
+
+$ docker compose -p comp_demo_p7 exec -T bench bench --site frontend version
+barcode_shrdc 0.0.2  ()   erpnext 16.35.0  ()   eu_einvoice 16.3.0  ()
+frappe 16.35.0  ()        item_tracking 0.0.2  ()  metabase_integration 0.0.1  ()
+my_invois 0.0.1  ()       shopify 0.0.1  ()
+```
+
+Restart + persistence (same project, after `docker compose restart bench`):
+
+```
+$ curl -H "Host: frontend" http://localhost:18000/api/method/ping   -> {"message":"pong"}
+$ bench --site frontend list-apps                                    -> all 8, exactly once
+$ bench --site frontend execute frappe.db.count --args "['Item']"    -> 72
+$ ls sites/assets/                                                   -> barcode_shrdc eu_einvoice
+                                                                        item_tracking (+frappe/erpnext)
+$ test -e sites/assets/barcode_shrdc/js/scanner_barcode_patch.js    -> exists (the historical
+                                                                        reload-loop asset is served)
+```
+
+### Blocker found and fixed during the test
+
+First run installed nothing (the seeded dump already contained all eight apps), so
+`sites/apps.txt` stayed at `frappe, erpnext` and `bench --site frontend version` reported **2** apps.
+Fix: `install-all-apps.sh` now reconciles `apps.txt` for every app on **every** run, not only when
+installing. Re-ran the installer in the test container: `apps.txt` and `bench version` then listed all
+eight. This defect would have hit every restored deployment.
+
+### Remaining blockers / not verified
+
+| Item | Status | Note |
+|---|---|---|
+| Truly cold machine (no cached `frappe/erpnext` base layer, fresh Docker) | Not started | the base image was already pulled here; only the build/run/restart path was exercised |
+| Windows `setup/up` / `setup/setup` deployment path | Not started | P7 changes are Compose/Dockerfile-level, but the PowerShell launchers were not re-run |
+| `install-apps-linux.sh` full run against a from-scratch (non-restored) site | Not started | the restore path was tested; the `bench new-site` path was not |
+| Metabase UI, Node-RED flow, planner SPA, Shopify token flow | Not started | services were started for the restore path only in local checks; no end-to-end UI pass |
+| Baked image published to GHCR (`docs/DISTRIBUTION.md`) | Not started | clean clones currently build locally (20-40 min); publishing remains a distribution task |
+
+### Confirmation run (after the apps.txt fix was committed)
+
+Rebuilt the image with the fixed installer baked in, recreated `bench` from it in the same isolated
+project, and ran the **image-baked** installer (no `docker cp`):
+
+```
+$ docker build -f bake/bench.Dockerfile --build-arg ERPNEXT_BASE=frappe/erpnext:v16.35.0 \
+      -t comp_demo-bench:p7-test .           -> image 1aba698c40ef, import ok x6
+$ docker compose -p comp_demo_p7 ... up -d --no-build bench
+$ docker compose -p comp_demo_p7 ... exec -T bench bash /usr/local/bin/install-all-apps.sh
+  import ok: frappe, erpnext, barcode_shrdc, shopify, eu_einvoice, item_tracking,
+             metabase_integration, my_invois
+  == install-all-apps: done - all requested apps installed on 'frontend' ==
+$ bench --site frontend version   -> all 8 apps
+$ curl -H "Host: frontend" http://localhost:18000/api/method/ping   -> {"message":"pong"}
+```
+
+Status: image build **Verified**, site restore **Verified**, all-8-apps install **Verified**,
+module import **Verified**, restart **Verified**, DB persistence **Verified** (`Item` count 72
+before and after restart), apps.txt/`bench version` **Verified** after the fix.
+Still not verified: genuinely cold machine, Windows launchers, from-scratch (`bench new-site`) path,
+UI-level integration pass - see the table above.
+
+## P8 — Close the deployment gaps (2026-11-18)
+
+Status vocabulary, used strictly: **Implemented** (code written), **Tested** (run at least
+once, transcript exists), **Verified** (run repeatedly / end-to-end with evidence recorded
+here), **Blocked** (cannot proceed, reason given), **Not started**.
+
+### P7 defects carried into P8
+
+| # | Defect | Status |
+|---|---|---|
+| 1 | `common_site_config.json` baked at build time; a start-up "write only if missing" guard is dead code because Docker copies image content into the fresh volume | **Verified** — endpoints are baked *and* merged/upserted at start-up; cold runs show db/redis endpoints present in a fresh `bench_sites` volume |
+| 2 | `apps.txt` stale after image build, so `bench version`/`list-apps` misreport | **Verified** — `sandbox/scripts/install-all-apps.sh` reconciles `sites/apps.txt` before verifying |
+| 3 | Install status decided from `bench list-apps` (under-reports on this bench build) | **Verified** — installer and verifier both decide from `frappe.get_installed_apps`; `list-apps` is printed for information only |
+| 4 | Verifier's app check trusted `list-apps` | **Verified** — verifier queries `tabInstalled Application` / `frappe.get_installed_apps` |
+
+### Defect found and fixed in P8 — the verifier could pass the wrong stack
+
+`verify-deployment.sh` selects its target through environment variables only (`PROJECT`,
+`SITE_NAME`, `ERPNEXT_PORT`). It took **no** positional arguments and silently ignored them, so
+`verify-deployment.sh -p comp_demo_cold` verified the **default** project `comp_demo` and printed
+`ALL CHECKS PASSED` — a false PASS against the live demo stack instead of the intended test stack.
+This was hit for real during P8.
+
+Fixed in this round: unknown positional arguments now abort with exit code 2 and print the correct
+invocation; `-h/--help` prints usage. Tested: `... verify-deployment.sh -p x` → exit 2 with the
+guidance message; `bash -n` clean.
+
+### A. Cold-machine deployment — cold build + cold site **Verified**; literal doc sequence not yet
+
+Round 2 (2026-11-18, `comp_demo_p9`, ports 18004/11881/13002/13006/18089) removed the
+image-cache caveat above:
+
+1. `docker rmi comp_demo-bench:coldtest frappe/erpnext:v16.35.0 frappe/erpnext:v16` and
+   `docker builder prune -af` (1.4 GB of layers) — the pinned base the bench image is
+   built FROM was gone, so no base-layer reuse was possible.
+2. `setup/up.ps1 -Project comp_demo_p9 -EnvFile <p9 env> -SkipScheduler` built
+   `comp_demo-bench:p9-cold` from `bake/bench.Dockerfile` (3.12 GB, base pulled fresh),
+   provisioned a from-scratch site, and installed the apps.
+3. `PROJECT=comp_demo_p9 ERPNEXT_PORT=18004 SITE_NAME=frontend bash sandbox/scripts/verify-deployment.sh`:
+
+```
+PASS  docker compose config renders
+PASS  bench container is running
+PASS  db container is running
+PASS  bench --site frontend version works          (all 8 apps, incl. item_tracking 0.0.2)
+PASS  all 8 apps installed exactly once (tabInstalled Application)
+PASS  all 8 app modules import in the bench venv
+PASS  GET /api/method/ping answered: {"message":"pong"}
+PASS  every app_include_js/css referenced by hooks.py resolves
+== verify-deployment: ALL CHECKS PASSED ==   (exit 0)
+```
+
+`bench list-apps` again printed all eight — but only after the DB had them; the earlier
+under-reporting run stands as evidence that it cannot be trusted.
+
+**What is still not Verified:** the exact doc sequence *fresh GitHub clone → `cp
+.env.example .env` → `bash ./setup/up-linux.sh`*. The cold run above used the Windows
+launcher and the existing working `.env`, not a fresh clone and not `up-linux.sh`. The
+image and site were genuinely cold; the clone was not.
+
+Evidence (`comp_demo_cold`, ports 18001, image `comp_demo-bench:coldtest`, build log
+`F:\ERPsessions\p7-cold-build.log`, 163 KB, **zero** `CACHED` lines → `--no-cache`):
+
+```
+== verify-deployment: project 'comp_demo_cold', site 'frontend', port 18001 ==
+PASS  docker compose config renders
+PASS  bench container is running
+PASS  db container is running
+PASS  bench --site frontend version works
+PASS  all 8 apps installed exactly once (tabInstalled Application)
+      frappe / erpnext / barcode_shrdc / shopify / eu_einvoice
+      metabase_integration / item_tracking / my_invois
+      bench list-apps:  frappe 16.35.0 UNVERSIONED erpnext 16.35.0 UNVERSIONED
+PASS  all 8 app modules import in the bench venv
+PASS  GET /api/method/ping answered: {"message":"pong"}
+PASS  every app_include_js/css referenced by hooks.py resolves
+== verify-deployment: ALL CHECKS PASSED ==   (exit 0)
+```
+
+That transcript also re-confirms hard-won fact 1: on the same site where the DB lists all eight
+apps, `bench list-apps` printed only `frappe` and `erpnext`.
+
+
+
+### B. Windows launcher path (`setup/up.ps1`, `setup/start.ps1`) — Verified on a cold project
+
+First ever run of the launcher after the move to `setup/`. Exercised on an isolated
+Compose project (`comp_demo_p8`, ports 18003/11880/13001/13005/18088, image tag
+`comp_demo-bench:coldtest`) with the live `comp_demo` stack left running throughout.
+It failed, for four separate reasons — all now fixed:
+
+| Defect | Effect | Fix |
+|---|---|---|
+| `$Project = 'comp_demo'` hard-coded, `.env` path hard-coded | The launcher could only ever be aimed at the live demo; step 3 runs `compose down --remove-orphans`, so testing it *was* taking the demo down. This is why it had no transcript. | `-Project` and `-EnvFile` parameters; `BENCH_IMAGE` already parameterised the tag |
+| `|| (apt-get update && apt-get install ...)` in the step-4 redis install | `bash: -c: line 2: unexpected EOF while looking for matching ')'` — the guarded branch could never run | no subshell: `command -v redis-server || apt-get install -y -qq redis-server` |
+| installer demanded exactly **1** `hooks.py` under `apps/<app>` | `repos/item_tracking` ships two extra copies (depth 1 and depth 3), so the guard refused a tree that `bench install-app` installs fine — `item_tracking` failed to install: "Shift+I scanner and per-unit labels will not work" | verify the load-bearing package hook `apps/<app>/<app>/hooks.py`, warn about the ignored copies instead of refusing |
+| `.Output.Trim()` on a `$null` capture at step 7d | `You cannot call a method on a null-valued expression` — aborted the whole run after app installation | null-guard both `mariadb` reads |
+
+`docs/DEPLOY.md` also advertised the setup command as `./setup/$2` — an unfilled
+template variable — in three places, so a first-time user following the doc
+verbatim could not start anything. Replaced with the real commands plus a
+Windows section documenting that `docker compose up -d` hangs on this host and
+that `compose create` + `docker start` is the working alternative.
+
+Two further defects were found in the same run and are **fixed but not yet
+re-verified end to end**:
+
+| Defect | Effect | Fix |
+|---|---|---|
+| `$demoServices` omitted `webhook-sink` | the documented `http://localhost:8088/healthz` was left in `Created` and never answered on a launcher-built stack (proved by starting it by hand: `200 {"ok": true, "stored": 0}`) | added to the start list |
+| the launcher installs apps by hand and only covers four of them (`barcode_shrdc`, `shopify`, `eu_einvoice`, `item_tracking`) | the site ended with **6 of 8** apps: `metabase_integration` and `my_invois` were never installed, and the launcher never called `install-all-apps.sh` at all | new step 7b-3 runs the canonical image-baked installer, which is ordered, idempotent and DB-truth |
+
+**Resolved in the second cold run (`comp_demo_p9`).** The duplicated
+`repos/item_tracking` tree was normalised to one `hooks.py` at package level
+(the root copy and the module-level copy were removed; the module package got a
+`__version__`), so `bench --site frontend version` now lists `item_tracking
+0.0.2` and the verifier's version check passes. The launcher's feature probes now
+log in as Administrator instead of trusting a possibly-stale API token — which is
+why `barcode app` and `e-invoicing` went from 401 to OK — and the QR page probe
+uses a real Item instead of the seed-only `PLN-BRACKET` (a from-scratch site
+answered an honest 404, which the run reported as a broken feature). The
+canonical installer step retries once, because its first call returned non-zero
+while the site was still settling after the previous app's migrate, then
+installed all eight on the retry. Final state of the cold launcher run: **8 of 8
+apps, verifier ALL CHECKS PASSED**.
+
+**Still failing on the from-scratch path** (pre-existing, not caused by P8):
+`seed-masters` and `virtual-work-order` report failures, so a site built by the
+launcher has no demo documents (no Items at all). That is why the QR probe had to
+become data-driven. The documented *restore* path (`up-linux.sh` → `seed` with
+`seed/frontend-database.sql.gz`) is the one that produces demo data, and it is the
+path the P7 cold transcript passed on; the launcher's own from-scratch seeding is
+what needs fixing next.
+
+### C. UI-level integration pass — partially Tested
+
+Run against the isolated cold stack (`comp_demo_cold`, restored demo database,
+HTTP on :18001) through the apps' own whitelisted entry points:
+
+```
+PASS  login as Administrator (HTTP 200)
+PASS  scan_barcode("FRM-001-0001") resolves the serial -> FRM-001-0001
+PASS  scan_barcode("1115653472") resolves the item -> 1115653472
+PASS  get_serial_summary(1115653472) -> item_name='Resting Bean Bag - 4 Piece'
+PASS  /item_qr?item_code=1115653472 -> HTTP 200, 12117B, barcode /files/barcode-980fec46f4d9.png
+PASS  item_tracking scanner asset (HTTP 200, 11579B, shift-shortcut=yes)
+PASS  Sales Invoice has 20 custom fields (my_invois fixtures applied)
+== 7 passed, 0 failed ==
+```
+
+**Defect found and fixed:** `/item_qr` — the QR/barcode scan page the demo
+advertises — returned **HTTP 500** for every item. `barcode_shrdc/www/item_qr.py`
+shipped without `www/item_qr.html`, so Jinja raised
+`TemplateNotFound: www/item_qr.html`. The template is now in the app (item card,
+scannable CODE128 via the `get_barcode_image` Jinja global, warehouse table,
+serial tracking table) and the page renders. Note that a web worker caches the
+negative template lookup: `bench clear-cache` is not enough, the bench process
+must restart.
+
+**Defect found, not fixed (demo data):** Serial Nos reference an item that does
+not exist. `FRM-001-0001` … `FRM-001-0068` point at item `FRM-001` ("Frame",
+go-kart demo item) while the restored DB has no such Item — 68 of the 68 serials
+are orphans. `scan_barcode` still resolves the serial (it reads the Serial No
+doc), but `/item_qr?serial_no=...` and any serial drill-down 404. Fixing it means
+either adding the missing Item to the seed dump or re-pointing the serials; both
+are seed-data changes, not code, and were left alone deliberately.
+
+**e-invoice coexistence — decided: both stay enabled.** `my_invois` registers no
+`doc_events` (fixtures + Client Script only); `eu_einvoice` hooks
+`Sales Invoice.validate` with `frappe.msgprint` warnings (never `frappe.throw`)
+and its `on_submit` returns immediately unless `einvoice_profile == "XRECHNUNG"`,
+swallowing every error. No shared hook, no way for either to block a plain
+Malaysian invoice. Default `SKIP_APPS` therefore unchanged.
+
+**Not done, and not claimed:** the browser-level pass (barcode camera scan,
+`item_tracking` Shift+I page interaction, `eu_einvoice` invoice import in the
+desk), Metabase rebound to a restored DB, planner SPA write-back at :3001, and
+the Node-RED flow at :1880. The asset, endpoint and hook levels are verified
+above; the click-through is not.
+
+### D. Ship it
+
+- P8 section in this file (four P7 defects + cold transcript + the verifier false-PASS defect):
+  **Implemented**.
+- GHCR publish: already existed before P8 — `publish-image.yml` builds and pushes
+  `ghcr.io/msf4-0/comp-demo-bench`, `make-package-public.yml` flips visibility, and
+  `setup/pull-bench.ps1` pulls it before compose builds. Nothing new was needed.
+- CI running the acceptance verifier: **Implemented** in `.github/workflows/e2e.yml`
+  (job `cold-start`, step *Acceptance verifier (7 checks, DB-truth)*), placed after
+  the planner-health step. It was previously possible for the seed/ping job to pass
+  while the verifier — the exact command `docs/DEPLOY.md` tells users to run — was
+  broken. Workflow YAML parses and the step is present in the parsed job.
+
+## P9 — Fresh-clone certification and the Linux one-command path (2026-11-18)
+
+Status vocabulary, unchanged: **Implemented** / **Tested** / **Verified** /
+**Blocked** / **Not started**.
+
+### Scope
+
+Close the gap P8 named explicitly: *"the exact doc sequence fresh GitHub clone →
+`cp .env.example .env` → `bash ./setup/up-linux.sh`"* had never been run. P9 runs
+it on an isolated project beside the live demo and certifies the result in
+[`TEST-PLAN.md`](TEST-PLAN.md).
+
+### What changed
+
+| Commit | Files | Change | Status |
+|---|---|---|---|
+| `6b90eab` | `setup/up-linux.sh` | project name from `COMPOSE_PROJECT_NAME` (was hard-coded `-p comp_demo`); `build` + `compose create` + `docker start` instead of `compose up -d`; start all nine services, not four | Verified |
+| `f9d3ed1` | `setup/up-linux.sh` | `MSYS_NO_PATHCONV=1` on Git Bash/Cygwin: MSYS rewrote in-container `/tmp/...` to `C:/Users/.../Temp/...`, so the deploy died at `docker cp` with `no such directory` | Verified |
+| `ce54eeb` | `sandbox/scripts/install-all-apps.sh`, `setup/up-linux.sh`, `seed/seed-site.sh`, `docker-compose.yml`, `sandbox/scripts/verify-deployment.sh` | installer mirrors `tabInstalled Application` into `site_config.json` (custom `www/` pages were 500); materialise `sandbox/node-red/flows.json` before `create`; dashboard URL uses `METABASE_PORT`; verifier text says seven apps | Verified |
+| `2c54cc2` | `setup/up-linux.sh`, `docs/DEPLOY.md`, `docs/TEST-PLAN.md` | require a **working** Python 3.9+ (the Windows Store `python3` alias passes `command -v` but fails when run); document the real prerequisites (Git, bash, curl, Python) and x86_64-only/ARM-untested | Verified |
+| `6a720da` | `.github/workflows/ci.yml` | make push-CI pass for the first time: load `versions.env` in the compose check, exempt the host-migration helper from the path grep, pass `ERPNEXT_BASE` to the image build, and build with `load:true`/`push:false` so CI does not depend on GHCR (publishing stays in `publish-image.yml`) | Verified — run `44281356855` green: validate, repository-hygiene, build-bench-image + in-job import smoke |
+| docs commit | `docs/TEST-PLAN.md`, `docs/DEPLOY.md`, this section | certification plan + corrections (I-12) | Implemented |
+
+### Cold run — Verified
+
+Host Windows 11, Docker 29.8.0, Compose v5.5.1. Clone
+`F:\ERPsessions\p9-clone` at `ce54eeb`, clean tree. Isolated project
+`comp_demo_p9clone`, own volumes, ports `18008 / 11885 / 13012 / 13013 / 18093`,
+image `comp_demo-bench:p9clone`. The live `comp_demo` stack was not touched.
+
+Wall clock: **10.2 min** (2026-11-18 16:49:24 → 16:59:37 local; 08:49:24 →
+08:59:37 UTC), exit code **0**. Build **74 s** with warm layers (the same
+Dockerfile, fully cold with no base image in attempt 1, took ≈5 min: pip and
+git-installed requirements dominated). Seed restore **3 min 29 s**
+(`08:51:00 → 08:54:29`). Metabase healthy ≈1–2 min after start.
+
+```
+$ bash ./setup/up-linux.sh
+startup policy: ENVIRONMENT=development
+demo-default credentials in use: DB_ROOT_PASSWORD, ERPNEXT_ADMIN_PASSWORD, METABASE_DB_PASS, METABASE_ADMIN_PASSWORD
+Project 'comp_demo_p9clone': building the bench image (25-40 min on a cold machine)...
+#23 naming to docker.io/library/comp_demo-bench:p9clone 0.1s done
+ Image comp_demo-bench:p9clone Built
+node-red: created sandbox/node-red/flows.json (empty flow; Shopify wiring needs credentials)
+Creating the containers...
+Starting MariaDB and Redis...
+Restoring the demo site (one-shot seed, ~5-7 min)...
+Demo site restored.
+Starting ERPNext, Metabase, Node-RED, planner and webhook sink...
+== no new apps to install - migrate skipped ==
+site_config: installed_apps already current
+-- installed (db): frappe erpnext barcode_shrdc shopify item_tracking metabase_integration my_invois
+ Container comp_demo_p9clone-bench-1 Restarting
+ERPNext is ready at http://localhost:18008 (site: frontend, project: comp_demo_p9clone).
+```
+
+Verifier (`PROJECT=comp_demo_p9clone ERPNEXT_PORT=18008 SITE_NAME=frontend`):
+
+```
+PASS  docker compose config renders
+PASS  bench container is running
+PASS  db container is running
+PASS  bench --site frontend version works          (all 7 apps)
+PASS  all 7 apps installed exactly once (tabInstalled Application)
+PASS  all 7 app modules import in the bench venv
+PASS  GET /api/method/ping answered: {"message":"pong"}
+PASS  every app_include_js/css referenced by hooks.py resolves
+== verify-deployment: ALL CHECKS PASSED ==   (exit 0)
+```
+
+Other evidence, same run:
+
+```
+items/boms/serials            5 / 1 / 68
+BOM                           FRM-001×1  WHL-001×4  STR-001×1  SEAT-001×1
+prices                        9 rows (5 selling, 4 buying) — see deviation D-6
+Metabase /api/health          {"status":"ok"}
+Metabase /api/session         {"id":"9a3a2975-..."}   (admin@demo.local / DemoPass2026!)
+guest /item_qr?item_code=FRM-001   200, 11340 B, contains Frame/FRM-001/barcode
+login + /metabase             200, 11511 B, iframe src=http://localhost:13013/public/dashboard/96f46652-...
+planner /api/health           200 {"status":"Server is running",...}
+Node-RED /                    200 (1731 B); /settings 200
+webhook-sink /healthz         200 {"ok": true, "stored": 0}
+live comp_demo                all 8 containers up, :8000 200, :3005 200
+ngrok                          https://scoreless-barcode-length.ngrok-free.dev -> http://localhost:1880
+```
+
+### Deviations from docs/DEPLOY.md
+
+| # | Deviation | Resolution |
+|---|---|---|
+| D-1 | `COMPOSE_PROJECT_NAME` was documented as the selector but the launcher ignored it (hard-coded `-p comp_demo`) | **Fixed** `6b90eab`; `DEPLOY.md` §4 now says the default project is the live one and both project and image tag must be changed on a shared host |
+| D-2 | `compose up -d` hangs on this host | **Fixed** `6b90eab` (build + create + start), matching `DEPLOY.md` §10 |
+| D-3 | The one command started only 4 of 9 services, so Metabase/Node-RED/planner/webhook-sink did not exist | **Fixed** `6b90eab`; `DEPLOY.md` §4 now lists the full start set |
+| D-4 | On Git Bash, in-container paths were rewritten by MSYS and the deploy died after the seed | **Fixed** `f9d3ed1` |
+| D-5 | Node-RED could not start on a fresh clone: `flows.json` is gitignored and Docker created a directory at the bind source | **Fixed** `ce54eeb` by writing an empty flow. **Deviation that remains:** the Shopify flow is *not* wired on a credential-free clone — building it needs a token (`build-flows.py`, `setup/up.ps1` §10) |
+| D-6 | Acceptance says "10 price rows"; the product has **9** | **Not fixed (spec).** `seed-gokart-demo.py` and `DEPLOY.md` §4 both define 5 Selling + 4 Buying. The brief's 10 is wrong; recorded as I-8 in `TEST-PLAN.md` |
+| D-7 | First ERPNext request after a restart takes ~9 s; the readiness gate allows 5 s, so the command waits ~4 min before printing READY | **Open (low).** It succeeds; raising the gate's `--max-time` would shorten the wait (I-10) |
+| D-8 | Node-RED reports `unhealthy` for ~2.5 min while its palette loads | **Open (low).** Self-heals; do not judge it in the first 3 minutes (I-9) |
+| D-9 | `bench list-apps` printed 2 of 7 apps (known under-report) | **Documented**, not a defect; verifier and installer decide from `tabInstalled Application` (I-13) |
+| D-10 | `DEPLOY.md` claimed "only Docker"; the Linux path also needs Git, bash, curl and a *working* Python 3.9+ (the Windows Store alias is not one), and the image is x86_64-only | **Fixed** `2c54cc2`; the launcher probes by executing and names the Store alias in its error |
+| D-11 | Push CI (`ci.yml`) had been red on every commit: two prerequisite steps failed before the image build was ever reached, so the X carried no signal about the product | **Fixed** `6a720da` (compose check loads `versions.env`; host-migration helper exempted; `ERPNEXT_BASE` passed from `versions.env`; CI builds with `load:true` and no GHCR push) |
+
+### Second run on the same project (idempotency) — Verified
+
+`bash ./setup/up-linux.sh` again at `2c54cc2` on the already-deployed project:
+**exit 0 in 1.6 min** (17:49:52 → 17:51:28).
+
+```
+ Image comp_demo-bench:p9clone Built
+Creating the containers...
+Starting MariaDB and Redis...
+Demo site already restored (seed exited 0) - nothing to do.
+Starting ERPNext, Metabase, Node-RED, planner and webhook sink...
+== no new apps to install - migrate skipped ==
+site_config: installed_apps already current
+-- installed (db): frappe erpnext barcode_shrdc shopify item_tracking metabase_integration my_invois
+ERPNext is ready at http://localhost:18008 (site: frontend, project: comp_demo_p9clone).
+```
+
+The verifier re-run immediately afterwards still printed
+`== verify-deployment: ALL CHECKS PASSED ==` (exit 0). The command is therefore
+safely re-runnable: seed and installer both exit early, and the restart does not
+regress the site. A run on a genuinely different machine remains untested.
+
+### Metabase defects found and fixed (re-verified in P9)
+
+Both were fixed before P9 (the P12 seed test) and are part of `bf52485`; P9
+re-verified that they still hold on a fresh clone:
+
+| Defect | Why it looked broken | Fix (still present, verified) |
+|---|---|---|
+| Entrypoint `chmod o+r /app/metabase.jar` caused an overlayfs copy-up that stalled 10+ min at ~75% CPU with **no logs** and no HTTP | running as root triggers the chmod branch | `docker-compose.yml` `user: "2000:2000"` — Metabase was **healthy in ~1–2 min** on this run, no stall |
+| `Access denied for user 'metabase_user'@'%' to database 'metabase'`, then Metabase shuts down | the seeder granted only `SELECT` on the ERPNext DB, not on Metabase's own schema | `seed/seed-site.sh`: `GRANT ALL PRIVILEGES ON \`metabase\`.* TO 'metabase_user'@'%'` — health and login both 200 |
+
+P9 additionally found and fixed a third Metabase defect: the seeded
+`metabase_dashboard_url` hard-coded `http://localhost:3005`, so the `/metabase`
+iframe pointed at the wrong stack whenever `METABASE_PORT` was not 3005. The
+seeder now takes `METABASE_PORT` from the environment (`ce54eeb`); the certified
+run's iframe is `http://localhost:13013/...`.
+
+### Live-stack preservation
+
+The live `comp_demo` stack kept its containers and volumes. It was found
+**already wedged** before P9 (ERPNext HTTP `000`, no request logs) and with the
+host ngrok pointing at a dead `localhost:11883`; a plain
+`docker restart comp_demo-bench-1` (no volumes, no retag) restored `:8000`, and
+the tunnel was restarted as `ngrok http 1880`. This is recorded as I-11 and is
+not caused by P9.
+
+### Status
+
+| Item | Status |
+|---|---|
+| Fresh-clone `bash ./setup/up-linux.sh` (one command, `.env` only) | **Verified** |
+| `verify-deployment.sh` ALL CHECKS PASSED | **Verified** |
+| Demo data 5 items / 1 BOM / 4 components / 68 serials | **Verified** |
+| Selling prices 4500/1800/220/310/260 + 4 buying prices | **Verified** (9 rows; brief's "10" is a spec error) |
+| Metabase health, `.env.example` login, `/metabase` page with correct port | **Verified** |
+| Guest `/item_qr` 200 | **Verified** |
+| Planner / Node-RED / webhook-sink HTTP | **Verified** (endpoint level) |
+| Live stack preserved; host ngrok restored to `:1880` | **Verified** |
+| Second run of the command (idempotency) | **Verified** — exit 0 in 1.6 min; verifier still green |
+| Push CI (`ci.yml`) on `main` | **Verified** — all three jobs green on `6a720da` (run `44281356855`): validate, repository-hygiene, and a real image build + import smoke, with no GHCR push |
+| Python 3.9+ preflight vs the Windows Store alias | **Verified** — stubbed probe falls back to `python`; with both broken it exits non-zero with the new message |
+| Git Bash path conversion, project isolation, full service set | **Verified** |
+| Shopify flow wired on a clone (needs credentials) | **Not started** |
+| Browser click-through (desk, planner SPA, QR camera) | **Not started** |
+| Truly cold machine with no Docker layer cache | **Not started** — attempt 1 pulled the base and ran pip cold, but the certified attempt reused layers |
+
+
