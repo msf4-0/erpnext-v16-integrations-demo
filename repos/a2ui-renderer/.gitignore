@@ -1,0 +1,11 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Logs & temp files
+*.log
+.DS_Store
+.turbo/

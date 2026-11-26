@@ -1,0 +1,6 @@
+app_name = "dsh_bridge"
+app_title = "DSH Bridge"
+app_publisher = "AI Collaborator"
+app_description = "Bridge for AI UI integration"
+app_email = "admin@example.com"
+app_license = "mit"

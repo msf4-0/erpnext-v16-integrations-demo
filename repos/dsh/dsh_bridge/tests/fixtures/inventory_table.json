@@ -1,0 +1,96 @@
+{
+  "components": [
+    {
+      "component": {
+        "Card": {
+          "child": "col"
+        }
+      },
+      "id": "root"
+    },
+    {
+      "component": {
+        "Column": {
+          "children": {
+            "explicitList": [
+              "title",
+              "table",
+              "count"
+            ]
+          }
+        }
+      },
+      "id": "col"
+    },
+    {
+      "component": {
+        "Text": {
+          "text": {
+            "literalString": "Inventory: Stores - SD"
+          },
+          "usageHint": "h3"
+        }
+      },
+      "id": "title"
+    },
+    {
+      "component": {
+        "Table": {
+          "columns": [
+            {
+              "key": "item_code",
+              "label": "Item"
+            },
+            {
+              "key": "item_name",
+              "label": "Name"
+            },
+            {
+              "align": "right",
+              "key": "qty",
+              "label": "Qty"
+            },
+            {
+              "key": "status",
+              "label": "Status"
+            }
+          ],
+          "rows": {
+            "path": "/rows"
+          }
+        }
+      },
+      "id": "table"
+    },
+    {
+      "component": {
+        "Text": {
+          "text": {
+            "literalString": "2 row(s)"
+          },
+          "usageHint": "caption"
+        }
+      },
+      "id": "count"
+    }
+  ],
+  "dataModel": {
+    "rows": [
+      {
+        "item_code": "SKU007",
+        "item_name": "Television",
+        "qty": 190,
+        "status": "Optimal"
+      },
+      {
+        "item_code": "SKU008",
+        "item_name": "Television Stand",
+        "qty": 4,
+        "status": "Low Stock"
+      }
+    ],
+    "title": "Inventory: Stores - SD"
+  },
+  "protocol": "a2ui/0.9",
+  "surfaceId": "<surfaceId>"
+}

@@ -1,0 +1,109 @@
+{
+  "components": [
+    {
+      "component": {
+        "Card": {
+          "child": "col"
+        }
+      },
+      "id": "root"
+    },
+    {
+      "component": {
+        "Column": {
+          "children": {
+            "explicitList": [
+              "title",
+              "badge",
+              "fields",
+              "link"
+            ]
+          }
+        }
+      },
+      "id": "col"
+    },
+    {
+      "component": {
+        "Text": {
+          "text": {
+            "literalString": "Sales Order created"
+          },
+          "usageHint": "h3"
+        }
+      },
+      "id": "title"
+    },
+    {
+      "component": {
+        "Badge": {
+          "text": {
+            "literalString": "Draft"
+          }
+        }
+      },
+      "id": "badge"
+    },
+    {
+      "component": {
+        "Table": {
+          "columns": [
+            {
+              "key": "label",
+              "label": "Field"
+            },
+            {
+              "key": "value",
+              "label": "Value"
+            }
+          ],
+          "rows": {
+            "path": "/fields"
+          }
+        }
+      },
+      "id": "fields"
+    },
+    {
+      "component": {
+        "Link": {
+          "href": {
+            "literalString": "/app/sales-order/SAL-ORD-0001"
+          },
+          "text": {
+            "literalString": "Open SAL-ORD-0001"
+          }
+        }
+      },
+      "id": "link"
+    }
+  ],
+  "dataModel": {
+    "badge": "Draft",
+    "fields": [
+      {
+        "label": "Document",
+        "value": "SAL-ORD-0001"
+      },
+      {
+        "label": "Customer",
+        "value": "Grant Plastics Ltd."
+      },
+      {
+        "label": "Item",
+        "value": "SKU008"
+      },
+      {
+        "label": "Qty",
+        "value": "2"
+      },
+      {
+        "label": "Total",
+        "value": "SAR 2,000.00"
+      }
+    ],
+    "title": "Sales Order created"
+  },
+  "protocol": "a2ui/0.9",
+  "surfaceId": "<surfaceId>"
+}

@@ -1,0 +1,111 @@
+{
+  "components": [
+    {
+      "component": {
+        "Card": {
+          "child": "col"
+        }
+      },
+      "id": "root"
+    },
+    {
+      "component": {
+        "Column": {
+          "children": {
+            "explicitList": [
+              "title",
+              "fields",
+              "action-0"
+            ]
+          }
+        }
+      },
+      "id": "col"
+    },
+    {
+      "component": {
+        "Text": {
+          "text": {
+            "literalString": "Create Sales Order?"
+          },
+          "usageHint": "h3"
+        }
+      },
+      "id": "title"
+    },
+    {
+      "component": {
+        "Table": {
+          "columns": [
+            {
+              "key": "label",
+              "label": "Field"
+            },
+            {
+              "key": "value",
+              "label": "Value"
+            }
+          ],
+          "rows": {
+            "path": "/fields"
+          }
+        }
+      },
+      "id": "fields"
+    },
+    {
+      "component": {
+        "Button": {
+          "action": {
+            "name": "create_sales_order",
+            "x-erpnext": {
+              "args": {
+                "customer": "Grant Plastics Ltd.",
+                "delivery_date": "2026-11-27",
+                "item_code": "SKU008",
+                "qty": 2.0
+              },
+              "confirm_required": true,
+              "token": "tok-fixture"
+            }
+          },
+          "child": "action-0-label"
+        }
+      },
+      "id": "action-0"
+    },
+    {
+      "component": {
+        "Text": {
+          "text": {
+            "literalString": "Create Sales Order"
+          }
+        }
+      },
+      "id": "action-0-label"
+    }
+  ],
+  "dataModel": {
+    "fields": [
+      {
+        "label": "Item code",
+        "value": "SKU008"
+      },
+      {
+        "label": "Qty",
+        "value": "2.0"
+      },
+      {
+        "label": "Customer",
+        "value": "Grant Plastics Ltd."
+      },
+      {
+        "label": "Delivery date",
+        "value": "2026-11-27"
+      }
+    ],
+    "title": "Create Sales Order?"
+  },
+  "protocol": "a2ui/0.9",
+  "surfaceId": "<surfaceId>"
+}

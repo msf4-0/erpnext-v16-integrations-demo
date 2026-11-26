@@ -32,8 +32,7 @@ jobs:
           for d in repos/*/; do
             [ -d "$d" ] || continue
             app=$(basename "$d")
-            # The folder name is not always the python package name
-            # (barcode-shrdc-v16-fixed contains barcode_shrdc/), so search.
+            [ -f "$d/.frappe-app" ] || continue     # only apps opt in
             if ! find "$d" -maxdepth 3 -name hooks.py -size +0c | grep -q .; then
               echo "::error::$app has no non-empty hooks.py - likely a partial commit"
               fail=1
